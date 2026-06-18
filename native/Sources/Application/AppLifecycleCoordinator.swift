@@ -8,7 +8,7 @@ final class AppLifecycleCoordinator: NSObject {
     private var thirdPartyNoticesWindow: NSWindow?
     private var allowsTermination = false
     private var workspaceObserver: NSObjectProtocol?
-    private let windowSize = NSSize(width: 560, height: 852)
+    private let windowSize = NSSize(width: 660, height: 858)
 
     init(controller: MainViewController) {
         self.controller = controller
@@ -141,7 +141,10 @@ final class AppLifecycleCoordinator: NSObject {
         mainWindow.appearance = NSAppearance(named: .darkAqua)
         mainWindow.isOpaque = false
         mainWindow.backgroundColor = .clear
-        mainWindow.titlebarAppearsTransparent = false
+        mainWindow.styleMask.insert(.fullSizeContentView)
+        mainWindow.titlebarAppearsTransparent = true
+        mainWindow.titleVisibility = .hidden
+        mainWindow.isMovableByWindowBackground = true
         mainWindow.contentViewController = controller
         mainWindow.contentView?.appearance = NSAppearance(named: .darkAqua)
         mainWindow.setContentSize(windowSize)

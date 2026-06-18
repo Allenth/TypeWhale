@@ -19,7 +19,7 @@ macos/**/*.app/
 
 # Local runtime and caches
 .runtime/
-models/
+/models/
 语音缓存/
 *.log
 

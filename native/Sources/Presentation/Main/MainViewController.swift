@@ -2,13 +2,23 @@ import AppKit
 import ApplicationServices
 
 final class MainViewController: NSViewController {
-    private let contentWidth: CGFloat = 560
-    private let contentHeight: CGFloat = 852
-    private let pageInset: CGFloat = 24
-    private let recentViewportHeight: CGFloat = 250
-    private let brandIconVisibleSize: CGFloat = 94
+    enum PrimaryStatusTone {
+        case idle
+        case listening
+        case processing
+        case success
+        case warning
+        case error
+    }
 
-    let status = label("等待录音", size: 18, weight: .semibold)
+    private let contentWidth: CGFloat = 660
+    private let contentHeight: CGFloat = 858
+    private let leftColumnWidth: CGFloat = 212
+    private let topInset: CGFloat = 38
+    private let recentViewportHeight: CGFloat = 196
+    private let brandIconVisibleSize: CGFloat = 64
+
+    let status = label("等待录音", size: 15, weight: .semibold)
     let detail = label("Fn 录音", size: 12)
     let micStatus = label("检测中", size: 12, weight: .medium)
     let accessibilityStatus = label("检测中", size: 12, weight: .medium)
@@ -16,7 +26,7 @@ final class MainViewController: NSViewController {
     let hotkeyValue = label(
         HotkeyBinding.load(storageKey: HotkeyBinding.chineseStorageKey, fallback: .defaultBinding).displayName,
         size: 13,
-        weight: .medium
+        weight: .semibold
     )
     let secondaryHotkeyValue = label(
         HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryChineseStorageKey)?.displayName ?? "未设置",
@@ -27,16 +37,24 @@ final class MainViewController: NSViewController {
     let hotkeyResetButton = NSButton(title: "恢复 Fn", target: nil, action: nil)
     let secondaryHotkeyCaptureButton = NSButton(title: "录入", target: nil, action: nil)
     let secondaryHotkeyClearButton = NSButton(title: "清空", target: nil, action: nil)
-    let modelValue = label("正在检查模型", size: 13, weight: .medium)
+    let modelValue = label("正在检查模型", size: 12, weight: .medium)
     let modelProgress = NSProgressIndicator()
     let modelInstallButton = NSButton(title: "安装模型", target: nil, action: nil)
-    let realtime = NSButton(checkboxWithTitle: "胶囊实时预览", target: nil, action: nil)
-    let autoFinish = NSButton(checkboxWithTitle: "停顿自动完成", target: nil, action: nil)
-    let duckSystemAudio = NSButton(checkboxWithTitle: "录音时降低电脑声音", target: nil, action: nil)
-    let launchAtLogin = NSButton(checkboxWithTitle: "开机自动启动", target: nil, action: nil)
-    let realtimeDraft = label("等待实时草稿", size: 13)
+    let realtime = BrandSwitch()
+    let autoFinish = BrandSwitch()
+    let duckSystemAudio = BrandSwitch()
+    let launchAtLogin = BrandSwitch()
+    let realtimeDraft = label("等待实时草稿", size: 12)
     var onInstallModel: (() -> Void)?
     var onHotkeysChange: ((HotkeyBinding, HotkeyBinding?) -> Void)?
+
+    private let modelEntryName = label("SenseVoice int8", size: 13, weight: .semibold)
+    private let modelEntryStatus = label("检查中", size: 11, weight: .medium)
+    private let modelEntryDot = NSView()
+    private let modelPathLabel = label("", size: 11)
+    private let statusDot = NSView()
+    private let waveform = MiniWaveformView()
+
     private let recentStack = FlippedStackView()
     private let recentScroll = NSScrollView()
     private var recentRecords: [RecentTranscription] = []
@@ -49,6 +67,7 @@ final class MainViewController: NSViewController {
     private var captureModifierKeyCodes: Set<Int> = []
     private var captureConfirmWorkItem: DispatchWorkItem?
     private var versionHistoryPopover: NSPopover?
+    private var modelDetailPopover: NSPopover?
     private lazy var versionHistoryViewController = VersionHistoryViewController()
 
     private enum HotkeySlot {
@@ -62,12 +81,24 @@ final class MainViewController: NSViewController {
         root.blendingMode = .behindWindow
         root.state = .active
         root.wantsLayer = true
-        root.layer?.backgroundColor = NSColor(calibratedWhite: 0.98, alpha: 0.18).cgColor
         view = root
         NSLayoutConstraint.activate([
             view.widthAnchor.constraint(equalToConstant: contentWidth),
             view.heightAnchor.constraint(equalToConstant: contentHeight),
         ])
+
+        let darkOverlay = NSView()
+        darkOverlay.translatesAutoresizingMaskIntoConstraints = false
+        darkOverlay.wantsLayer = true
+        darkOverlay.layer?.backgroundColor = NSColor(calibratedWhite: 0, alpha: 0.36).cgColor
+        view.addSubview(darkOverlay)
+        NSLayoutConstraint.activate([
+            darkOverlay.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            darkOverlay.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            darkOverlay.topAnchor.constraint(equalTo: view.topAnchor),
+            darkOverlay.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+
         let settings = AppSettingsStore.loadMainViewSettings()
         realtime.state = settings.realtimePreviewEnabled ? .on : .off
         realtime.target = self; realtime.action = #selector(saveSettings)
@@ -77,83 +108,215 @@ final class MainViewController: NSViewController {
         duckSystemAudio.target = self; duckSystemAudio.action = #selector(saveSettings)
         refreshLaunchAtLoginState()
         launchAtLogin.target = self; launchAtLogin.action = #selector(toggleLaunchAtLogin)
+        configureOptionAccessibility()
+
+        let left = buildLeftColumn()
+        let right = buildRightColumn()
+        view.addSubview(left)
+        view.addSubview(right)
+        NSLayoutConstraint.activate([
+            left.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            left.topAnchor.constraint(equalTo: view.topAnchor),
+            left.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            left.widthAnchor.constraint(equalToConstant: leftColumnWidth),
+            right.leadingAnchor.constraint(equalTo: left.trailingAnchor, constant: 22),
+            right.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -22),
+            right.topAnchor.constraint(equalTo: view.topAnchor, constant: topInset),
+            right.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -20),
+        ])
+
+        updateHotkeys(
+            primary: HotkeyBinding.load(storageKey: HotkeyBinding.chineseStorageKey, fallback: .defaultBinding),
+            secondary: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryChineseStorageKey)
+        )
+        DispatchQueue.main.async { [weak self] in
+            _ = self?.versionHistoryViewController.view
+        }
+    }
+
+    // MARK: - Left column
+
+    private func buildLeftColumn() -> NSView {
+        let container = NSView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.wantsLayer = true
+        container.layer?.backgroundColor = UITheme.brandTint.cgColor
+
+        let border = NSView()
+        border.translatesAutoresizingMaskIntoConstraints = false
+        border.wantsLayer = true
+        border.layer?.backgroundColor = UITheme.cardBorder.cgColor
+        container.addSubview(border)
 
         let brandIcon = NSImageView()
         brandIcon.image = loadBrandIcon()
         brandIcon.imageScaling = .scaleProportionallyUpOrDown
         brandIcon.translatesAutoresizingMaskIntoConstraints = false
         brandIcon.wantsLayer = true
-        brandIcon.layer?.cornerRadius = 18
+        brandIcon.layer?.cornerRadius = 15
         brandIcon.layer?.masksToBounds = true
         let brandTitle = label("TypeWhale", size: 18, weight: .semibold)
-        brandTitle.maximumNumberOfLines = 1
-        brandTitle.lineBreakMode = .byClipping
-        brandTitle.setContentCompressionResistancePriority(.required, for: .vertical)
-        let brandVersion = label(versionText(), size: 12, weight: .medium)
+        brandTitle.alignment = .center
+        let brandVersion = label(versionText(), size: 11, weight: .medium)
         brandVersion.textColor = .secondaryLabelColor
-        brandVersion.maximumNumberOfLines = 1
-        brandVersion.lineBreakMode = .byClipping
-        brandVersion.setContentCompressionResistancePriority(.required, for: .vertical)
-        let versionHelpButton = NSButton(title: "?", target: self, action: #selector(showVersionHistory(_:)))
-        versionHelpButton.bezelStyle = .circular
-        versionHelpButton.controlSize = .small
-        versionHelpButton.font = NSFont.systemFont(ofSize: 11, weight: .semibold)
-        versionHelpButton.toolTip = "查看版本历史"
-        versionHelpButton.translatesAutoresizingMaskIntoConstraints = false
-        let versionRow = NSStackView(views: [brandVersion, versionHelpButton])
-        versionRow.orientation = .horizontal
-        versionRow.alignment = .centerY
-        versionRow.spacing = 6
-        versionRow.setContentCompressionResistancePriority(.required, for: .vertical)
-        let brandText = NSStackView(views: [brandTitle, versionRow])
-        brandText.orientation = .vertical
-        brandText.alignment = .leading
-        brandText.spacing = 3
-        brandText.setContentCompressionResistancePriority(.required, for: .vertical)
-        let brandRow = NSStackView(views: [brandIcon, brandText])
-        brandRow.orientation = .horizontal
-        brandRow.alignment = .centerY
-        brandRow.spacing = 24
-        brandRow.setContentHuggingPriority(.required, for: .vertical)
-        brandRow.setContentCompressionResistancePriority(.required, for: .vertical)
-        status.alignment = .right
+        brandVersion.alignment = .center
+        let brandStack = NSStackView(views: [brandIcon, brandTitle, brandVersion])
+        brandStack.orientation = .vertical
+        brandStack.alignment = .centerX
+        brandStack.spacing = 6
+
+        let statusPanel = buildStatusPanel()
+        let modelEntry = buildModelEntry()
+
+        let historyButton = NSButton(title: " 版本历史", target: self, action: #selector(showVersionHistory(_:)))
+        historyButton.image = NSImage(systemSymbolName: "clock.arrow.circlepath", accessibilityDescription: nil)
+        historyButton.imagePosition = .imageLeading
+        historyButton.bezelStyle = .rounded
+        historyButton.controlSize = .regular
+
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .vertical)
+        spacer.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+
+        let stack = NSStackView(views: [brandStack, statusPanel, modelEntry, spacer, historyButton])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 14
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(stack)
+
+        NSLayoutConstraint.activate([
+            border.topAnchor.constraint(equalTo: container.topAnchor),
+            border.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            border.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            border.widthAnchor.constraint(equalToConstant: 0.5),
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 18),
+            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -18),
+            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: topInset),
+            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -16),
+            brandStack.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            statusPanel.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            modelEntry.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            historyButton.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            brandIcon.widthAnchor.constraint(equalToConstant: brandIconVisibleSize),
+            brandIcon.heightAnchor.constraint(equalToConstant: brandIconVisibleSize),
+        ])
+        return container
+    }
+
+    private func buildStatusPanel() -> NSView {
+        status.alignment = .center
         status.maximumNumberOfLines = 1
         status.lineBreakMode = .byTruncatingTail
-        detail.alignment = .right
+        detail.alignment = .center
+        detail.textColor = .secondaryLabelColor
         detail.maximumNumberOfLines = 2
         detail.lineBreakMode = .byWordWrapping
-        detail.textColor = .secondaryLabelColor
-        let statusBlock = NSStackView(views: [status, detail])
-        statusBlock.orientation = .vertical
-        statusBlock.alignment = .trailing
-        statusBlock.spacing = 6
-        statusBlock.setContentHuggingPriority(.required, for: .vertical)
-        statusBlock.setContentCompressionResistancePriority(.required, for: .vertical)
-        let headerSpacer = NSView()
-        headerSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let headerRow = NSStackView(views: [brandRow, headerSpacer, statusBlock])
-        headerRow.orientation = .horizontal
-        headerRow.alignment = .centerY
-        headerRow.spacing = 16
-        headerRow.setContentHuggingPriority(.required, for: .vertical)
-        headerRow.setContentCompressionResistancePriority(.required, for: .vertical)
 
-        let permissionTitle = label("权限", size: 14, weight: .semibold)
-        let micButton = NSButton(title: "麦克风设置", target: self, action: #selector(openMicrophone))
-        let accessButton = NSButton(title: "辅助功能设置", target: self, action: #selector(openAccessibility))
-        let keyboardButton = NSButton(title: "键盘设置", target: self, action: #selector(openKeyboard))
-        let micName = label("麦克风", size: 13)
-        let accessName = label("辅助功能", size: 13)
-        let hotkeyName = label("全局快捷键", size: 13)
-        let hotkeyBindingName = label("主快捷键", size: 13)
-        let secondaryHotkeyBindingName = label("备用快捷键", size: 13)
-        let micRow = NSStackView(views: [micName, micStatus, micButton])
-        let accessRow = NSStackView(views: [accessName, accessibilityStatus, accessButton])
-        let hotkeyRow = NSStackView(views: [hotkeyName, hotkeyStatus, keyboardButton])
+        statusDot.translatesAutoresizingMaskIntoConstraints = false
+        statusDot.wantsLayer = true
+        statusDot.layer?.cornerRadius = 3.5
+        statusDot.layer?.backgroundColor = NSColor.systemGreen.cgColor
+
+        let pillStack = NSStackView(views: [statusDot, status])
+        pillStack.orientation = .horizontal
+        pillStack.alignment = .centerY
+        pillStack.spacing = 7
+        pillStack.translatesAutoresizingMaskIntoConstraints = false
+        let pill = NSView()
+        pill.translatesAutoresizingMaskIntoConstraints = false
+        pill.wantsLayer = true
+        pill.layer?.backgroundColor = NSColor(calibratedWhite: 1, alpha: 0.06).cgColor
+        pill.layer?.cornerRadius = 12
+        pill.addSubview(pillStack)
+
+        waveform.translatesAutoresizingMaskIntoConstraints = false
+
+        let inner = NSStackView(views: [pill, waveform, detail])
+        inner.orientation = .vertical
+        inner.alignment = .centerX
+        inner.spacing = 11
+        inner.translatesAutoresizingMaskIntoConstraints = false
+
+        let box = NSView()
+        box.translatesAutoresizingMaskIntoConstraints = false
+        box.wantsLayer = true
+        box.layer?.backgroundColor = UITheme.cardFill.cgColor
+        box.layer?.cornerRadius = 12
+        box.layer?.borderWidth = 0.5
+        box.layer?.borderColor = UITheme.cardBorder.cgColor
+        box.addSubview(inner)
+
+        NSLayoutConstraint.activate([
+            pillStack.leadingAnchor.constraint(equalTo: pill.leadingAnchor, constant: 13),
+            pillStack.trailingAnchor.constraint(equalTo: pill.trailingAnchor, constant: -13),
+            pillStack.topAnchor.constraint(equalTo: pill.topAnchor, constant: 6),
+            pillStack.bottomAnchor.constraint(equalTo: pill.bottomAnchor, constant: -6),
+            statusDot.widthAnchor.constraint(equalToConstant: 7),
+            statusDot.heightAnchor.constraint(equalToConstant: 7),
+            waveform.heightAnchor.constraint(equalToConstant: 34),
+            waveform.widthAnchor.constraint(equalTo: inner.widthAnchor),
+            box.heightAnchor.constraint(equalToConstant: 128),
+            inner.leadingAnchor.constraint(equalTo: box.leadingAnchor, constant: 14),
+            inner.trailingAnchor.constraint(equalTo: box.trailingAnchor, constant: -14),
+            inner.topAnchor.constraint(equalTo: box.topAnchor, constant: 14),
+            detail.widthAnchor.constraint(equalTo: inner.widthAnchor),
+        ])
+        return box
+    }
+
+    private func buildModelEntry() -> NSView {
+        let caption = label("当前模型", size: 10, weight: .medium)
+        caption.textColor = UITheme.sectionTitle
+        modelEntryName.maximumNumberOfLines = 1
+        modelEntryName.lineBreakMode = .byTruncatingTail
+
+        let chevron = symbolIcon("chevron.right", size: 12, color: NSColor(calibratedWhite: 1, alpha: 0.35))
+        let nameRow = NSStackView(views: [modelEntryName, flexSpacer(), chevron])
+        nameRow.orientation = .horizontal
+        nameRow.alignment = .centerY
+        nameRow.spacing = 8
+
+        modelEntryDot.translatesAutoresizingMaskIntoConstraints = false
+        modelEntryDot.wantsLayer = true
+        modelEntryDot.layer?.cornerRadius = 3
+        modelEntryDot.layer?.backgroundColor = NSColor.systemGreen.cgColor
+        modelEntryStatus.textColor = .secondaryLabelColor
+        let statusRow = NSStackView(views: [modelEntryDot, modelEntryStatus])
+        statusRow.orientation = .horizontal
+        statusRow.alignment = .centerY
+        statusRow.spacing = 5
+
+        let textStack = NSStackView(views: [caption, nameRow, statusRow])
+        textStack.orientation = .vertical
+        textStack.alignment = .leading
+        textStack.spacing = 3
+
+        let box = roundedBox(textStack, hPad: 14, vPad: 12)
+        NSLayoutConstraint.activate([
+            modelEntryDot.widthAnchor.constraint(equalToConstant: 6),
+            modelEntryDot.heightAnchor.constraint(equalToConstant: 6),
+            nameRow.widthAnchor.constraint(equalTo: textStack.widthAnchor),
+        ])
+        let click = NSClickGestureRecognizer(target: self, action: #selector(showModelDetail(_:)))
+        box.addGestureRecognizer(click)
+        return box
+    }
+
+    // MARK: - Right column
+
+    private func buildRightColumn() -> NSView {
+        let micButton = settingsButton("设置", action: #selector(openMicrophone))
+        let accessButton = settingsButton("设置", action: #selector(openAccessibility))
+        let keyboardButton = settingsButton("设置", action: #selector(openKeyboard))
+        let permissionCard = listCard([
+            permissionRow(icon: "mic", name: "麦克风", status: micStatus, button: micButton),
+            permissionRow(icon: "accessibility", name: "辅助功能", status: accessibilityStatus, button: accessButton),
+            permissionRow(icon: "keyboard", name: "全局快捷键", status: hotkeyStatus, button: keyboardButton),
+        ])
+
         [hotkeyValue, secondaryHotkeyValue].forEach {
-            $0.textColor = .secondaryLabelColor
             $0.lineBreakMode = .byTruncatingMiddle
-            $0.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         }
         hotkeyCaptureButton.target = self
         hotkeyCaptureButton.action = #selector(beginHotkeyCapture)
@@ -163,89 +326,66 @@ final class MainViewController: NSViewController {
         secondaryHotkeyCaptureButton.action = #selector(beginSecondaryHotkeyCapture)
         secondaryHotkeyClearButton.target = self
         secondaryHotkeyClearButton.action = #selector(clearSecondaryHotkey)
-        let hotkeyBindingRow = NSStackView(views: [hotkeyBindingName, hotkeyValue, hotkeyCaptureButton, hotkeyResetButton])
-        let secondaryHotkeyBindingRow = NSStackView(views: [secondaryHotkeyBindingName, secondaryHotkeyValue, secondaryHotkeyCaptureButton, secondaryHotkeyClearButton])
-        [micRow, accessRow, hotkeyRow, hotkeyBindingRow, secondaryHotkeyBindingRow].forEach {
-            $0.orientation = .horizontal
-            $0.alignment = .centerY
-            $0.distribution = .fill
-            $0.spacing = 12
-            $0.setContentHuggingPriority(.required, for: .vertical)
-            $0.setContentCompressionResistancePriority(.required, for: .vertical)
+        let hotkeyButtons = [hotkeyCaptureButton, hotkeyResetButton, secondaryHotkeyCaptureButton, secondaryHotkeyClearButton]
+        hotkeyButtons.forEach {
+            $0.bezelStyle = .rounded
+            $0.controlSize = .regular
+            $0.font = .systemFont(ofSize: 12)
         }
-        [micName, accessName, hotkeyName, hotkeyBindingName, secondaryHotkeyBindingName].forEach {
-            $0.widthAnchor.constraint(equalToConstant: 90).isActive = true
-        }
-        [micStatus, accessibilityStatus, hotkeyStatus].forEach {
-            $0.widthAnchor.constraint(equalToConstant: 190).isActive = true
-        }
-        [micButton, accessButton, keyboardButton].forEach {
-            $0.widthAnchor.constraint(equalToConstant: 130).isActive = true
-        }
-        [hotkeyValue, secondaryHotkeyValue].forEach {
-            $0.widthAnchor.constraint(equalToConstant: 150).isActive = true
+        let keycapWidth: CGFloat = 92
+        let captureWidth: CGFloat = 54
+        let trailingWidth: CGFloat = 74
+        let primaryKeycap = KeycapView(hotkeyValue, minWidth: 46, height: 22)
+        let secondaryKeycap = KeycapView(secondaryHotkeyValue, minWidth: 46, height: 22)
+        [primaryKeycap, secondaryKeycap].forEach {
+            $0.widthAnchor.constraint(equalToConstant: keycapWidth).isActive = true
         }
         [hotkeyCaptureButton, secondaryHotkeyCaptureButton].forEach {
-            $0.widthAnchor.constraint(equalToConstant: 72).isActive = true
+            $0.widthAnchor.constraint(equalToConstant: captureWidth).isActive = true
         }
-        hotkeyResetButton.widthAnchor.constraint(equalToConstant: 118).isActive = true
-        secondaryHotkeyClearButton.widthAnchor.constraint(equalToConstant: 118).isActive = true
+        [hotkeyResetButton, secondaryHotkeyClearButton].forEach {
+            $0.widthAnchor.constraint(equalToConstant: trailingWidth).isActive = true
+        }
+        let primaryName = label("主快捷键", size: 14)
+        let primaryRow = NSStackView(views: [primaryName, flexSpacer(), primaryKeycap, hotkeyCaptureButton, hotkeyResetButton])
+        let secondaryName = label("备用快捷键", size: 14)
+        let secondaryRow = NSStackView(views: [secondaryName, flexSpacer(), secondaryKeycap, secondaryHotkeyCaptureButton, secondaryHotkeyClearButton])
+        [primaryRow, secondaryRow].forEach {
+            $0.orientation = .horizontal
+            $0.alignment = .centerY
+            $0.spacing = 8
+            $0.heightAnchor.constraint(equalToConstant: 42).isActive = true
+        }
+        let hotkeyCard = listCard([primaryRow, secondaryRow])
 
-        let modelTitle = label("本地识别模型", size: 14, weight: .semibold)
-        modelValue.textColor = .secondaryLabelColor
-        modelValue.maximumNumberOfLines = 2
-        modelValue.lineBreakMode = .byWordWrapping
-        modelValue.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        modelProgress.isIndeterminate = false
-        modelProgress.minValue = 0
-        modelProgress.maxValue = 1
-        modelProgress.controlSize = .small
-        modelProgress.isHidden = true
-        modelInstallButton.target = self
-        modelInstallButton.action = #selector(installModel)
-        modelInstallButton.isHidden = true
-        modelInstallButton.widthAnchor.constraint(equalToConstant: 94).isActive = true
-        let modelSpacer = NSView()
-        modelSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let modelRow = NSStackView(views: [modelValue, modelSpacer, modelInstallButton])
-        modelRow.orientation = .horizontal
-        modelRow.alignment = .centerY
-        modelRow.spacing = 10
-        let modelTitleSpacer = NSView()
-        modelTitleSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let modelTitleRow = NSStackView(views: [modelTitle, modelTitleSpacer])
-        modelTitleRow.orientation = .horizontal
-        modelTitleRow.alignment = .centerY
-        modelTitleRow.spacing = 12
-        modelTitleRow.setContentHuggingPriority(.required, for: .vertical)
-        modelTitleRow.setContentCompressionResistancePriority(.required, for: .vertical)
-        let modelSettingsSpacer = NSView()
-        modelSettingsSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let modelSettingsRow = NSStackView(views: [modelSettingsSpacer, launchAtLogin, duckSystemAudio, autoFinish, realtime])
-        modelSettingsRow.orientation = .horizontal
-        modelSettingsRow.alignment = .centerY
-        modelSettingsRow.spacing = 12
-        modelSettingsRow.setContentHuggingPriority(.required, for: .vertical)
-        modelSettingsRow.setContentCompressionResistancePriority(.required, for: .vertical)
+        let optionCard = listCard([
+            optionRow("胶囊实时预览", realtime),
+            optionRow("停顿自动完成", autoFinish),
+            optionRow("录音时降低电脑声音", duckSystemAudio),
+            optionRow("开机自动启动", launchAtLogin),
+        ])
+
+        realtimeDraft.textColor = .secondaryLabelColor
         realtimeDraft.maximumNumberOfLines = 2
         realtimeDraft.lineBreakMode = .byWordWrapping
         (realtimeDraft.cell as? NSTextFieldCell)?.truncatesLastVisibleLine = true
-        realtimeDraft.textColor = .secondaryLabelColor
-        realtimeDraft.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        realtimeDraft.setContentHuggingPriority(.defaultLow, for: .vertical)
-        let guideTitle = label("使用说明", size: 14, weight: .semibold)
-        let guideText = label("授权麦克风和辅助功能后，按主快捷键开始录音，再次按下停止；也可以按住说话、松开粘贴。备用快捷键可作为第二个入口。", size: 12)
-        guideText.textColor = .secondaryLabelColor
-        guideText.maximumNumberOfLines = 2
-        guideText.lineBreakMode = .byWordWrapping
-        guideText.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        guideText.setContentCompressionResistancePriority(.required, for: .vertical)
-        let resultTitle = label("最近转录", size: 14, weight: .semibold)
-        resultTitle.setContentCompressionResistancePriority(.required, for: .vertical)
+        realtimeDraft.translatesAutoresizingMaskIntoConstraints = false
+        let draftContent = NSView()
+        draftContent.translatesAutoresizingMaskIntoConstraints = false
+        draftContent.addSubview(realtimeDraft)
+        NSLayoutConstraint.activate([
+            realtimeDraft.leadingAnchor.constraint(equalTo: draftContent.leadingAnchor),
+            realtimeDraft.trailingAnchor.constraint(equalTo: draftContent.trailingAnchor),
+            realtimeDraft.topAnchor.constraint(equalTo: draftContent.topAnchor),
+            realtimeDraft.bottomAnchor.constraint(equalTo: draftContent.bottomAnchor),
+            draftContent.heightAnchor.constraint(greaterThanOrEqualToConstant: 22),
+        ])
+        let draftCard = roundedBox(draftContent, hPad: 15, vPad: 11)
+
         recentStack.orientation = .vertical
         recentStack.alignment = .width
         recentStack.spacing = 0
-        recentStack.edgeInsets = NSEdgeInsets(top: 0, left: 0, bottom: 10, right: 0)
+        recentStack.edgeInsets = NSEdgeInsets(top: 0, left: 0, bottom: 6, right: 0)
         recentStack.translatesAutoresizingMaskIntoConstraints = false
         recentRecords = loadRecentTranscriptions()
         rebuildRecentRows()
@@ -254,84 +394,86 @@ final class MainViewController: NSViewController {
         recentScroll.autohidesScrollers = true
         recentScroll.drawsBackground = false
         recentScroll.borderType = .noBorder
-        recentScroll.setContentHuggingPriority(.required, for: .vertical)
-        recentScroll.setContentCompressionResistancePriority(.required, for: .vertical)
+        recentScroll.translatesAutoresizingMaskIntoConstraints = false
+        recentScroll.heightAnchor.constraint(equalToConstant: recentViewportHeight).isActive = true
+        let recentCard = roundedBox(recentScroll, hPad: 8, vPad: 6)
 
-        let topSeparator = separator()
-        let permissionSeparator = separator()
-        let guideSeparator = separator()
-        let resultSeparator = separator()
-        let stack = NSStackView(views: [
-            headerRow, topSeparator, guideTitle, guideText,
-            guideSeparator, permissionTitle, micRow, accessRow, hotkeyRow, hotkeyBindingRow, secondaryHotkeyBindingRow,
-            permissionSeparator, modelTitleRow, modelSettingsRow, modelRow, modelProgress, realtimeDraft,
-            resultSeparator, resultTitle, recentScroll,
-        ])
+        let sections = [
+            section("权限", permissionCard),
+            section("快捷键", hotkeyCard),
+            section("选项", optionCard),
+            section("实时草稿", draftCard),
+            section("最近转录", recentCard),
+        ]
+        let stack = NSStackView(views: sections)
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 7
-        view.addSubview(stack)
+        stack.spacing = 12
         stack.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: pageInset),
-            stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -pageInset),
-            stack.topAnchor.constraint(equalTo: view.topAnchor, constant: 22),
-            headerRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            brandRow.heightAnchor.constraint(greaterThanOrEqualToConstant: brandIconVisibleSize),
-            brandIcon.widthAnchor.constraint(equalToConstant: brandIconVisibleSize),
-            brandIcon.heightAnchor.constraint(equalToConstant: brandIconVisibleSize),
-            brandTitle.heightAnchor.constraint(equalToConstant: 22),
-            brandVersion.heightAnchor.constraint(equalToConstant: 16),
-            versionHelpButton.widthAnchor.constraint(equalToConstant: 20),
-            versionHelpButton.heightAnchor.constraint(equalToConstant: 20),
-            statusBlock.widthAnchor.constraint(lessThanOrEqualToConstant: 260),
-            topSeparator.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            permissionSeparator.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            guideSeparator.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            resultSeparator.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            guideTitle.heightAnchor.constraint(greaterThanOrEqualToConstant: 20),
-            permissionTitle.heightAnchor.constraint(greaterThanOrEqualToConstant: 20),
-            modelTitleRow.heightAnchor.constraint(greaterThanOrEqualToConstant: 24),
-            modelSettingsRow.heightAnchor.constraint(greaterThanOrEqualToConstant: 24),
-            resultTitle.heightAnchor.constraint(greaterThanOrEqualToConstant: 20),
-            micRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            accessRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            hotkeyRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            hotkeyBindingRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            secondaryHotkeyBindingRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            modelTitleRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            modelSettingsRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            modelRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            modelProgress.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            recentScroll.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            recentScroll.heightAnchor.constraint(equalToConstant: recentViewportHeight),
-            recentScroll.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -pageInset),
-            recentStack.widthAnchor.constraint(equalTo: recentScroll.contentView.widthAnchor),
-            realtimeDraft.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            realtimeDraft.heightAnchor.constraint(equalToConstant: 34),
-            guideText.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            guideText.heightAnchor.constraint(greaterThanOrEqualToConstant: 32),
-            micRow.heightAnchor.constraint(equalToConstant: 32),
-            accessRow.heightAnchor.constraint(equalToConstant: 32),
-            hotkeyRow.heightAnchor.constraint(equalToConstant: 32),
-            hotkeyBindingRow.heightAnchor.constraint(equalToConstant: 32),
-            secondaryHotkeyBindingRow.heightAnchor.constraint(equalToConstant: 32),
-        ])
-        DispatchQueue.main.async { [weak self] in
-            _ = self?.versionHistoryViewController.view
+        for sectionView in sections {
+            sectionView.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         }
+
+        recentStack.widthAnchor.constraint(equalTo: recentScroll.contentView.widthAnchor).isActive = true
+        return stack
     }
 
-    private func separator() -> NSBox {
-        let box = NSBox()
-        box.boxType = .separator
-        return box
+    private func section(_ title: String, _ card: NSView) -> NSView {
+        let stack = NSStackView(views: [sectionHeader(title), card])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 8
+        card.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        return stack
+    }
+
+    private func settingsButton(_ title: String, action: Selector) -> NSButton {
+        let button = NSButton(title: title, target: self, action: action)
+        button.bezelStyle = .rounded
+        button.controlSize = .regular
+        button.font = .systemFont(ofSize: 12)
+        button.widthAnchor.constraint(equalToConstant: 54).isActive = true
+        return button
+    }
+
+    private func permissionRow(icon: String, name: String, status: NSTextField, button: NSButton) -> NSView {
+        let iconView = symbolIcon(icon, size: 16)
+        let nameLabel = label(name, size: 14)
+        status.alignment = .left
+        status.maximumNumberOfLines = 1
+        status.lineBreakMode = .byTruncatingTail
+        status.setContentCompressionResistancePriority(.required, for: .horizontal)
+        status.widthAnchor.constraint(equalToConstant: 86).isActive = true
+        let row = NSStackView(views: [iconView, nameLabel, flexSpacer(), status, button])
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 10
+        row.heightAnchor.constraint(equalToConstant: 40).isActive = true
+        return row
+    }
+
+    private func optionRow(_ title: String, _ control: NSView) -> NSView {
+        let titleLabel = label(title, size: 14)
+        control.setAccessibilityLabel(title)
+        let row = NSStackView(views: [titleLabel, flexSpacer(), control])
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 10
+        row.heightAnchor.constraint(equalToConstant: 36).isActive = true
+        return row
+    }
+
+    private func configureOptionAccessibility() {
+        realtime.setAccessibilityLabel("胶囊实时预览")
+        autoFinish.setAccessibilityLabel("停顿自动完成")
+        duckSystemAudio.setAccessibilityLabel("录音时降低电脑声音")
+        launchAtLogin.setAccessibilityLabel("开机自动启动")
     }
 
     private func versionText() -> String {
         let info = Bundle.main.infoDictionary
-        let version = info?["CFBundleShortVersionString"] as? String ?? "1.2.12"
-        let build = info?["CFBundleVersion"] as? String ?? "169"
+        let version = info?["CFBundleShortVersionString"] as? String ?? "1.2.13"
+        let build = info?["CFBundleVersion"] as? String ?? "170"
         return "Version \(version) (\(build))"
     }
 
@@ -372,15 +514,93 @@ final class MainViewController: NSViewController {
         popover.contentSize = NSSize(width: 400, height: 390)
         popover.contentViewController = versionHistoryViewController
         versionHistoryPopover = popover
-        popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxY)
+        popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxX)
+    }
+
+    @objc private func showModelDetail(_ sender: NSGestureRecognizer) {
+        guard let anchor = sender.view else { return }
+        if let popover = modelDetailPopover, popover.isShown {
+            popover.performClose(nil)
+            return
+        }
+        let popover = modelDetailPopover ?? NSPopover()
+        if modelDetailPopover == nil {
+            popover.behavior = .transient
+            popover.animates = true
+            popover.contentSize = NSSize(width: 300, height: 240)
+            popover.contentViewController = makeModelDetailController()
+            modelDetailPopover = popover
+        }
+        popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .maxX)
+    }
+
+    private func makeModelDetailController() -> NSViewController {
+        let icon = symbolIcon("cpu", size: 18, color: UITheme.brandYellow)
+        let title = label("SenseVoice int8", size: 14, weight: .semibold)
+        let titleRow = NSStackView(views: [icon, title])
+        titleRow.orientation = .horizontal
+        titleRow.alignment = .centerY
+        titleRow.spacing = 8
+
+        modelValue.maximumNumberOfLines = 2
+        modelValue.lineBreakMode = .byWordWrapping
+
+        let desc = label("本地离线语音识别模型，全程在本机推理，不上传音频。", size: 12)
+        desc.textColor = .secondaryLabelColor
+        desc.maximumNumberOfLines = 0
+        desc.lineBreakMode = .byWordWrapping
+
+        let pathCaption = label("模型位置", size: 11, weight: .medium)
+        pathCaption.textColor = UITheme.sectionTitle
+        modelPathLabel.textColor = .secondaryLabelColor
+        modelPathLabel.maximumNumberOfLines = 3
+        modelPathLabel.lineBreakMode = .byCharWrapping
+
+        modelProgress.isIndeterminate = false
+        modelProgress.minValue = 0
+        modelProgress.maxValue = 1
+        modelProgress.controlSize = .small
+        modelProgress.isHidden = true
+        modelInstallButton.target = self
+        modelInstallButton.action = #selector(installModel)
+        modelInstallButton.isHidden = true
+        modelInstallButton.bezelStyle = .rounded
+        let installRow = NSStackView(views: [flexSpacer(), modelInstallButton])
+        installRow.orientation = .horizontal
+
+        let stack = NSStackView(views: [titleRow, hairlineView(), modelValue, modelProgress, desc, pathCaption, modelPathLabel, installRow])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 9
+        stack.translatesAutoresizingMaskIntoConstraints = false
+
+        let content = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 240))
+        content.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
+            stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 16),
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -16),
+            stack.widthAnchor.constraint(equalToConstant: 268),
+            modelValue.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            desc.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            modelPathLabel.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            modelProgress.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            installRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
+        ])
+        let controller = NSViewController()
+        controller.view = content
+        return controller
     }
 
     @objc private func saveSettings() {
         if autoFinish.state == .on {
             realtime.state = .on
+            realtime.needsDisplay = true
         }
         if realtime.state == .off {
             autoFinish.state = .off
+            autoFinish.needsDisplay = true
         }
         AppSettingsStore.save(MainViewSettings(
             realtimePreviewEnabled: realtime.state == .on,
@@ -404,6 +624,7 @@ final class MainViewController: NSViewController {
 
     private func refreshLaunchAtLoginState() {
         launchAtLogin.state = (LoginItemManager.isEnabled || LoginItemManager.isPendingApproval) ? .on : .off
+        launchAtLogin.needsDisplay = true
         launchAtLogin.toolTip = LoginItemManager.isPendingApproval
             ? "已提交开机启动请求，请在系统设置的登录项中允许 TypeWhale"
             : "登录 macOS 后自动启动 TypeWhale"
@@ -454,9 +675,9 @@ final class MainViewController: NSViewController {
 
     func updateHotkeys(primary: HotkeyBinding, secondary: HotkeyBinding?) {
         hotkeyValue.stringValue = primary.displayName
-        hotkeyValue.textColor = .secondaryLabelColor
+        hotkeyValue.textColor = NSColor(calibratedWhite: 1, alpha: 0.92)
         secondaryHotkeyValue.stringValue = secondary?.displayName ?? "未设置"
-        secondaryHotkeyValue.textColor = .secondaryLabelColor
+        secondaryHotkeyValue.textColor = secondary == nil ? .tertiaryLabelColor : NSColor(calibratedWhite: 1, alpha: 0.92)
         detail.stringValue = "\(primary.displayName) 录音"
     }
 
@@ -677,21 +898,32 @@ final class MainViewController: NSViewController {
     func updateModelState(_ state: SenseVoiceModelInstaller.State) {
         switch state {
         case .missing:
+            modelEntryStatus.stringValue = "未安装"
+            modelEntryStatus.textColor = .systemRed
+            modelEntryDot.layer?.backgroundColor = NSColor.systemRed.cgColor
             modelValue.toolTip = nil
-            modelValue.stringValue = "SenseVoice int8 缺失"
+            modelValue.stringValue = "SenseVoice int8 缺失，请先安装"
             modelValue.textColor = .systemRed
+            modelPathLabel.stringValue = "—"
             modelProgress.isHidden = true
             modelInstallButton.isHidden = false
             modelInstallButton.isEnabled = true
             modelInstallButton.title = "安装模型"
         case .ready:
             let sensePath = SenseVoiceModelManifest.preferredModelDirectory?.path ?? ""
+            modelEntryStatus.stringValue = "已就绪"
+            modelEntryStatus.textColor = .systemGreen
+            modelEntryDot.layer?.backgroundColor = NSColor.systemGreen.cgColor
             modelValue.toolTip = sensePath
-            modelValue.stringValue = "SenseVoice int8 已就绪"
+            modelValue.stringValue = "本地模型已就绪，可离线识别"
             modelValue.textColor = .systemGreen
+            modelPathLabel.stringValue = sensePath.isEmpty ? "内置模型" : sensePath
             modelProgress.isHidden = true
             modelInstallButton.isHidden = true
         case .downloading(let progress):
+            modelEntryStatus.stringValue = "安装中 \(Int(progress * 100))%"
+            modelEntryStatus.textColor = .secondaryLabelColor
+            modelEntryDot.layer?.backgroundColor = UITheme.brandYellow.cgColor
             modelValue.toolTip = nil
             modelValue.stringValue = "正在安装 SenseVoice · \(Int(progress * 100))%"
             modelValue.textColor = .secondaryLabelColor
@@ -701,6 +933,9 @@ final class MainViewController: NSViewController {
             modelInstallButton.isEnabled = false
             modelInstallButton.title = "安装中"
         case .failed(let message):
+            modelEntryStatus.stringValue = "安装失败"
+            modelEntryStatus.textColor = .systemRed
+            modelEntryDot.layer?.backgroundColor = NSColor.systemRed.cgColor
             modelValue.toolTip = message
             modelValue.stringValue = message
             modelValue.textColor = .systemRed
@@ -708,6 +943,43 @@ final class MainViewController: NSViewController {
             modelInstallButton.isHidden = false
             modelInstallButton.isEnabled = true
             modelInstallButton.title = "重试安装"
+        }
+    }
+
+    func updateInputBands(_ bands: [Float]) {
+        waveform.update(bands)
+    }
+
+    func resetInputBands() {
+        waveform.reset()
+    }
+
+    func setPrimaryStatus(
+        _ text: String,
+        detail detailText: String? = nil,
+        tone: PrimaryStatusTone,
+        resetWaveform: Bool = false
+    ) {
+        status.stringValue = text
+        if let detailText {
+            detail.stringValue = detailText
+        }
+        statusDot.layer?.backgroundColor = statusColor(for: tone).cgColor
+        if resetWaveform {
+            resetInputBands()
+        }
+    }
+
+    private func statusColor(for tone: PrimaryStatusTone) -> NSColor {
+        switch tone {
+        case .idle, .success:
+            return .systemGreen
+        case .listening, .processing:
+            return UITheme.brandYellow
+        case .warning:
+            return .systemOrange
+        case .error:
+            return .systemRed
         }
     }
 
@@ -769,7 +1041,18 @@ final class MainViewController: NSViewController {
             $0.removeFromSuperview()
         }
         if recentRecords.isEmpty {
-            recentStack.addArrangedSubview(label("尚无转录结果", size: 13))
+            let empty = label("尚无转录结果", size: 13)
+            empty.textColor = .secondaryLabelColor
+            let wrapper = NSView()
+            wrapper.translatesAutoresizingMaskIntoConstraints = false
+            wrapper.addSubview(empty)
+            empty.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                wrapper.heightAnchor.constraint(greaterThanOrEqualToConstant: 56),
+                empty.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 10),
+                empty.centerYAnchor.constraint(equalTo: wrapper.centerYAnchor),
+            ])
+            recentStack.addArrangedSubview(wrapper)
             return
         }
         for (index, record) in recentRecords.enumerated() {

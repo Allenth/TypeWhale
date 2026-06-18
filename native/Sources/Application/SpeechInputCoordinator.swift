@@ -44,7 +44,10 @@ final class SpeechInputCoordinator {
     }
 
     func start() {
-        recorder.onBands = { [weak self] bands in self?.popup.updateBands(bands) }
+        recorder.onBands = { [weak self] bands in
+            self?.popup.updateBands(bands)
+            self?.controller.updateInputBands(bands)
+        }
         recorder.onRealtimeSnapshot = { [weak self] taskID, url in
             self?.receiveRealtimeSnapshot(taskID: taskID, url: url)
         }
@@ -56,8 +59,12 @@ final class SpeechInputCoordinator {
             self?.controller.updateModelState(state)
             if case .ready = state {
                 self?.nativeASR.reload()
-                self?.controller.status.stringValue = "等待录音"
-                self?.controller.detail.stringValue = "Fn 录音"
+                self?.controller.setPrimaryStatus(
+                    "等待录音",
+                    detail: "\(self?.primaryHotkeyBinding.displayName ?? "Fn") 录音",
+                    tone: .idle,
+                    resetWaveform: true
+                )
             }
         }
         controller.onInstallModel = { [weak self] in
@@ -74,8 +81,7 @@ final class SpeechInputCoordinator {
         asr.start()
         realtimeASR.start()
         if let error = asr.startupError, SenseVoiceModelManifest.preferredModelDirectory == nil {
-            controller.status.stringValue = "需要安装本地模型"
-            controller.detail.stringValue = error
+            controller.setPrimaryStatus("需要安装本地模型", detail: error, tone: .warning, resetWaveform: true)
         }
         refreshPermissions()
         PermissionDiagnosticsProvider.requestAccessibilityIfNeeded()
@@ -168,8 +174,12 @@ final class SpeechInputCoordinator {
     ) {
         guard !recorder.isRecording else { return }
         guard nativeASR.isAvailable else {
-            controller.status.stringValue = "需要安装本地模型"
-            controller.detail.stringValue = "请先在主窗口点击“安装模型”"
+            controller.setPrimaryStatus(
+                "需要安装本地模型",
+                detail: "请先在主窗口点击“安装模型”",
+                tone: .warning,
+                resetWaveform: true
+            )
             showMainWindow()
             return
         }
@@ -186,8 +196,7 @@ final class SpeechInputCoordinator {
         activeSession = session
         inputState = .recording(taskID)
         controller.realtimeDraft.stringValue = realtimeEnabled ? "正在等待第一段实时文本…" : "胶囊实时预览已关闭"
-        controller.status.stringValue = "录音中"
-        controller.detail.stringValue = instructions
+        controller.setPrimaryStatus("录音中", detail: instructions, tone: .listening)
         popup.show(state: "录音中", draft: "")
         outputAudioDucker.duckIfNeeded(enabled: controller.duckSystemAudioWhileRecordingEnabled)
         do {
@@ -200,8 +209,7 @@ final class SpeechInputCoordinator {
         } catch {
             cancelAutoFinishTimer()
             clearActiveRecording()
-            controller.status.stringValue = "无法开始录音"
-            controller.detail.stringValue = error.localizedDescription
+            controller.setPrimaryStatus("无法开始录音", detail: error.localizedDescription, tone: .error, resetWaveform: true)
             popup.show(state: "录音失败")
         }
     }
@@ -217,8 +225,7 @@ final class SpeechInputCoordinator {
             result = try recorder.stop()
         } catch {
             clearActiveRecording()
-            controller.status.stringValue = "保存录音失败"
-            controller.detail.stringValue = error.localizedDescription
+            controller.setPrimaryStatus("保存录音失败", detail: error.localizedDescription, tone: .error, resetWaveform: true)
             popup.show(state: "保存失败", draft: "")
             return
         }
@@ -240,8 +247,12 @@ final class SpeechInputCoordinator {
         inputState = .finalizing(task)
         latestSubmittedTaskID = taskID
         drainPendingPasteResultsIfPossible()
-        controller.status.stringValue = "正在检测人声"
-        controller.detail.stringValue = String(format: "已完整录制 %.1f 秒", duration)
+        controller.setPrimaryStatus(
+            "正在检测人声",
+            detail: String(format: "已完整录制 %.1f 秒", duration),
+            tone: .processing,
+            resetWaveform: true
+        )
         popup.hideAnimated()
         asr.containsSpeech(audio: url) { [weak self] response in
             DispatchQueue.main.async {
@@ -250,8 +261,12 @@ final class SpeechInputCoordinator {
                 switch response {
                 case .failure(let error):
                     if shouldUpdateInterface {
-                        self.controller.status.stringValue = "人声检测失败"
-                        self.controller.detail.stringValue = error.localizedDescription
+                        self.controller.setPrimaryStatus(
+                            "人声检测失败",
+                            detail: error.localizedDescription,
+                            tone: .error,
+                            resetWaveform: true
+                        )
                         self.popup.show(state: "检测失败", draft: "")
                     }
                     self.finishFinalTask(task)
@@ -262,8 +277,12 @@ final class SpeechInputCoordinator {
                     self.finishFinalTask(task)
                 case .success(true):
                     if shouldUpdateInterface {
-                        self.controller.status.stringValue = "正在识别"
-                        self.controller.detail.stringValue = String(format: "已完整录制 %.1f 秒", duration)
+                        self.controller.setPrimaryStatus(
+                            "正在识别",
+                            detail: String(format: "已完整录制 %.1f 秒", duration),
+                            tone: .processing,
+                            resetWaveform: true
+                        )
                         self.popup.show(state: "识别中", draft: "")
                     }
                     self.asr.transcribe(
@@ -282,6 +301,7 @@ final class SpeechInputCoordinator {
         cancelInitialSilenceTimer()
         outputAudioDucker.restore()
         activeSession = nil
+        controller.resetInputBands()
         discardPendingRealtimeSnapshot()
     }
 
@@ -376,16 +396,14 @@ final class SpeechInputCoordinator {
         switch response {
         case .failure(let error):
             if shouldUpdateInterface {
-                controller.status.stringValue = "识别失败"
-                controller.detail.stringValue = error.localizedDescription
+                controller.setPrimaryStatus("识别失败", detail: error.localizedDescription, tone: .error, resetWaveform: true)
                 popup.show(state: "识别失败", draft: "")
             }
             finishFinalTask(task)
         case .success(let value):
             if let error = value["error"] as? String, !error.isEmpty {
                 if shouldUpdateInterface {
-                    controller.status.stringValue = "识别失败"
-                    controller.detail.stringValue = error
+                    controller.setPrimaryStatus("识别失败", detail: error, tone: .error, resetWaveform: true)
                     popup.show(state: "识别失败", draft: "")
                 }
                 finishFinalTask(task)
@@ -398,8 +416,12 @@ final class SpeechInputCoordinator {
                     controller.addRecentTranscription(text, recognitionSeconds: elapsed)
                     controller.realtimeDraft.stringValue = text
                 }
-                controller.status.stringValue = "识别完成"
-                controller.detail.stringValue = String(format: "本地识别耗时 %.2f 秒", elapsed)
+                controller.setPrimaryStatus(
+                    "识别完成",
+                    detail: String(format: "本地识别耗时 %.2f 秒", elapsed),
+                    tone: .success,
+                    resetWaveform: true
+                )
             }
             if !text.isEmpty {
                 if shouldUpdateInterface {
@@ -454,8 +476,12 @@ final class SpeechInputCoordinator {
     }
 
     private func showEmptyRecording() {
-        controller.status.stringValue = "没有收到有效音频"
-        controller.detail.stringValue = emptyRecordingDetail()
+        controller.setPrimaryStatus(
+            "没有收到有效音频",
+            detail: emptyRecordingDetail(),
+            tone: .warning,
+            resetWaveform: true
+        )
         popup.hideAnimated()
     }
 
@@ -483,8 +509,7 @@ final class SpeechInputCoordinator {
                 controller.detail.stringValue = "识别结果已粘贴，检测到新的剪贴板内容并已保留"
                 hidePopup(after: 0, task: task)
             case .failed(let message):
-                controller.status.stringValue = "自动粘贴失败"
-                controller.detail.stringValue = message
+                controller.setPrimaryStatus("自动粘贴失败", detail: message, tone: .error, resetWaveform: true)
                 popup.show(state: "粘贴失败", draft: "")
                 hidePopup(after: 1.2, task: task)
             }

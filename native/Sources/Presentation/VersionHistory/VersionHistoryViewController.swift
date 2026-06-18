@@ -9,6 +9,16 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.2.13 (Build 170)",
+            date: "2026-06-18",
+            changes: [
+                "提交 cc 优化后的双栏深色 dashboard 主界面，保留左侧品牌、状态、模型入口和右侧权限、快捷键、选项、实时草稿、最近转录。",
+                "新增共享 UI 组件，用于卡片、分区标题、按键胶囊、自绘开关和主界面小波形。",
+                "主界面状态点跟随录音、检测、识别、完成和错误状态变色，录音结束后重置小波形。",
+                "为自绘开关补充无障碍标签，并清理不应提交的系统缩略图缓存文件。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.2.12 (Build 169)",
             date: "2026-06-18",
             changes: [
@@ -494,7 +504,9 @@ final class VersionHistoryViewController: NSViewController {
         view = NSView(frame: NSRect(x: 0, y: 0, width: 400, height: 390))
 
         let title = label("版本历史", size: 15, weight: .semibold)
+        title.alignment = .left
         let subtitle = label("包含正式版本和 33 个 Build 记录，向下滚动查看。", size: 12)
+        subtitle.alignment = .left
         subtitle.textColor = NSColor(calibratedWhite: 1, alpha: 0.82)
 
         let historyText = NSTextView()
@@ -524,7 +536,7 @@ final class VersionHistoryViewController: NSViewController {
 
         let stack = NSStackView(views: [title, subtitle, scroll])
         stack.orientation = .vertical
-        stack.alignment = .width
+        stack.alignment = .leading
         stack.spacing = 8
         stack.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(stack)
@@ -534,6 +546,8 @@ final class VersionHistoryViewController: NSViewController {
             stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
             stack.topAnchor.constraint(equalTo: view.topAnchor, constant: 14),
             stack.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -14),
+            title.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            subtitle.widthAnchor.constraint(equalTo: stack.widthAnchor),
             scroll.widthAnchor.constraint(equalTo: stack.widthAnchor),
         ])
     }
