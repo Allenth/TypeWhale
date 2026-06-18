@@ -2,6 +2,14 @@
 
 TypeWhale is a local-first desktop speech input tool. It records from the microphone, runs local ASR through a native sherpa-onnx / ONNX Runtime pipeline, previews recognition in a compact capsule, and inserts the final text back into the active app.
 
+## Download
+
+[Download TypeWhale-1.2.12-169.dmg](https://github.com/Allenth/TypeWhale/releases/download/v1.2.12-build169/TypeWhale-1.2.12-169.dmg)
+
+This is a public test build. It is not notarized with Developer ID yet, so macOS may require manual approval in System Settings.
+
+中文用户可以直接点击上面的链接下载安装包。如果浏览器没有开始下载，请右键链接选择“链接另存为”，或打开 [Releases](https://github.com/Allenth/TypeWhale/releases) 页面，在 **Assets** 区域下载 `TypeWhale-1.2.12-169.dmg`。
+
 The current macOS baseline is:
 
 ```text
