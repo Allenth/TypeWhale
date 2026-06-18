@@ -1,0 +1,39 @@
+.DS_Store
+Thumbs.db
+
+# Python / local environments
+__pycache__/
+*.py[cod]
+.env
+.venv/
+venv/
+
+# Build and release artifacts
+dist/
+*.dmg
+*.zip
+*.pkg
+macos/*.app/
+macos/**/*.app/
+**/_CodeSignature/
+
+# Local runtime and caches
+.runtime/
+models/
+语音缓存/
+*.log
+
+# Model and runtime binaries are not committed
+*.onnx
+*.dylib
+*.dll
+*.exe
+*.pdb
+
+# Windows generated output
+windows/TypeWhale.Windows/bin/
+windows/TypeWhale.Windows/obj/
+windows/TypeWhale.Windows/runtimes/
+windows/native/build/
+windows/TypeWhale.Windows/Models/**/*.onnx
+windows/TypeWhale.Windows/Models/**/tokens.txt

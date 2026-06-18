@@ -1,0 +1,8 @@
+TypeWhale.Windows/bin/
+TypeWhale.Windows/obj/
+native/build/
+publish/
+TypeWhale.Windows/Models/**/*.onnx
+TypeWhale.Windows/runtimes/
+*.user
+*.suo

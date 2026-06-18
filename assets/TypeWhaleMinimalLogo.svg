@@ -1,0 +1,27 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="tile" x1="512" y1="152" x2="512" y2="858" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFD84D"/>
+      <stop offset="1" stop-color="#FFB615"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(340 260) rotate(52) scale(500 430)">
+      <stop offset="0" stop-color="#FFF39A" stop-opacity="0.50"/>
+      <stop offset="0.55" stop-color="#FFE36A" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#FFB615" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="softShadow" x="120" y="122" width="784" height="784" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#A87300" flood-opacity="0.16"/>
+    </filter>
+  </defs>
+
+  <rect x="150" y="145" width="724" height="724" rx="136" fill="url(#tile)" filter="url(#softShadow)"/>
+  <rect x="150" y="145" width="724" height="724" rx="136" fill="url(#glow)"/>
+  <rect x="151.5" y="146.5" width="721" height="721" rx="134.5" stroke="#E7A80B" stroke-opacity="0.28" stroke-width="3"/>
+
+  <path d="M398 524C417 506 437 546 457 524C477 502 497 546 520 524C538 508 559 514 577 524"
+        stroke="#6F4E08"
+        stroke-width="38"
+        stroke-linecap="round"
+        stroke-linejoin="round"/>
+  <circle cx="644" cy="447" r="24" fill="#6F4E08"/>
+</svg>
