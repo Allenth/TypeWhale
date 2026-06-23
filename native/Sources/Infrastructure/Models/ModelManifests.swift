@@ -145,3 +145,55 @@ enum VoiceActivityModelManifest {
         }
     }
 }
+
+enum Qwen3ASRModelManifest {
+    static let directoryName = "qwen3-asr-0.6b-int8"
+    static let nestedDirectoryName = "sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25"
+    static let requiredFiles = [
+        "conv_frontend.onnx",
+        "encoder.int8.onnx",
+        "decoder.int8.onnx",
+        "tokenizer/vocab.json",
+        "tokenizer/merges.txt",
+        "tokenizer/tokenizer_config.json",
+    ]
+
+    static var modelDirectory: URL {
+        AppPaths.models
+            .appendingPathComponent(directoryName)
+            .appendingPathComponent(nestedDirectoryName)
+    }
+
+    static var bundledModelDirectory: URL {
+        AppPaths.resources
+            .appendingPathComponent("Models")
+            .appendingPathComponent(directoryName)
+            .appendingPathComponent(nestedDirectoryName)
+    }
+
+    static var preferredModelDirectory: URL? {
+        if let override = ProcessInfo.processInfo.environment["TYPEWHALE_QWEN3_ASR_MODEL_DIR"],
+           !override.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let url = URL(fileURLWithPath: override, isDirectory: true)
+            if isInstalled(at: url) { return url }
+        }
+        if isInstalled(at: bundledModelDirectory) {
+            return bundledModelDirectory
+        }
+        if isInstalled(at: modelDirectory) {
+            return modelDirectory
+        }
+        return nil
+    }
+
+    static func isInstalled(at directory: URL) -> Bool {
+        requiredFiles.allSatisfy { relativePath in
+            let url = directory.appendingPathComponent(relativePath)
+            guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+                  let size = attributes[.size] as? NSNumber else {
+                return false
+            }
+            return size.int64Value > 0
+        }
+    }
+}

@@ -9,6 +9,16 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.2.41 (Build 198)",
+            date: "2026-06-24",
+            changes: [
+                "新增 Qwen3-ASR 0.6B 原生识别后端。",
+                "识别模型增加“自动 / SenseVoice int8 / Qwen3-ASR 0.6B”选择。",
+                "自动模式会优先使用本机已安装的 Qwen3-ASR ONNX 模型，缺失时回退 SenseVoice。",
+                "Qwen3-ASR 走 sherpa-onnx 原生 C bridge，不依赖 Python。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.2.40 (Build 197)",
             date: "2026-06-23",
             changes: [

@@ -37,11 +37,57 @@ enum RecognitionLanguageMode: String, CaseIterable {
     }
 }
 
+enum ASRBackend: String, CaseIterable, Codable {
+    case automatic
+    case senseVoice
+    case qwen3ASR
+
+    static let defaultsKey = "asrBackend"
+
+    static func load() -> ASRBackend {
+        ASRBackend(rawValue: UserDefaults.standard.string(forKey: defaultsKey) ?? "") ?? .automatic
+    }
+
+    func save() {
+        UserDefaults.standard.set(rawValue, forKey: Self.defaultsKey)
+    }
+
+    var displayName: String {
+        switch self {
+        case .automatic: return "自动"
+        case .senseVoice: return "SenseVoice int8"
+        case .qwen3ASR: return "Qwen3-ASR 0.6B"
+        }
+    }
+
+    var menuTag: Int {
+        switch self {
+        case .automatic: return 0
+        case .senseVoice: return 1
+        case .qwen3ASR: return 2
+        }
+    }
+
+    var resolvedBackend: ASRBackend {
+        switch self {
+        case .automatic:
+            return Qwen3ASRModelManifest.preferredModelDirectory == nil ? .senseVoice : .qwen3ASR
+        case .senseVoice, .qwen3ASR:
+            return self
+        }
+    }
+
+    static func fromMenuTag(_ tag: Int) -> ASRBackend {
+        Self.allCases.first { $0.menuTag == tag } ?? .automatic
+    }
+}
+
 struct ASRConfiguration {
     let languageMode: RecognitionLanguageMode
+    let backend: ASRBackend
 
     static func current() -> ASRConfiguration {
-        ASRConfiguration(languageMode: .load())
+        ASRConfiguration(languageMode: .load(), backend: .load())
     }
 }
 

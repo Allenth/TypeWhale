@@ -190,19 +190,23 @@ final class SpeechInputCoordinator {
             showMainWindow()
             return
         }
-        let realtimeEnabled = controller.realtimePreviewEnabled
+        let selectedBackend = controller.asrBackend
+        let resolvedBackend = selectedBackend.resolvedBackend
+        let realtimeEnabled = controller.realtimePreviewEnabled && resolvedBackend == .senseVoice
         let taskID = UUID()
         let session = SpeechSession(
             id: taskID,
             targetApp: NSWorkspace.shared.frontmostApplication,
-            configuration: ASRConfiguration(languageMode: .chinese),
+            configuration: ASRConfiguration(languageMode: .chinese, backend: selectedBackend),
             activation: activation,
             realtimeEnabled: realtimeEnabled,
             latestPreviewText: ""
         )
         activeSession = session
         inputState = .recording(taskID)
-        controller.realtimeDraft.stringValue = realtimeEnabled ? "正在等待第一段实时文本…" : "胶囊实时预览已关闭"
+        controller.realtimeDraft.stringValue = realtimeEnabled
+            ? "正在等待第一段实时文本…"
+            : (resolvedBackend == .qwen3ASR ? "Qwen3-ASR 模式下实时预览暂不启用" : "胶囊实时预览已关闭")
         controller.setPrimaryStatus("录音中", detail: instructions, tone: .listening)
         popup.show(state: "录音中", draft: "")
         outputAudioDucker.duckIfNeeded(enabled: controller.duckSystemAudioWhileRecordingEnabled)

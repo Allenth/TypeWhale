@@ -3,11 +3,14 @@ import Foundation
 final class NativeSenseVoiceBridge {
     private enum Engine: Equatable {
         case senseVoice(URL)
+        case qwen3ASR(URL)
 
         var label: String {
             switch self {
             case .senseVoice:
                 return "sensevoice-small/sherpa-native"
+            case .qwen3ASR:
+                return "qwen3-asr-0.6b-int8/sherpa-native"
             }
         }
     }
@@ -147,6 +150,12 @@ final class NativeSenseVoiceBridge {
                     }
                 }
             }
+        case .qwen3ASR(let directory):
+            created = directory.path.withCString { directoryCString in
+                "".withCString { hotwordsCString in
+                    TypeSpeakerNativeQwen3RecognizerCreate(directoryCString, hotwordsCString, &errorPointer)
+                }
+            }
         }
         defer {
             if let errorPointer { TypeSpeakerNativeStringFree(errorPointer) }
@@ -164,8 +173,25 @@ final class NativeSenseVoiceBridge {
     }
 
     private func preferredEngine(for configuration: ASRConfiguration? = nil) -> Engine? {
-        if let senseDirectory = SenseVoiceModelManifest.preferredModelDirectory {
-            return .senseVoice(senseDirectory)
+        switch (configuration?.backend ?? .load()).resolvedBackend {
+        case .qwen3ASR:
+            if let qwenDirectory = Qwen3ASRModelManifest.preferredModelDirectory {
+                return .qwen3ASR(qwenDirectory)
+            }
+            if let senseDirectory = SenseVoiceModelManifest.preferredModelDirectory {
+                return .senseVoice(senseDirectory)
+            }
+        case .senseVoice:
+            if let senseDirectory = SenseVoiceModelManifest.preferredModelDirectory {
+                return .senseVoice(senseDirectory)
+            }
+        case .automatic:
+            if let qwenDirectory = Qwen3ASRModelManifest.preferredModelDirectory {
+                return .qwen3ASR(qwenDirectory)
+            }
+            if let senseDirectory = SenseVoiceModelManifest.preferredModelDirectory {
+                return .senseVoice(senseDirectory)
+            }
         }
         return nil
     }
@@ -184,7 +210,7 @@ final class SenseVoiceRouter {
 
     var startupError: String? {
         if native.isAvailable { return nil }
-        return "尚未安装原生 SenseVoice 模型"
+        return "尚未安装可用的本地 ASR 模型"
     }
 
     func start() {
@@ -202,7 +228,7 @@ final class SenseVoiceRouter {
             completion(.failure(NSError(
                 domain: "com.waykingah.typespeaker.asr",
                 code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "请先安装原生 SenseVoice 模型"]
+                userInfo: [NSLocalizedDescriptionKey: "请先安装可用的本地 ASR 模型"]
             )))
         }
     }

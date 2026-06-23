@@ -25,6 +25,22 @@ static const char *sense_voice_language(void) {
   return "auto";
 }
 
+static char *join_path(const char *directory, const char *relative_path) {
+  size_t directory_length = strlen(directory);
+  size_t relative_length = strlen(relative_path);
+  int needs_slash = directory_length > 0 && directory[directory_length - 1] != '/';
+  char *result = (char *)calloc(directory_length + relative_length + (needs_slash ? 2 : 1), sizeof(char));
+  if (result == NULL) {
+    return NULL;
+  }
+  strcpy(result, directory);
+  if (needs_slash) {
+    strcat(result, "/");
+  }
+  strcat(result, relative_path);
+  return result;
+}
+
 static int vad_accept_samples(
     const SherpaOnnxVoiceActivityDetector *vad,
     const float *samples,
@@ -169,6 +185,71 @@ TypeSpeakerNativeRecognizer TypeSpeakerNativeRecognizerCreate(
   if (state == NULL) {
     SherpaOnnxDestroyOfflineRecognizer(recognizer);
     set_error(error_message, "无法分配原生识别器状态");
+    return NULL;
+  }
+  state->recognizer = recognizer;
+  state->hotwords = hotwords != NULL && hotwords[0] != '\0' ? strdup(hotwords) : NULL;
+  return (TypeSpeakerNativeRecognizer)state;
+}
+
+TypeSpeakerNativeRecognizer TypeSpeakerNativeQwen3RecognizerCreate(
+    const char *model_dir,
+    const char *hotwords,
+    char **error_message) {
+  if (error_message != NULL) {
+    *error_message = NULL;
+  }
+  if (model_dir == NULL || model_dir[0] == '\0') {
+    set_error(error_message, "缺少 Qwen3-ASR 模型目录");
+    return NULL;
+  }
+
+  char *conv_frontend = join_path(model_dir, "conv_frontend.onnx");
+  char *encoder = join_path(model_dir, "encoder.int8.onnx");
+  char *decoder = join_path(model_dir, "decoder.int8.onnx");
+  char *tokenizer = join_path(model_dir, "tokenizer");
+  if (conv_frontend == NULL || encoder == NULL || decoder == NULL || tokenizer == NULL) {
+    free(conv_frontend);
+    free(encoder);
+    free(decoder);
+    free(tokenizer);
+    set_error(error_message, "无法分配 Qwen3-ASR 模型路径");
+    return NULL;
+  }
+
+  SherpaOnnxOfflineRecognizerConfig config;
+  memset(&config, 0, sizeof(config));
+  config.feat_config.sample_rate = 16000;
+  config.feat_config.feature_dim = 80;
+  config.model_config.qwen3_asr.conv_frontend = conv_frontend;
+  config.model_config.qwen3_asr.encoder = encoder;
+  config.model_config.qwen3_asr.decoder = decoder;
+  config.model_config.qwen3_asr.tokenizer = tokenizer;
+  config.model_config.qwen3_asr.max_total_len = 512;
+  config.model_config.qwen3_asr.max_new_tokens = 256;
+  config.model_config.qwen3_asr.hotwords =
+      hotwords != NULL && hotwords[0] != '\0' ? hotwords : NULL;
+  config.model_config.num_threads = 4;
+  config.model_config.provider = "cpu";
+  config.model_config.debug = 0;
+  config.decoding_method = "greedy_search";
+
+  const SherpaOnnxOfflineRecognizer *recognizer =
+      SherpaOnnxCreateOfflineRecognizer(&config);
+  free(conv_frontend);
+  free(encoder);
+  free(decoder);
+  free(tokenizer);
+  if (recognizer == NULL) {
+    set_error(error_message, "无法创建原生 Qwen3-ASR 识别器");
+    return NULL;
+  }
+
+  TypeSpeakerNativeRecognizerState *state =
+      (TypeSpeakerNativeRecognizerState *)calloc(1, sizeof(TypeSpeakerNativeRecognizerState));
+  if (state == NULL) {
+    SherpaOnnxDestroyOfflineRecognizer(recognizer);
+    set_error(error_message, "无法分配原生 Qwen3-ASR 状态");
     return NULL;
   }
   state->recognizer = recognizer;

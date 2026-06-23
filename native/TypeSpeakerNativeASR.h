@@ -14,6 +14,12 @@ TypeSpeakerNativeRecognizer TypeSpeakerNativeRecognizerCreate(
     char **error_message
 );
 
+TypeSpeakerNativeRecognizer TypeSpeakerNativeQwen3RecognizerCreate(
+    const char *model_dir,
+    const char *hotwords,
+    char **error_message
+);
+
 char *TypeSpeakerNativeRecognizerTranscribe(
     TypeSpeakerNativeRecognizer recognizer,
     const char *audio_path,

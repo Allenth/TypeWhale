@@ -44,6 +44,7 @@ final class MainViewController: NSViewController {
     let autoFinish = BrandSwitch()
     let duckSystemAudio = BrandSwitch()
     let launchAtLogin = BrandSwitch()
+    let asrBackendMode = NSPopUpButton()
     let smartRewriteMode = NSPopUpButton()
     let deepSeekKeyButton = NSButton(title: "设置 Key", target: nil, action: nil)
     let promptSettingsButton = NSButton(title: "提示词", target: nil, action: nil)
@@ -114,6 +115,8 @@ final class MainViewController: NSViewController {
         autoFinish.target = self; autoFinish.action = #selector(saveSettings)
         duckSystemAudio.state = settings.duckSystemAudioWhileRecordingEnabled ? .on : .off
         duckSystemAudio.target = self; duckSystemAudio.action = #selector(saveSettings)
+        configureASRBackendMenu(settings.asrBackend)
+        asrBackendMode.target = self; asrBackendMode.action = #selector(saveSettings)
         configureSmartRewriteModeMenu(settings.smartRewritePreference)
         smartRewriteMode.target = self; smartRewriteMode.action = #selector(saveSettings)
         configureDeepSeekKeyButton()
@@ -450,6 +453,7 @@ final class MainViewController: NSViewController {
         translationPromptButton.widthAnchor.constraint(equalToConstant: 62).isActive = true
 
         let optionCard = listCard([
+            optionRow("识别模型", asrBackendMode),
             optionRow("智能整理", smartRewriteControls),
             optionRow("自动翻译", autoTranslate),
             optionRow("翻译方向", translationControls),
@@ -559,6 +563,8 @@ final class MainViewController: NSViewController {
 
     private func configureOptionAccessibility() {
         smartRewriteMode.setAccessibilityLabel("智能整理")
+        asrBackendMode.setAccessibilityLabel("识别模型")
+        asrBackendMode.toolTip = "选择 final 识别使用的本地 ASR 后端"
         deepSeekKeyButton.setAccessibilityLabel("DeepSeek API Key")
         promptSettingsButton.setAccessibilityLabel("智能整理提示词")
         developerTermsButton.setAccessibilityLabel("开发术语词库")
@@ -583,6 +589,19 @@ final class MainViewController: NSViewController {
         smartRewriteMode.bezelStyle = .rounded
         smartRewriteMode.controlSize = .regular
         smartRewriteMode.font = .systemFont(ofSize: 12)
+    }
+
+    private func configureASRBackendMenu(_ backend: ASRBackend) {
+        asrBackendMode.removeAllItems()
+        for item in ASRBackend.allCases {
+            asrBackendMode.addItem(withTitle: item.displayName)
+            asrBackendMode.lastItem?.tag = item.menuTag
+        }
+        asrBackendMode.selectItem(withTag: backend.menuTag)
+        asrBackendMode.toolTip = "自动模式优先使用已安装的 Qwen3-ASR，否则回退 SenseVoice"
+        asrBackendMode.bezelStyle = .rounded
+        asrBackendMode.controlSize = .regular
+        asrBackendMode.font = .systemFont(ofSize: 12)
     }
 
     private func configureDeepSeekKeyButton() {
@@ -649,8 +668,8 @@ final class MainViewController: NSViewController {
 
     private func versionText() -> String {
         let info = Bundle.main.infoDictionary
-        let version = info?["CFBundleShortVersionString"] as? String ?? "1.2.40"
-        let build = info?["CFBundleVersion"] as? String ?? "197"
+        let version = info?["CFBundleShortVersionString"] as? String ?? "1.2.41"
+        let build = info?["CFBundleVersion"] as? String ?? "198"
         return "Version \(version) (\(build))"
     }
 
@@ -713,7 +732,7 @@ final class MainViewController: NSViewController {
 
     private func makeModelDetailController() -> NSViewController {
         let icon = symbolIcon("cpu", size: 18, color: UITheme.brandYellow)
-        let title = label("SenseVoice int8", size: 14, weight: .semibold)
+        let title = label("本地 ASR 模型", size: 14, weight: .semibold)
         let titleRow = NSStackView(views: [icon, title])
         titleRow.orientation = .horizontal
         titleRow.alignment = .centerY
@@ -722,7 +741,7 @@ final class MainViewController: NSViewController {
         modelValue.maximumNumberOfLines = 2
         modelValue.lineBreakMode = .byWordWrapping
 
-        let desc = label("本地离线语音识别模型，全程在本机推理，不上传音频。", size: 12)
+        let desc = label("本地离线语音识别模型，全程在本机推理，不上传音频。Qwen3-ASR 使用原生 sherpa-onnx 链路。", size: 12)
         desc.textColor = .secondaryLabelColor
         desc.maximumNumberOfLines = 0
         desc.lineBreakMode = .byWordWrapping
@@ -783,10 +802,12 @@ final class MainViewController: NSViewController {
             realtimePreviewEnabled: realtime.state == .on,
             autoFinishAfterPauseEnabled: autoFinish.state == .on,
             duckSystemAudioWhileRecordingEnabled: duckSystemAudio.state == .on,
+            asrBackend: asrBackend,
             smartRewritePreference: smartRewritePreference,
             autoTranslateEnabled: autoTranslate.state == .on,
             translationDirection: translationDirection
         ))
+        refreshDisplayedModelState()
     }
 
     @objc private func configureSmartRewritePrompts() {
@@ -1156,6 +1177,40 @@ final class MainViewController: NSViewController {
     }
 
     func updateModelState(_ state: SenseVoiceModelInstaller.State) {
+        refreshDisplayedModelState(installerState: state)
+    }
+
+    private func refreshDisplayedModelState(installerState state: SenseVoiceModelInstaller.State? = nil) {
+        let selectedBackend = asrBackend.resolvedBackend
+        modelEntryName.stringValue = asrBackend == .automatic
+            ? "\(selectedBackend.displayName) · 自动"
+            : selectedBackend.displayName
+        if selectedBackend == .qwen3ASR {
+            if let qwenPath = Qwen3ASRModelManifest.preferredModelDirectory?.path {
+                modelEntryStatus.stringValue = "已就绪"
+                modelEntryStatus.textColor = .systemGreen
+                modelEntryDot.layer?.backgroundColor = NSColor.systemGreen.cgColor
+                modelValue.toolTip = qwenPath
+                modelValue.stringValue = "Qwen3-ASR 原生模型已就绪，可离线识别"
+                modelValue.textColor = .systemGreen
+                modelPathLabel.stringValue = qwenPath
+                modelProgress.isHidden = true
+                modelInstallButton.isHidden = true
+                return
+            }
+            modelEntryStatus.stringValue = "未安装"
+            modelEntryStatus.textColor = .systemRed
+            modelEntryDot.layer?.backgroundColor = NSColor.systemRed.cgColor
+            modelValue.toolTip = Qwen3ASRModelManifest.modelDirectory.path
+            modelValue.stringValue = "Qwen3-ASR 模型缺失，自动模式会回退 SenseVoice"
+            modelValue.textColor = .systemOrange
+            modelPathLabel.stringValue = Qwen3ASRModelManifest.modelDirectory.path
+            modelProgress.isHidden = true
+            modelInstallButton.isHidden = true
+            return
+        }
+
+        let state = state ?? (SenseVoiceModelManifest.preferredModelDirectory == nil ? .missing : .ready)
         switch state {
         case .missing:
             modelEntryStatus.stringValue = "未安装"
@@ -1171,6 +1226,7 @@ final class MainViewController: NSViewController {
             modelInstallButton.title = "安装模型"
         case .ready:
             let sensePath = SenseVoiceModelManifest.preferredModelDirectory?.path ?? ""
+            modelEntryName.stringValue = asrBackend == .automatic ? "SenseVoice int8 · 自动" : "SenseVoice int8"
             modelEntryStatus.stringValue = "已就绪"
             modelEntryStatus.textColor = .systemGreen
             modelEntryDot.layer?.backgroundColor = NSColor.systemGreen.cgColor
@@ -1274,6 +1330,10 @@ final class MainViewController: NSViewController {
 
     var duckSystemAudioWhileRecordingEnabled: Bool {
         duckSystemAudio.state == .on
+    }
+
+    var asrBackend: ASRBackend {
+        ASRBackend.fromMenuTag(asrBackendMode.selectedItem?.tag ?? 0)
     }
 
     var smartRewritePreference: SmartRewritePreference {
