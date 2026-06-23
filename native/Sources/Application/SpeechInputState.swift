@@ -24,7 +24,10 @@ struct RealtimeSnapshotRequest {
 struct PendingPasteResult {
     let task: RecordingTask
     let text: String
-    let recognitionSeconds: Double
+    let sourceText: String?
+    let translatedText: String?
+    let translationDirection: SmartTranslationDirection?
+    let usage: SmartUsage?
 }
 
 enum SpeechInputState {

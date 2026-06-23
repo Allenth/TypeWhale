@@ -120,6 +120,7 @@ xcrun swiftc \
   -framework ApplicationServices \
   -framework CryptoKit \
   -framework QuartzCore \
+  -framework Security \
   -framework ServiceManagement \
   "${swift_sources[@]}" \
   "$NATIVE_ASR_OBJECT" \
@@ -142,8 +143,8 @@ cat > "$CONTENTS/Info.plist" <<'PLIST'
 <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
 <key>CFBundleName</key><string>TypeWhale</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>1.2.13</string>
-<key>CFBundleVersion</key><string>170</string>
+<key>CFBundleShortVersionString</key><string>1.2.40</string>
+<key>CFBundleVersion</key><string>197</string>
 <key>LSMinimumSystemVersion</key><string>13.0</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSMicrophoneUsageDescription</key><string>TypeWhale 需要使用麦克风进行本地语音转文字。</string>

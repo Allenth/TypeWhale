@@ -51,11 +51,37 @@ struct RecordingTask {
     let targetApp: NSRunningApplication?
     let configuration: ASRConfiguration
     let duration: TimeInterval
+    let finishRequestedAt: Date
 }
 
 struct RecentTranscription: Codable, Equatable {
     let text: String
     let recognitionSeconds: Double?
+    let sourceText: String?
+    let translatedText: String?
+    let translationDirection: SmartTranslationDirection?
+    let usage: SmartUsage?
+
+    init(
+        text: String,
+        recognitionSeconds: Double?,
+        sourceText: String? = nil,
+        translatedText: String? = nil,
+        translationDirection: SmartTranslationDirection? = nil,
+        usage: SmartUsage? = nil
+    ) {
+        self.text = text
+        self.recognitionSeconds = recognitionSeconds
+        self.sourceText = sourceText
+        self.translatedText = translatedText
+        self.translationDirection = translationDirection
+        self.usage = usage
+    }
+
+    var hasTranslation: Bool {
+        guard let sourceText, let translatedText else { return false }
+        return !sourceText.isEmpty && !translatedText.isEmpty
+    }
 
     var timeText: String {
         guard let recognitionSeconds else { return "识别时间 --" }

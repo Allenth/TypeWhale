@@ -16,8 +16,10 @@ final class SpeechInputCoordinator {
     private let modelInstaller = SenseVoiceModelInstaller()
     private let nativeASR = NativeSenseVoiceBridge(runtimeName: "shared")
     private let outputAudioDucker = OutputAudioDucker()
+    private let smartEngine = DeepSeekRewriteEngine()
     private lazy var asr = SenseVoiceRouter(runtimeName: "final", native: nativeASR)
     private lazy var realtimeASR = SenseVoiceRouter(runtimeName: "realtime", native: nativeASR)
+    private lazy var smartInputRouter = SmartInputRouter(engine: smartEngine)
     private let pasteCoordinator = PasteCoordinator()
     private var inputState: SpeechInputState = .idle
     private var activeSession: SpeechSession?
@@ -55,6 +57,7 @@ final class SpeechInputCoordinator {
         hotkey.update(primary: primaryHotkeyBinding, secondary: secondaryHotkeyBinding)
         hotkey.onDown = { [weak self] channel, binding in self?.handleHotkeyDown(channel: channel, binding: binding) }
         hotkey.onUp = { [weak self] channel, binding in self?.handleHotkeyUp(channel: channel, binding: binding) }
+        hotkey.onAutoTranslateToggle = { [weak self] in self?.toggleAutoTranslateFromHotkey() }
         modelInstaller.onStateChange = { [weak self] state in
             self?.controller.updateModelState(state)
             if case .ready = state {
@@ -167,6 +170,10 @@ final class SpeechInputCoordinator {
         }
     }
 
+    private func toggleAutoTranslateFromHotkey() {
+        controller.toggleAutoTranslateFromShortcut()
+    }
+
     private func startRecording(
         instructions: String,
         activation: RecordingActivation,
@@ -242,7 +249,8 @@ final class SpeechInputCoordinator {
             audioURL: url,
             targetApp: targetApp,
             configuration: configuration,
-            duration: duration
+            duration: duration,
+            finishRequestedAt: Date()
         )
         inputState = .finalizing(task)
         latestSubmittedTaskID = taskID
@@ -411,29 +419,248 @@ final class SpeechInputCoordinator {
             }
             let text = cleanRecognitionText(value["text"] as? String ?? "", languageMode: task.configuration.languageMode)
             let elapsed = value["duration_sec"] as? Double ?? 0
-            if shouldUpdateInterface {
-                if !text.isEmpty {
-                    controller.addRecentTranscription(text, recognitionSeconds: elapsed)
-                    controller.realtimeDraft.stringValue = text
-                }
-                controller.setPrimaryStatus(
-                    "识别完成",
-                    detail: String(format: "本地识别耗时 %.2f 秒", elapsed),
-                    tone: .success,
-                    resetWaveform: true
-                )
-            }
             if !text.isEmpty {
                 if shouldUpdateInterface {
-                    popup.hideAnimated()
+                    controller.realtimeDraft.stringValue = text
+                    let preference = controller.smartRewritePreference
+                    let context = SmartInputContext(targetApp: task.targetApp)
+                    let progress = smartInputRouter.progressInfo(preference: preference, context: context)
+                    if controller.autoTranslateEnabled {
+                        if controller.translationDirection.usesRawSourceTextForTranslation {
+                            controller.setPrimaryStatus(
+                                "AI 翻译中",
+                                detail: smartTranslationProgressDetail(
+                                    direction: controller.translationDirection,
+                                    modelName: smartEngine.displayName
+                                ),
+                                tone: .processing,
+                                resetWaveform: true
+                            )
+                            popup.show(state: "翻译中", draft: "")
+                        } else if progress.shouldRewrite {
+                            controller.setPrimaryStatus(
+                                "AI 整理中",
+                                detail: "整理后继续\(controller.translationDirection.displayName) · \(smartEngine.displayName)",
+                                tone: .processing,
+                                resetWaveform: true
+                            )
+                            popup.show(state: "整理中", draft: "")
+                        } else {
+                            controller.setPrimaryStatus(
+                                "AI 翻译中",
+                                detail: smartTranslationProgressDetail(
+                                    direction: controller.translationDirection,
+                                    modelName: smartEngine.displayName
+                                ),
+                                tone: .processing,
+                                resetWaveform: true
+                            )
+                            popup.show(state: "翻译中", draft: "")
+                        }
+                    } else {
+                        if progress.shouldRewrite {
+                            controller.setPrimaryStatus(
+                                "AI 整理中",
+                                detail: smartRewriteProgressDetail(progress),
+                                tone: .processing,
+                                resetWaveform: true
+                            )
+                            popup.show(state: "整理中", draft: "")
+                        } else {
+                            controller.setPrimaryStatus(
+                                "识别完成",
+                                detail: String(format: "原文模式 · 本地识别耗时 %.2f 秒", elapsed),
+                                tone: .success,
+                                resetWaveform: true
+                            )
+                        }
+                    }
                 }
-                submitPasteResult(PendingPasteResult(task: task, text: text, recognitionSeconds: elapsed))
+                if controller.autoTranslateEnabled {
+                    rewriteTranslateAndSubmit(text, elapsed: elapsed, task: task)
+                } else {
+                    rewriteAndSubmit(text, elapsed: elapsed, task: task)
+                }
             } else if shouldUpdateInterface {
                 popup.hideAnimated()
                 finishFinalTask(task)
             } else {
                 finishFinalTask(task)
             }
+        }
+    }
+
+    private func rewriteTranslateAndSubmit(_ rawText: String, elapsed: Double, task: RecordingTask) {
+        let preference = controller.smartRewritePreference
+        let direction = controller.translationDirection
+        let context = SmartInputContext(targetApp: task.targetApp)
+        Task { [weak self] in
+            guard let self else { return }
+            let rewriteResult: SmartRewriteResult
+            let sourceForTranslation: String
+            if direction.usesRawSourceTextForTranslation {
+                let trimmedRawText = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+                rewriteResult = SmartRewriteResult(
+                    text: trimmedRawText,
+                    rawText: rawText,
+                    mode: .raw,
+                    didFallback: false
+                )
+                sourceForTranslation = trimmedRawText.isEmpty ? rawText : trimmedRawText
+            } else {
+                rewriteResult = await self.smartInputRouter.rewrite(
+                    rawText: rawText,
+                    preference: preference,
+                    context: context
+                )
+                sourceForTranslation = rewriteResult.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    ? rawText
+                    : rewriteResult.text
+            }
+            if rewriteResult.mode != .raw,
+               !rewriteResult.didFallback,
+               self.shouldUpdateInterface(for: task.id) {
+                await MainActor.run {
+                    self.controller.setPrimaryStatus(
+                        "AI 翻译中",
+                        detail: self.smartTranslationProgressDetail(
+                            direction: direction,
+                            modelName: self.smartEngine.displayName
+                        ),
+                        tone: .processing,
+                        resetWaveform: true
+                    )
+                    self.popup.show(state: "翻译中", draft: "")
+                }
+            }
+            let translation = await self.translateWithTimeout(
+                rawText: sourceForTranslation,
+                direction: direction,
+                context: context,
+                timeoutSeconds: 4.5
+            )
+            await MainActor.run {
+                let finalText = translation?.translatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                    ? translation?.translatedText ?? sourceForTranslation
+                    : sourceForTranslation
+                if self.shouldUpdateInterface(for: task.id) {
+                    if let translation {
+                        self.controller.realtimeDraft.stringValue = "\(sourceForTranslation)\n\(translation.translatedText)"
+                        self.controller.setPrimaryStatus(
+                            "翻译完成",
+                            detail: "已整理并按\(translation.direction.displayName)转换 · \(translation.modelName)",
+                            tone: .success,
+                            resetWaveform: true
+                        )
+                    } else {
+                        self.controller.realtimeDraft.stringValue = finalText
+                        self.controller.setPrimaryStatus(
+                            "翻译未完成",
+                            detail: String(format: "已使用%@文本 · %.2f 秒", rewriteResult.mode == .raw ? "原始识别" : "整理后", elapsed),
+                            tone: .warning,
+                            resetWaveform: true
+                        )
+                    }
+                    self.popup.hideAnimated()
+                }
+                self.submitPasteResult(PendingPasteResult(
+                    task: task,
+                    text: finalText,
+                    sourceText: translation == nil ? nil : sourceForTranslation,
+                    translatedText: translation?.translatedText,
+                    translationDirection: translation?.direction,
+                    usage: translation == nil ? rewriteResult.usage : SmartUsage.combined([rewriteResult.usage, translation?.usage])
+                ))
+            }
+        }
+    }
+
+    private func rewriteAndSubmit(_ rawText: String, elapsed: Double, task: RecordingTask) {
+        let preference = controller.smartRewritePreference
+        let context = SmartInputContext(targetApp: task.targetApp)
+        Task { [weak self] in
+            guard let self else { return }
+            let result = await self.smartInputRouter.rewrite(
+                rawText: rawText,
+                preference: preference,
+                context: context
+            )
+            await MainActor.run {
+                let finalText = result.text.isEmpty ? rawText : result.text
+                if self.shouldUpdateInterface(for: task.id) {
+                    self.controller.realtimeDraft.stringValue = finalText
+                    self.controller.setPrimaryStatus(
+                        "识别完成",
+                        detail: self.smartRewriteDetail(result: result, elapsed: elapsed),
+                        tone: .success,
+                        resetWaveform: true
+                    )
+                    self.popup.hideAnimated()
+                }
+                self.submitPasteResult(PendingPasteResult(
+                    task: task,
+                    text: finalText,
+                    sourceText: nil,
+                    translatedText: nil,
+                    translationDirection: nil,
+                    usage: result.usage
+                ))
+            }
+        }
+    }
+
+    private func smartRewriteDetail(result: SmartRewriteResult, elapsed: Double) -> String {
+        if result.didFallback {
+            return String(format: "智能整理未完成，已使用原始识别文本 · %.2f 秒", elapsed)
+        }
+        switch result.mode {
+        case .raw:
+            return String(format: "原文模式 · 本地识别耗时 %.2f 秒", elapsed)
+        case .polish, .developerRequirement, .note, .chat, .exhaustiveSummary:
+            let model = result.modelName.map { " · \($0)" } ?? ""
+            return "已按\(result.mode.displayName)模式整理\(model)，准备粘贴"
+        case .command:
+            return "命令模式未执行操作，已按原文准备粘贴"
+        }
+    }
+
+    private func smartRewriteProgressDetail(_ progress: SmartRewriteProgressInfo) -> String {
+        let seconds = Int(progress.timeoutSeconds.rounded())
+        return "正在用\(progress.modelName)进行\(progress.mode.displayName)，最多等待 \(seconds) 秒"
+    }
+
+    private func smartTranslationProgressDetail(
+        direction: SmartTranslationDirection,
+        modelName: String
+    ) -> String {
+        "正在用\(modelName)进行\(direction.displayName)，历史会保留原文和译文"
+    }
+
+    private func translateWithTimeout(
+        rawText: String,
+        direction: SmartTranslationDirection,
+        context: SmartInputContext,
+        timeoutSeconds: TimeInterval
+    ) async -> SmartTranslationOutput? {
+        do {
+            return try await withThrowingTaskGroup(of: SmartTranslationOutput.self) { group in
+                group.addTask {
+                    try await self.smartEngine.translate(
+                        rawText: rawText,
+                        direction: direction,
+                        context: context
+                    )
+                }
+                group.addTask {
+                    try await Task.sleep(nanoseconds: UInt64(timeoutSeconds * 1_000_000_000))
+                    throw SmartRewriteError.timeout
+                }
+                let value = try await group.next()
+                group.cancelAll()
+                return value
+            }
+        } catch {
+            return nil
         }
     }
 
@@ -464,7 +691,7 @@ final class SpeechInputCoordinator {
         let result = pendingPasteResults.removeFirst()
         inputState = .pasting(result.task)
         pasteCoordinator.enqueue(text: result.text, targetApp: result.task.targetApp) { [weak self] outcome in
-            self?.handlePasteOutcome(outcome, task: result.task)
+            self?.handlePasteOutcome(outcome, result: result)
         }
     }
 
@@ -495,17 +722,21 @@ final class SpeechInputCoordinator {
         return "未收到麦克风输入。请选通话正在用的麦克风。"
     }
 
-    private func handlePasteOutcome(_ outcome: PasteOutcome, task: RecordingTask) {
+    private func handlePasteOutcome(_ outcome: PasteOutcome, result: PendingPasteResult) {
+        let task = result.task
         let shouldUpdateInterface = shouldUpdateInterface(for: task.id)
         if shouldUpdateInterface {
             switch outcome {
             case .directInserted:
+                addRecentTranscription(for: result, outcome: outcome)
                 controller.detail.stringValue = "识别结果已直接输入，未改动剪贴板"
                 hidePopup(after: 0, task: task)
             case .restored:
+                addRecentTranscription(for: result, outcome: outcome)
                 controller.detail.stringValue = "识别结果已粘贴，原剪贴板已恢复"
                 hidePopup(after: 0, task: task)
             case .preservedUserClipboard:
+                addRecentTranscription(for: result, outcome: outcome)
                 controller.detail.stringValue = "识别结果已粘贴，检测到新的剪贴板内容并已保留"
                 hidePopup(after: 0, task: task)
             case .failed(let message):
@@ -518,6 +749,21 @@ final class SpeechInputCoordinator {
             inputState = .idle
         }
         drainPendingPasteResultsIfPossible()
+    }
+
+    private func addRecentTranscription(for result: PendingPasteResult, outcome: PasteOutcome) {
+        let totalSeconds = max(
+            0,
+            (outcome.pasteCompletedAt ?? Date()).timeIntervalSince(result.task.finishRequestedAt)
+        )
+        controller.addRecentTranscription(
+            result.text,
+            recognitionSeconds: totalSeconds,
+            sourceText: result.sourceText,
+            translatedText: result.translatedText,
+            translationDirection: result.translationDirection,
+            usage: result.usage
+        )
     }
 
     private func hidePopup(after delay: TimeInterval, task: RecordingTask) {

@@ -15,7 +15,7 @@ final class MainViewController: NSViewController {
     private let contentHeight: CGFloat = 858
     private let leftColumnWidth: CGFloat = 212
     private let topInset: CGFloat = 38
-    private let recentViewportHeight: CGFloat = 196
+    private let recentViewportHeight: CGFloat = 258
     private let brandIconVisibleSize: CGFloat = 64
 
     let status = label("等待录音", size: 15, weight: .semibold)
@@ -44,6 +44,13 @@ final class MainViewController: NSViewController {
     let autoFinish = BrandSwitch()
     let duckSystemAudio = BrandSwitch()
     let launchAtLogin = BrandSwitch()
+    let smartRewriteMode = NSPopUpButton()
+    let deepSeekKeyButton = NSButton(title: "设置 Key", target: nil, action: nil)
+    let promptSettingsButton = NSButton(title: "提示词", target: nil, action: nil)
+    let developerTermsButton = NSButton(title: "术语", target: nil, action: nil)
+    let autoTranslate = BrandSwitch()
+    let translationDirectionMode = NSPopUpButton()
+    let translationPromptButton = NSButton(title: "提示词", target: nil, action: nil)
     let realtimeDraft = label("等待实时草稿", size: 12)
     var onInstallModel: (() -> Void)?
     var onHotkeysChange: ((HotkeyBinding, HotkeyBinding?) -> Void)?
@@ -54,6 +61,7 @@ final class MainViewController: NSViewController {
     private let modelPathLabel = label("", size: 11)
     private let statusDot = NSView()
     private let waveform = MiniWaveformView()
+    private let processingProgress = NSProgressIndicator()
 
     private let recentStack = FlippedStackView()
     private let recentScroll = NSScrollView()
@@ -106,6 +114,16 @@ final class MainViewController: NSViewController {
         autoFinish.target = self; autoFinish.action = #selector(saveSettings)
         duckSystemAudio.state = settings.duckSystemAudioWhileRecordingEnabled ? .on : .off
         duckSystemAudio.target = self; duckSystemAudio.action = #selector(saveSettings)
+        configureSmartRewriteModeMenu(settings.smartRewritePreference)
+        smartRewriteMode.target = self; smartRewriteMode.action = #selector(saveSettings)
+        configureDeepSeekKeyButton()
+        configurePromptSettingsButton()
+        configureDeveloperTermsButton()
+        autoTranslate.state = settings.autoTranslateEnabled ? .on : .off
+        autoTranslate.target = self; autoTranslate.action = #selector(saveSettings)
+        configureTranslationDirectionMenu(settings.translationDirection)
+        configureTranslationPromptButton()
+        translationDirectionMode.target = self; translationDirectionMode.action = #selector(saveSettings)
         refreshLaunchAtLoginState()
         launchAtLogin.target = self; launchAtLogin.action = #selector(toggleLaunchAtLogin)
         configureOptionAccessibility()
@@ -167,6 +185,9 @@ final class MainViewController: NSViewController {
 
         let statusPanel = buildStatusPanel()
         let modelEntry = buildModelEntry()
+        let draftEntry = buildRealtimeDraftEntry()
+        draftEntry.setContentHuggingPriority(.required, for: .vertical)
+        draftEntry.setContentCompressionResistancePriority(.required, for: .vertical)
 
         let historyButton = NSButton(title: " 版本历史", target: self, action: #selector(showVersionHistory(_:)))
         historyButton.image = NSImage(systemSymbolName: "clock.arrow.circlepath", accessibilityDescription: nil)
@@ -174,11 +195,15 @@ final class MainViewController: NSViewController {
         historyButton.bezelStyle = .rounded
         historyButton.controlSize = .regular
 
+        let usageGuide = buildUsageGuideEntry()
+        usageGuide.setContentHuggingPriority(.required, for: .vertical)
+        usageGuide.setContentCompressionResistancePriority(.required, for: .vertical)
+
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .vertical)
         spacer.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
 
-        let stack = NSStackView(views: [brandStack, statusPanel, modelEntry, spacer, historyButton])
+        let stack = NSStackView(views: [brandStack, statusPanel, modelEntry, draftEntry, spacer, usageGuide, historyButton])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 14
@@ -197,6 +222,9 @@ final class MainViewController: NSViewController {
             brandStack.widthAnchor.constraint(equalTo: stack.widthAnchor),
             statusPanel.widthAnchor.constraint(equalTo: stack.widthAnchor),
             modelEntry.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            draftEntry.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            usageGuide.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            draftEntry.heightAnchor.constraint(equalToConstant: 108),
             historyButton.widthAnchor.constraint(equalTo: stack.widthAnchor),
             brandIcon.widthAnchor.constraint(equalToConstant: brandIconVisibleSize),
             brandIcon.heightAnchor.constraint(equalToConstant: brandIconVisibleSize),
@@ -231,11 +259,18 @@ final class MainViewController: NSViewController {
         pill.addSubview(pillStack)
 
         waveform.translatesAutoresizingMaskIntoConstraints = false
+        processingProgress.translatesAutoresizingMaskIntoConstraints = false
+        processingProgress.style = .bar
+        processingProgress.controlSize = .small
+        processingProgress.isIndeterminate = true
+        processingProgress.isDisplayedWhenStopped = false
+        processingProgress.isHidden = true
 
-        let inner = NSStackView(views: [pill, waveform, detail])
+        let inner = NSStackView(views: [pill, waveform, processingProgress, detail])
         inner.orientation = .vertical
         inner.alignment = .centerX
         inner.spacing = 11
+        inner.detachesHiddenViews = true
         inner.translatesAutoresizingMaskIntoConstraints = false
 
         let box = NSView()
@@ -256,6 +291,8 @@ final class MainViewController: NSViewController {
             statusDot.heightAnchor.constraint(equalToConstant: 7),
             waveform.heightAnchor.constraint(equalToConstant: 34),
             waveform.widthAnchor.constraint(equalTo: inner.widthAnchor),
+            processingProgress.widthAnchor.constraint(equalTo: inner.widthAnchor, multiplier: 0.78),
+            processingProgress.heightAnchor.constraint(equalToConstant: 4),
             box.heightAnchor.constraint(equalToConstant: 128),
             inner.leadingAnchor.constraint(equalTo: box.leadingAnchor, constant: 14),
             inner.trailingAnchor.constraint(equalTo: box.trailingAnchor, constant: -14),
@@ -303,6 +340,51 @@ final class MainViewController: NSViewController {
         return box
     }
 
+    private func buildRealtimeDraftEntry() -> NSView {
+        realtimeDraft.textColor = .secondaryLabelColor
+        realtimeDraft.maximumNumberOfLines = 4
+        realtimeDraft.lineBreakMode = .byWordWrapping
+        (realtimeDraft.cell as? NSTextFieldCell)?.truncatesLastVisibleLine = true
+        realtimeDraft.translatesAutoresizingMaskIntoConstraints = false
+
+        let draftContent = NSView()
+        draftContent.translatesAutoresizingMaskIntoConstraints = false
+        draftContent.addSubview(realtimeDraft)
+        NSLayoutConstraint.activate([
+            realtimeDraft.leadingAnchor.constraint(equalTo: draftContent.leadingAnchor),
+            realtimeDraft.trailingAnchor.constraint(equalTo: draftContent.trailingAnchor),
+            realtimeDraft.topAnchor.constraint(equalTo: draftContent.topAnchor),
+            realtimeDraft.bottomAnchor.constraint(lessThanOrEqualTo: draftContent.bottomAnchor),
+            draftContent.heightAnchor.constraint(greaterThanOrEqualToConstant: 56),
+        ])
+        return section("实时草稿", roundedBox(draftContent, hPad: 12, vPad: 10))
+    }
+
+    private func buildUsageGuideEntry() -> NSView {
+        let title = label("使用方法", size: 11, weight: .semibold)
+        title.textColor = UITheme.sectionTitle
+
+        let body = label(
+            """
+            先开启麦克风和辅助功能。
+            按 Fn 开始录音，再按一次或松开结束。
+            首次打开测试版：右键 App 选“打开”；若被拦截，到 系统设置 > 隐私与安全性，点“仍要打开”。
+            """,
+            size: 10
+        )
+        body.textColor = .secondaryLabelColor
+        body.maximumNumberOfLines = 0
+        body.lineBreakMode = .byWordWrapping
+
+        let stack = NSStackView(views: [title, body])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 6
+        title.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        body.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        return roundedBox(stack, hPad: 12, vPad: 10)
+    }
+
     // MARK: - Right column
 
     private func buildRightColumn() -> NSView {
@@ -332,55 +414,50 @@ final class MainViewController: NSViewController {
             $0.controlSize = .regular
             $0.font = .systemFont(ofSize: 12)
         }
-        let keycapWidth: CGFloat = 92
-        let captureWidth: CGFloat = 54
-        let trailingWidth: CGFloat = 74
-        let primaryKeycap = KeycapView(hotkeyValue, minWidth: 46, height: 22)
-        let secondaryKeycap = KeycapView(secondaryHotkeyValue, minWidth: 46, height: 22)
-        [primaryKeycap, secondaryKeycap].forEach {
-            $0.widthAnchor.constraint(equalToConstant: keycapWidth).isActive = true
-        }
+        let captureWidth: CGFloat = 124
+        let trailingWidth: CGFloat = 96
         [hotkeyCaptureButton, secondaryHotkeyCaptureButton].forEach {
             $0.widthAnchor.constraint(equalToConstant: captureWidth).isActive = true
         }
         [hotkeyResetButton, secondaryHotkeyClearButton].forEach {
             $0.widthAnchor.constraint(equalToConstant: trailingWidth).isActive = true
         }
-        let primaryName = label("主快捷键", size: 14)
-        let primaryRow = NSStackView(views: [primaryName, flexSpacer(), primaryKeycap, hotkeyCaptureButton, hotkeyResetButton])
-        let secondaryName = label("备用快捷键", size: 14)
-        let secondaryRow = NSStackView(views: [secondaryName, flexSpacer(), secondaryKeycap, secondaryHotkeyCaptureButton, secondaryHotkeyClearButton])
-        [primaryRow, secondaryRow].forEach {
-            $0.orientation = .horizontal
-            $0.alignment = .centerY
-            $0.spacing = 8
-            $0.heightAnchor.constraint(equalToConstant: 42).isActive = true
-        }
-        let hotkeyCard = listCard([primaryRow, secondaryRow])
+        let primaryRow = shortcutRow(
+            title: "主快捷键",
+            captureButton: hotkeyCaptureButton,
+            fallbackButton: hotkeyResetButton
+        )
+        let secondaryRow = shortcutRow(
+            title: "备用快捷键",
+            captureButton: secondaryHotkeyCaptureButton,
+            fallbackButton: secondaryHotkeyClearButton
+        )
+        let hotkeyCard = listCard([primaryRow, secondaryRow], hPad: 12)
+        hotkeyCard.setContentCompressionResistancePriority(.required, for: .vertical)
+
+        let smartRewriteControls = NSStackView(views: [smartRewriteMode, promptSettingsButton, developerTermsButton, deepSeekKeyButton])
+        smartRewriteControls.orientation = .horizontal
+        smartRewriteControls.alignment = .centerY
+        smartRewriteControls.spacing = 6
+        promptSettingsButton.widthAnchor.constraint(equalToConstant: 62).isActive = true
+        developerTermsButton.widthAnchor.constraint(equalToConstant: 50).isActive = true
+        deepSeekKeyButton.widthAnchor.constraint(equalToConstant: 74).isActive = true
+
+        let translationControls = NSStackView(views: [translationDirectionMode, translationPromptButton])
+        translationControls.orientation = .horizontal
+        translationControls.alignment = .centerY
+        translationControls.spacing = 6
+        translationPromptButton.widthAnchor.constraint(equalToConstant: 62).isActive = true
 
         let optionCard = listCard([
+            optionRow("智能整理", smartRewriteControls),
+            optionRow("自动翻译", autoTranslate),
+            optionRow("翻译方向", translationControls),
             optionRow("胶囊实时预览", realtime),
             optionRow("停顿自动完成", autoFinish),
             optionRow("录音时降低电脑声音", duckSystemAudio),
             optionRow("开机自动启动", launchAtLogin),
         ])
-
-        realtimeDraft.textColor = .secondaryLabelColor
-        realtimeDraft.maximumNumberOfLines = 2
-        realtimeDraft.lineBreakMode = .byWordWrapping
-        (realtimeDraft.cell as? NSTextFieldCell)?.truncatesLastVisibleLine = true
-        realtimeDraft.translatesAutoresizingMaskIntoConstraints = false
-        let draftContent = NSView()
-        draftContent.translatesAutoresizingMaskIntoConstraints = false
-        draftContent.addSubview(realtimeDraft)
-        NSLayoutConstraint.activate([
-            realtimeDraft.leadingAnchor.constraint(equalTo: draftContent.leadingAnchor),
-            realtimeDraft.trailingAnchor.constraint(equalTo: draftContent.trailingAnchor),
-            realtimeDraft.topAnchor.constraint(equalTo: draftContent.topAnchor),
-            realtimeDraft.bottomAnchor.constraint(equalTo: draftContent.bottomAnchor),
-            draftContent.heightAnchor.constraint(greaterThanOrEqualToConstant: 22),
-        ])
-        let draftCard = roundedBox(draftContent, hPad: 15, vPad: 11)
 
         recentStack.orientation = .vertical
         recentStack.alignment = .width
@@ -402,7 +479,6 @@ final class MainViewController: NSViewController {
             section("权限", permissionCard),
             section("快捷键", hotkeyCard),
             section("选项", optionCard),
-            section("实时草稿", draftCard),
             section("最近转录", recentCard),
         ]
         let stack = NSStackView(views: sections)
@@ -452,6 +528,24 @@ final class MainViewController: NSViewController {
         return row
     }
 
+    private func shortcutRow(
+        title: String,
+        captureButton: NSButton,
+        fallbackButton: NSButton
+    ) -> NSView {
+        let titleLabel = label(title, size: 14)
+        titleLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        let row = NSStackView(views: [titleLabel, flexSpacer(), captureButton, fallbackButton])
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 8
+        row.translatesAutoresizingMaskIntoConstraints = false
+        row.setContentCompressionResistancePriority(.required, for: .vertical)
+        row.heightAnchor.constraint(equalToConstant: 42).isActive = true
+        return row
+    }
+
     private func optionRow(_ title: String, _ control: NSView) -> NSView {
         let titleLabel = label(title, size: 14)
         control.setAccessibilityLabel(title)
@@ -464,16 +558,99 @@ final class MainViewController: NSViewController {
     }
 
     private func configureOptionAccessibility() {
+        smartRewriteMode.setAccessibilityLabel("智能整理")
+        deepSeekKeyButton.setAccessibilityLabel("DeepSeek API Key")
+        promptSettingsButton.setAccessibilityLabel("智能整理提示词")
+        developerTermsButton.setAccessibilityLabel("开发术语词库")
+        autoTranslate.setAccessibilityLabel("自动翻译")
+        autoTranslate.toolTip = "可用 Shift + \\ 快速打开或关闭"
+        translationDirectionMode.setAccessibilityLabel("翻译方向")
+        translationPromptButton.setAccessibilityLabel("翻译提示词")
         realtime.setAccessibilityLabel("胶囊实时预览")
         autoFinish.setAccessibilityLabel("停顿自动完成")
         duckSystemAudio.setAccessibilityLabel("录音时降低电脑声音")
         launchAtLogin.setAccessibilityLabel("开机自动启动")
     }
 
+    private func configureSmartRewriteModeMenu(_ preference: SmartRewritePreference) {
+        smartRewriteMode.removeAllItems()
+        for item in SmartRewritePreference.allCases {
+            smartRewriteMode.addItem(withTitle: item.displayName)
+            smartRewriteMode.lastItem?.tag = item.menuTag
+        }
+        smartRewriteMode.selectItem(withTag: preference.menuTag)
+        smartRewriteMode.toolTip = "最终识别后、粘贴前的文本整理模式"
+        smartRewriteMode.bezelStyle = .rounded
+        smartRewriteMode.controlSize = .regular
+        smartRewriteMode.font = .systemFont(ofSize: 12)
+    }
+
+    private func configureDeepSeekKeyButton() {
+        deepSeekKeyButton.target = self
+        deepSeekKeyButton.action = #selector(configureDeepSeekAPIKey)
+        deepSeekKeyButton.bezelStyle = .rounded
+        deepSeekKeyButton.controlSize = .regular
+        deepSeekKeyButton.font = .systemFont(ofSize: 12, weight: .medium)
+        deepSeekKeyButton.toolTip = "录入 DeepSeek API Key，保存到 macOS Keychain"
+        refreshDeepSeekKeyButton()
+    }
+
+    private func configurePromptSettingsButton() {
+        promptSettingsButton.target = self
+        promptSettingsButton.action = #selector(configureSmartRewritePrompts)
+        promptSettingsButton.bezelStyle = .rounded
+        promptSettingsButton.controlSize = .regular
+        promptSettingsButton.font = .systemFont(ofSize: 12, weight: .medium)
+        promptSettingsButton.toolTip = "调整、修改并保存智能整理提示词"
+    }
+
+    private func configureDeveloperTermsButton() {
+        developerTermsButton.target = self
+        developerTermsButton.action = #selector(configureDeveloperTerms)
+        developerTermsButton.bezelStyle = .rounded
+        developerTermsButton.controlSize = .regular
+        developerTermsButton.font = .systemFont(ofSize: 12, weight: .medium)
+        developerTermsButton.toolTip = "管理开发术语和别名"
+    }
+
+    private func configureTranslationPromptButton() {
+        translationPromptButton.target = self
+        translationPromptButton.action = #selector(configureTranslationPrompts)
+        translationPromptButton.bezelStyle = .rounded
+        translationPromptButton.controlSize = .regular
+        translationPromptButton.font = .systemFont(ofSize: 12, weight: .medium)
+        translationPromptButton.toolTip = "调整、修改并保存自动翻译提示词"
+    }
+
+    private func refreshDeepSeekKeyButton() {
+        deepSeekKeyButton.title = DeepSeekAPIKeyStore.hasAPIKey() ? "Key 已设" : "设置 Key"
+    }
+
+    func toggleAutoTranslateFromShortcut() {
+        autoTranslate.state = autoTranslate.state == .on ? .off : .on
+        autoTranslate.needsDisplay = true
+        saveSettings()
+        let stateText = autoTranslate.state == .on ? "已开启" : "已关闭"
+        detail.stringValue = "自动翻译\(stateText) · Shift + \\"
+    }
+
+    private func configureTranslationDirectionMenu(_ direction: SmartTranslationDirection) {
+        translationDirectionMode.removeAllItems()
+        for item in SmartTranslationDirection.allCases {
+            translationDirectionMode.addItem(withTitle: item.displayName)
+            translationDirectionMode.lastItem?.tag = item.menuTag
+        }
+        translationDirectionMode.selectItem(withTag: direction.menuTag)
+        translationDirectionMode.toolTip = "自动翻译开启后使用的转换方向"
+        translationDirectionMode.bezelStyle = .rounded
+        translationDirectionMode.controlSize = .regular
+        translationDirectionMode.font = .systemFont(ofSize: 12)
+    }
+
     private func versionText() -> String {
         let info = Bundle.main.infoDictionary
-        let version = info?["CFBundleShortVersionString"] as? String ?? "1.2.13"
-        let build = info?["CFBundleVersion"] as? String ?? "170"
+        let version = info?["CFBundleShortVersionString"] as? String ?? "1.2.40"
+        let build = info?["CFBundleVersion"] as? String ?? "197"
         return "Version \(version) (\(build))"
     }
 
@@ -605,8 +782,91 @@ final class MainViewController: NSViewController {
         AppSettingsStore.save(MainViewSettings(
             realtimePreviewEnabled: realtime.state == .on,
             autoFinishAfterPauseEnabled: autoFinish.state == .on,
-            duckSystemAudioWhileRecordingEnabled: duckSystemAudio.state == .on
+            duckSystemAudioWhileRecordingEnabled: duckSystemAudio.state == .on,
+            smartRewritePreference: smartRewritePreference,
+            autoTranslateEnabled: autoTranslate.state == .on,
+            translationDirection: translationDirection
         ))
+    }
+
+    @objc private func configureSmartRewritePrompts() {
+        let dialog = SmartRewritePromptDialog(initialMode: smartRewritePreference.manualMode ?? .developerRequirement)
+        switch dialog.runModal() {
+        case .save(let mode, let template):
+            SmartRewritePromptStore.save(template, for: mode)
+            detail.stringValue = "\(mode.displayName)提示词已保存"
+        case .reset(let mode):
+            SmartRewritePromptStore.reset(mode)
+            detail.stringValue = "\(mode.displayName)提示词已恢复默认"
+        case .cancel:
+            break
+        }
+    }
+
+    @objc private func configureTranslationPrompts() {
+        let dialog = SmartTranslationPromptDialog(initialDirection: translationDirection)
+        switch dialog.runModal() {
+        case .save(let direction, let template):
+            SmartTranslationPromptStore.save(template, for: direction)
+            detail.stringValue = "\(direction.displayName)提示词已保存"
+        case .reset(let direction):
+            SmartTranslationPromptStore.reset(direction)
+            detail.stringValue = "\(direction.displayName)提示词已恢复默认"
+        case .cancel:
+            break
+        }
+    }
+
+    @objc private func configureDeveloperTerms() {
+        switch DeveloperLexiconDialog().runModal() {
+        case .save(let terms):
+            DeveloperLexiconStore.save(terms)
+            detail.stringValue = "开发术语词库已保存"
+        case .reset:
+            DeveloperLexiconStore.restoreDefaults()
+            detail.stringValue = "开发术语词库已恢复默认"
+        case .cancel:
+            break
+        }
+    }
+
+    @objc private func configureDeepSeekAPIKey() {
+        let alert = NSAlert()
+        alert.messageText = "DeepSeek API Key"
+        alert.informativeText = "用于智能整理和自动翻译，保存到 macOS Keychain。TypeWhale 使用 deepseek-v4-flash，并关闭 thinking。"
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "保存")
+        alert.addButton(withTitle: "清除")
+        alert.addButton(withTitle: "取消")
+
+        let input = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 24))
+        input.placeholderString = DeepSeekAPIKeyStore.hasAPIKey() ? "已保存 Key，输入新 Key 可覆盖" : "sk-..."
+        alert.accessoryView = input
+
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            do {
+                try DeepSeekAPIKeyStore.save(input.stringValue)
+                refreshDeepSeekKeyButton()
+                detail.stringValue = DeepSeekAPIKeyStore.hasAPIKey()
+                    ? "DeepSeek Key 已保存，智能整理已启用"
+                    : "未输入 Key，智能整理会回退原文"
+            } catch {
+                showDeepSeekKeyError(error)
+            }
+        case .alertSecondButtonReturn:
+            DeepSeekAPIKeyStore.delete()
+            refreshDeepSeekKeyButton()
+            detail.stringValue = "DeepSeek Key 已清除，智能整理会回退原文"
+        default:
+            refreshDeepSeekKeyButton()
+        }
+    }
+
+    private func showDeepSeekKeyError(_ error: Error) {
+        let alert = NSAlert(error: error)
+        alert.messageText = "DeepSeek Key 保存失败"
+        alert.runModal()
     }
 
     @objc private func toggleLaunchAtLogin() {
@@ -644,8 +904,7 @@ final class MainViewController: NSViewController {
         capturingChannel = .chinese
         capturingHotkeySlot = slot
         captureModifierKeyCodes.removeAll()
-        activeHotkeyValueLabel?.stringValue = "请按快捷键…"
-        activeHotkeyValueLabel?.textColor = .systemOrange
+        activeHotkeyButton?.title = "请按快捷键…"
         hotkeyCaptureButton.isEnabled = false
         secondaryHotkeyCaptureButton.isEnabled = false
         startHotkeyCaptureTap()
@@ -676,8 +935,12 @@ final class MainViewController: NSViewController {
     func updateHotkeys(primary: HotkeyBinding, secondary: HotkeyBinding?) {
         hotkeyValue.stringValue = primary.displayName
         hotkeyValue.textColor = NSColor(calibratedWhite: 1, alpha: 0.92)
+        hotkeyCaptureButton.title = primary.displayName
+        hotkeyCaptureButton.toolTip = "点击录入主快捷键"
         secondaryHotkeyValue.stringValue = secondary?.displayName ?? "未设置"
         secondaryHotkeyValue.textColor = secondary == nil ? .tertiaryLabelColor : NSColor(calibratedWhite: 1, alpha: 0.92)
+        secondaryHotkeyCaptureButton.title = secondary?.displayName ?? "未设置"
+        secondaryHotkeyCaptureButton.toolTip = "点击录入备用快捷键"
         detail.stringValue = "\(primary.displayName) 录音"
     }
 
@@ -795,8 +1058,7 @@ final class MainViewController: NSViewController {
         if isPressed {
             captureModifierKeyCodes.insert(keyCode)
             if capturingChannel != nil {
-                activeHotkeyValueLabel?.stringValue = "\(HotkeyKeyCodes.displayName(for: keyCode)) …"
-                activeHotkeyValueLabel?.textColor = .systemOrange
+                activeHotkeyButton?.title = "\(HotkeyKeyCodes.displayName(for: keyCode)) …"
             }
             scheduleModifierCaptureConfirmation(keyCode: keyCode)
         } else {
@@ -807,8 +1069,7 @@ final class MainViewController: NSViewController {
 
     private func captureFunctionKey() {
         guard capturingChannel != nil else { return }
-        activeHotkeyValueLabel?.stringValue = "Fn …"
-        activeHotkeyValueLabel?.textColor = .systemOrange
+        activeHotkeyButton?.title = "Fn …"
         captureModifierKeyCodes = []
         commitCapturedHotkey(keyCode: HotkeyKeyCodes.function)
     }
@@ -834,8 +1095,7 @@ final class MainViewController: NSViewController {
 
     private func showCaptureError(_ message: String, channel: SpeechInputChannel) {
         captureConfirmWorkItem?.cancel()
-        activeHotkeyValueLabel?.stringValue = message
-        activeHotkeyValueLabel?.textColor = .systemRed
+        activeHotkeyButton?.title = message
     }
 
     private func applyCapturedHotkey(_ binding: HotkeyBinding) {
@@ -880,12 +1140,12 @@ final class MainViewController: NSViewController {
         )
     }
 
-    private var activeHotkeyValueLabel: NSTextField? {
+    private var activeHotkeyButton: NSButton? {
         switch capturingHotkeySlot {
         case .primary:
-            return hotkeyValue
+            return hotkeyCaptureButton
         case .secondary:
-            return secondaryHotkeyValue
+            return secondaryHotkeyCaptureButton
         case nil:
             return nil
         }
@@ -965,6 +1225,13 @@ final class MainViewController: NSViewController {
             detail.stringValue = detailText
         }
         statusDot.layer?.backgroundColor = statusColor(for: tone).cgColor
+        if tone == .processing {
+            processingProgress.isHidden = false
+            processingProgress.startAnimation(nil)
+        } else {
+            processingProgress.stopAnimation(nil)
+            processingProgress.isHidden = true
+        }
         if resetWaveform {
             resetInputBands()
         }
@@ -1009,9 +1276,35 @@ final class MainViewController: NSViewController {
         duckSystemAudio.state == .on
     }
 
-    func addRecentTranscription(_ text: String, recognitionSeconds: Double) {
+    var smartRewritePreference: SmartRewritePreference {
+        SmartRewritePreference.fromMenuTag(smartRewriteMode.selectedItem?.tag ?? 0)
+    }
+
+    var autoTranslateEnabled: Bool {
+        autoTranslate.state == .on
+    }
+
+    var translationDirection: SmartTranslationDirection {
+        SmartTranslationDirection.fromMenuTag(translationDirectionMode.selectedItem?.tag ?? 0)
+    }
+
+    func addRecentTranscription(
+        _ text: String,
+        recognitionSeconds: Double,
+        sourceText: String? = nil,
+        translatedText: String? = nil,
+        translationDirection: SmartTranslationDirection? = nil,
+        usage: SmartUsage? = nil
+    ) {
         guard !text.isEmpty else { return }
-        let record = RecentTranscription(text: text, recognitionSeconds: recognitionSeconds)
+        let record = RecentTranscription(
+            text: text,
+            recognitionSeconds: recognitionSeconds,
+            sourceText: sourceText,
+            translatedText: translatedText,
+            translationDirection: translationDirection,
+            usage: usage
+        )
         recentRecords.removeAll { $0.text == text }
         recentRecords.insert(record, at: 0)
         recentRecords = Array(recentRecords.prefix(5))
@@ -1061,9 +1354,16 @@ final class MainViewController: NSViewController {
             metaLabel.maximumNumberOfLines = 1
             metaLabel.lineBreakMode = .byTruncatingTail
             metaLabel.translatesAutoresizingMaskIntoConstraints = false
+            let usageLabel = label(record.usage?.compactText ?? "", size: 10, weight: .medium)
+            usageLabel.textColor = UITheme.sectionTitle
+            usageLabel.alignment = .right
+            usageLabel.maximumNumberOfLines = 1
+            usageLabel.lineBreakMode = .byTruncatingTail
+            usageLabel.translatesAutoresizingMaskIntoConstraints = false
+            usageLabel.isHidden = record.usage == nil
 
-            let textLabel = label(record.text, size: 12)
-            textLabel.maximumNumberOfLines = 3
+            let textLabel = label(displayText(for: record), size: 12)
+            textLabel.maximumNumberOfLines = record.hasTranslation ? 5 : 3
             textLabel.lineBreakMode = .byWordWrapping
             (textLabel.cell as? NSTextFieldCell)?.truncatesLastVisibleLine = true
             textLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -1082,15 +1382,19 @@ final class MainViewController: NSViewController {
             let row = NSView()
             row.translatesAutoresizingMaskIntoConstraints = false
             row.addSubview(metaLabel)
+            row.addSubview(usageLabel)
             row.addSubview(textLabel)
             row.addSubview(copyButton)
             recentStack.addArrangedSubview(row)
             NSLayoutConstraint.activate([
                 row.widthAnchor.constraint(equalTo: recentStack.widthAnchor),
-                row.heightAnchor.constraint(greaterThanOrEqualToConstant: 64),
+                row.heightAnchor.constraint(greaterThanOrEqualToConstant: record.hasTranslation ? 86 : 64),
                 metaLabel.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 10),
                 metaLabel.topAnchor.constraint(equalTo: row.topAnchor, constant: 8),
-                metaLabel.trailingAnchor.constraint(equalTo: copyButton.leadingAnchor, constant: -10),
+                metaLabel.trailingAnchor.constraint(lessThanOrEqualTo: usageLabel.leadingAnchor, constant: -8),
+                usageLabel.trailingAnchor.constraint(equalTo: copyButton.leadingAnchor, constant: -10),
+                usageLabel.centerYAnchor.constraint(equalTo: metaLabel.centerYAnchor),
+                usageLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 112),
                 textLabel.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 10),
                 textLabel.topAnchor.constraint(equalTo: metaLabel.bottomAnchor, constant: 5),
                 textLabel.bottomAnchor.constraint(lessThanOrEqualTo: row.bottomAnchor, constant: -9),
@@ -1118,6 +1422,402 @@ final class MainViewController: NSViewController {
         guard recentRecords.indices.contains(sender.tag) else { return }
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.setString(recentRecords[sender.tag].text, forType: .string)
+        pasteboard.setString(displayText(for: recentRecords[sender.tag]), forType: .string)
+    }
+
+    private func displayText(for record: RecentTranscription) -> String {
+        guard record.hasTranslation,
+              let sourceText = record.sourceText,
+              let translatedText = record.translatedText,
+              let direction = record.translationDirection else {
+            return record.text
+        }
+        return "\(direction.sourceLabel)：\(sourceText)\n\(direction.targetLabel)：\(translatedText)"
+    }
+}
+
+private final class SmartRewritePromptDialog: NSObject {
+    enum Result {
+        case save(RewriteMode, String)
+        case reset(RewriteMode)
+        case cancel
+    }
+
+    private let modePicker = NSPopUpButton()
+    private let textView = NSTextView()
+    private var selectedMode: RewriteMode
+
+    init(initialMode: RewriteMode) {
+        selectedMode = SmartRewritePromptStore.editableModes.contains(initialMode) ? initialMode : .developerRequirement
+        super.init()
+    }
+
+    func runModal() -> Result {
+        let alert = NSAlert()
+        alert.messageText = "智能整理提示词"
+        alert.informativeText = "选择一种整理模式，修改提示词后保存。可用占位符：{rawText}、{targetAppName}、{targetBundleIdentifier}。"
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "保存")
+        alert.addButton(withTitle: "恢复默认")
+        alert.addButton(withTitle: "取消")
+        alert.accessoryView = buildAccessoryView()
+        loadTemplate(for: selectedMode)
+
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            return .save(selectedMode, textView.string)
+        case .alertSecondButtonReturn:
+            return .reset(selectedMode)
+        default:
+            return .cancel
+        }
+    }
+
+    private func buildAccessoryView() -> NSView {
+        modePicker.removeAllItems()
+        for mode in SmartRewritePromptStore.editableModes {
+            modePicker.addItem(withTitle: mode.displayName)
+            modePicker.lastItem?.representedObject = mode.rawValue
+        }
+        modePicker.selectItem(withTitle: selectedMode.displayName)
+        modePicker.target = self
+        modePicker.action = #selector(modeDidChange)
+        modePicker.bezelStyle = .rounded
+        modePicker.controlSize = .regular
+
+        textView.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        textView.textColor = NSColor(calibratedWhite: 0.96, alpha: 1)
+        textView.backgroundColor = NSColor(calibratedWhite: 0.08, alpha: 1)
+        textView.insertionPointColor = NSColor(calibratedWhite: 1, alpha: 1)
+        textView.isRichText = false
+        textView.isEditable = true
+        textView.isSelectable = true
+        textView.drawsBackground = true
+        textView.allowsUndo = true
+        textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticDashSubstitutionEnabled = false
+        textView.isAutomaticTextReplacementEnabled = false
+        textView.textContainerInset = NSSize(width: 10, height: 10)
+        textView.frame = NSRect(x: 0, y: 0, width: 460, height: 300)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
+        textView.minSize = NSSize(width: 0, height: 0)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.textContainer?.containerSize = NSSize(width: 440, height: CGFloat.greatestFiniteMagnitude)
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.heightTracksTextView = false
+        textView.textContainer?.lineFragmentPadding = 8
+        textView.typingAttributes = [
+            .font: NSFont.monospacedSystemFont(ofSize: 12, weight: .regular),
+            .foregroundColor: NSColor(calibratedWhite: 0.96, alpha: 1),
+        ]
+
+        let scrollView = NSScrollView()
+        scrollView.borderType = .bezelBorder
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = false
+        scrollView.documentView = textView
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+
+        let hint = NSTextField(labelWithString: "保存空内容会恢复默认。若忘记 {rawText}，TypeWhale 会自动补到模板末尾。")
+        hint.font = .systemFont(ofSize: 11)
+        hint.textColor = .secondaryLabelColor
+        hint.maximumNumberOfLines = 2
+        hint.lineBreakMode = .byWordWrapping
+
+        let stack = NSStackView(views: [modePicker, scrollView, hint])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 8
+        stack.translatesAutoresizingMaskIntoConstraints = false
+
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 460, height: 360))
+        container.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: container.topAnchor),
+            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            modePicker.widthAnchor.constraint(equalToConstant: 160),
+            scrollView.widthAnchor.constraint(equalToConstant: 460),
+            scrollView.heightAnchor.constraint(equalToConstant: 300),
+            hint.widthAnchor.constraint(equalToConstant: 460),
+        ])
+        return container
+    }
+
+    @objc private func modeDidChange() {
+        guard let rawValue = modePicker.selectedItem?.representedObject as? String,
+              let mode = RewriteMode(rawValue: rawValue) else {
+            return
+        }
+        selectedMode = mode
+        loadTemplate(for: mode)
+    }
+
+    private func loadTemplate(for mode: RewriteMode) {
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedSystemFont(ofSize: 12, weight: .regular),
+            .foregroundColor: NSColor(calibratedWhite: 0.96, alpha: 1),
+        ]
+        textView.textStorage?.setAttributedString(NSAttributedString(
+            string: SmartRewritePromptStore.template(for: mode),
+            attributes: attributes
+        ))
+        textView.setSelectedRange(NSRange(location: 0, length: 0))
+        textView.scrollRangeToVisible(NSRange(location: 0, length: 0))
+    }
+}
+
+private final class SmartTranslationPromptDialog: NSObject {
+    enum Result {
+        case save(SmartTranslationDirection, String)
+        case reset(SmartTranslationDirection)
+        case cancel
+    }
+
+    private let directionPicker = NSPopUpButton()
+    private let textView = NSTextView()
+    private var selectedDirection: SmartTranslationDirection
+
+    init(initialDirection: SmartTranslationDirection) {
+        selectedDirection = initialDirection
+        super.init()
+    }
+
+    func runModal() -> Result {
+        let alert = NSAlert()
+        alert.messageText = "翻译提示词"
+        alert.informativeText = "选择翻译方向，修改语气和表达规则后保存。中译英提示词会影响英文翻译的口语化风格。"
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "保存")
+        alert.addButton(withTitle: "恢复默认")
+        alert.addButton(withTitle: "取消")
+        alert.accessoryView = buildAccessoryView()
+        loadTemplate(for: selectedDirection)
+
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            return .save(selectedDirection, textView.string)
+        case .alertSecondButtonReturn:
+            return .reset(selectedDirection)
+        default:
+            return .cancel
+        }
+    }
+
+    private func buildAccessoryView() -> NSView {
+        directionPicker.removeAllItems()
+        for direction in SmartTranslationDirection.allCases {
+            directionPicker.addItem(withTitle: direction.displayName)
+            directionPicker.lastItem?.representedObject = direction.rawValue
+        }
+        directionPicker.selectItem(withTitle: selectedDirection.displayName)
+        directionPicker.target = self
+        directionPicker.action = #selector(directionDidChange)
+        directionPicker.bezelStyle = .rounded
+        directionPicker.controlSize = .regular
+
+        textView.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        textView.textColor = NSColor(calibratedWhite: 0.96, alpha: 1)
+        textView.backgroundColor = NSColor(calibratedWhite: 0.08, alpha: 1)
+        textView.insertionPointColor = NSColor(calibratedWhite: 1, alpha: 1)
+        textView.isRichText = false
+        textView.isEditable = true
+        textView.isSelectable = true
+        textView.drawsBackground = true
+        textView.allowsUndo = true
+        textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticDashSubstitutionEnabled = false
+        textView.isAutomaticTextReplacementEnabled = false
+        textView.textContainerInset = NSSize(width: 10, height: 10)
+        textView.frame = NSRect(x: 0, y: 0, width: 460, height: 260)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
+        textView.minSize = NSSize(width: 0, height: 0)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.textContainer?.containerSize = NSSize(width: 440, height: CGFloat.greatestFiniteMagnitude)
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.heightTracksTextView = false
+        textView.textContainer?.lineFragmentPadding = 8
+        textView.typingAttributes = [
+            .font: NSFont.monospacedSystemFont(ofSize: 12, weight: .regular),
+            .foregroundColor: NSColor(calibratedWhite: 0.96, alpha: 1),
+        ]
+
+        let scrollView = NSScrollView()
+        scrollView.borderType = .bezelBorder
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = false
+        scrollView.documentView = textView
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+
+        let hint = NSTextField(labelWithString: "保存空内容会恢复默认。这里只写翻译语气和表达规则，原文会由 TypeWhale 自动附加。")
+        hint.font = .systemFont(ofSize: 11)
+        hint.textColor = .secondaryLabelColor
+        hint.maximumNumberOfLines = 2
+        hint.lineBreakMode = .byWordWrapping
+
+        let stack = NSStackView(views: [directionPicker, scrollView, hint])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 8
+        stack.translatesAutoresizingMaskIntoConstraints = false
+
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 460, height: 320))
+        container.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: container.topAnchor),
+            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            directionPicker.widthAnchor.constraint(equalToConstant: 160),
+            scrollView.widthAnchor.constraint(equalToConstant: 460),
+            scrollView.heightAnchor.constraint(equalToConstant: 260),
+            hint.widthAnchor.constraint(equalToConstant: 460),
+        ])
+        return container
+    }
+
+    @objc private func directionDidChange() {
+        guard let rawValue = directionPicker.selectedItem?.representedObject as? String,
+              let direction = SmartTranslationDirection(rawValue: rawValue) else {
+            return
+        }
+        selectedDirection = direction
+        loadTemplate(for: direction)
+    }
+
+    private func loadTemplate(for direction: SmartTranslationDirection) {
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedSystemFont(ofSize: 12, weight: .regular),
+            .foregroundColor: NSColor(calibratedWhite: 0.96, alpha: 1),
+        ]
+        textView.textStorage?.setAttributedString(NSAttributedString(
+            string: SmartTranslationPromptStore.template(for: direction),
+            attributes: attributes
+        ))
+        textView.setSelectedRange(NSRange(location: 0, length: 0))
+        textView.scrollRangeToVisible(NSRange(location: 0, length: 0))
+    }
+}
+
+private final class DeveloperLexiconDialog: NSObject {
+    enum Result {
+        case save([DeveloperTerm])
+        case reset
+        case cancel
+    }
+
+    private let textView = NSTextView()
+
+    func runModal() -> Result {
+        let alert = NSAlert()
+        alert.messageText = "开发术语词库"
+        alert.informativeText = "每行一个术语：标准词 | 分类 | 别名1, 别名2。新增、编辑或删除对应行即可管理词库。"
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "保存")
+        alert.addButton(withTitle: "恢复默认")
+        alert.addButton(withTitle: "取消")
+        alert.accessoryView = buildAccessoryView()
+        loadTerms()
+
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            return .save(parseTerms(from: textView.string))
+        case .alertSecondButtonReturn:
+            return .reset
+        default:
+            return .cancel
+        }
+    }
+
+    private func buildAccessoryView() -> NSView {
+        textView.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        textView.textColor = NSColor(calibratedWhite: 0.96, alpha: 1)
+        textView.backgroundColor = NSColor(calibratedWhite: 0.08, alpha: 1)
+        textView.insertionPointColor = NSColor(calibratedWhite: 1, alpha: 1)
+        textView.isRichText = false
+        textView.isEditable = true
+        textView.isSelectable = true
+        textView.drawsBackground = true
+        textView.allowsUndo = true
+        textView.textContainerInset = NSSize(width: 10, height: 10)
+        textView.frame = NSRect(x: 0, y: 0, width: 520, height: 320)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
+        textView.textContainer?.containerSize = NSSize(width: 500, height: CGFloat.greatestFiniteMagnitude)
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.heightTracksTextView = false
+        textView.textContainer?.lineFragmentPadding = 8
+
+        let scrollView = NSScrollView()
+        scrollView.borderType = .bezelBorder
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = false
+        scrollView.documentView = textView
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+
+        let hint = NSTextField(labelWithString: "分类可用：tool、model、framework、language、api、product、project、acronym。无法识别的分类会按 project 保存。")
+        hint.font = .systemFont(ofSize: 11)
+        hint.textColor = .secondaryLabelColor
+        hint.maximumNumberOfLines = 2
+        hint.lineBreakMode = .byWordWrapping
+
+        let stack = NSStackView(views: [scrollView, hint])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 8
+        stack.translatesAutoresizingMaskIntoConstraints = false
+
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 520, height: 350))
+        container.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: container.topAnchor),
+            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            scrollView.widthAnchor.constraint(equalToConstant: 520),
+            scrollView.heightAnchor.constraint(equalToConstant: 320),
+            hint.widthAnchor.constraint(equalToConstant: 520),
+        ])
+        return container
+    }
+
+    private func loadTerms() {
+        let text = DeveloperLexiconStore.load()
+            .sorted { $0.canonical.localizedCaseInsensitiveCompare($1.canonical) == .orderedAscending }
+            .map { term in
+                "\(term.canonical) | \(term.category.rawValue) | \(term.aliases.joined(separator: ", "))"
+            }
+            .joined(separator: "\n")
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedSystemFont(ofSize: 12, weight: .regular),
+            .foregroundColor: NSColor(calibratedWhite: 0.96, alpha: 1),
+        ]
+        textView.textStorage?.setAttributedString(NSAttributedString(string: text, attributes: attributes))
+        textView.setSelectedRange(NSRange(location: 0, length: 0))
+        textView.scrollRangeToVisible(NSRange(location: 0, length: 0))
+    }
+
+    private func parseTerms(from text: String) -> [DeveloperTerm] {
+        text.components(separatedBy: .newlines).compactMap { line in
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, !trimmed.hasPrefix("#") else { return nil }
+            let parts = trimmed.components(separatedBy: "|").map {
+                $0.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            guard let canonical = parts.first, !canonical.isEmpty else { return nil }
+            let category = parts.count > 1
+                ? DeveloperTermCategory(rawValue: parts[1]) ?? .project
+                : .project
+            let aliases = parts.count > 2
+                ? parts[2].components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+                : []
+            return DeveloperTerm(canonical: canonical, aliases: aliases, category: category)
+        }
     }
 }

@@ -13,6 +13,7 @@ final class HotkeyMonitor {
     private var activeBinding: HotkeyBinding?
     var onDown: ((SpeechInputChannel, HotkeyBinding) -> Void)?
     var onUp: ((SpeechInputChannel, HotkeyBinding) -> Void)?
+    var onAutoTranslateToggle: (() -> Void)?
 
     func start() {
         guard tap == nil || !isTapEnabled else { return }
@@ -116,6 +117,13 @@ final class HotkeyMonitor {
 
     private func handleKey(event: CGEvent, isDown: Bool) -> Bool {
         let eventKeyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
+        if isAutoTranslateToggle(eventKeyCode: eventKeyCode, eventFlags: event.flags) {
+            if isDown, event.getIntegerValueField(.keyboardEventAutorepeat) == 0 {
+                onAutoTranslateToggle?()
+            }
+            return true
+        }
+
         guard let binding = bindings.first(where: { binding in
             binding.kind == .combo &&
             binding.keyCode == eventKeyCode &&
@@ -124,6 +132,15 @@ final class HotkeyMonitor {
             return false
         }
         return updateTrigger(isDown: isDown, channel: .chinese, binding: binding)
+    }
+
+    private func isAutoTranslateToggle(eventKeyCode: Int, eventFlags: CGEventFlags) -> Bool {
+        guard eventKeyCode == HotkeyKeyCodes.backslash else { return false }
+        guard eventFlags.contains(.maskShift) else { return false }
+        return !eventFlags.contains(.maskCommand) &&
+            !eventFlags.contains(.maskAlternate) &&
+            !eventFlags.contains(.maskControl) &&
+            !eventFlags.contains(.maskSecondaryFn)
     }
 
     private func isBindingDown(_ binding: HotkeyBinding, keyCode: Int, eventFlags: CGEventFlags) -> Bool {

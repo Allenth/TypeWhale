@@ -99,7 +99,7 @@ final class PasteCoordinator {
             finish(request, outcome: .failed("无法创建系统直接输入事件"))
             return
         }
-        finish(request, outcome: .directInserted)
+        finish(request, outcome: .directInserted(Date()))
     }
 
     private func postUnicodeText(_ text: String) -> Bool {
@@ -158,14 +158,15 @@ final class PasteCoordinator {
         up.flags = .maskCommand
         down.post(tap: .cghidEventTap)
         up.post(tap: .cghidEventTap)
+        let pasteCompletedAt = Date()
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             guard let self else { return }
             if pasteboard.changeCount == injectedChangeCount {
                 previous.restore(to: pasteboard)
-                self.finish(request, outcome: .restored)
+                self.finish(request, outcome: .restored(pasteCompletedAt))
             } else {
-                self.finish(request, outcome: .preservedUserClipboard)
+                self.finish(request, outcome: .preservedUserClipboard(pasteCompletedAt))
             }
         }
     }

@@ -12,6 +12,7 @@ enum HotkeyKeyCodes {
     static let leftControl = 59
     static let rightControl = 62
     static let function = 63
+    static let backslash = 42
 
     static let modifierKeyCodes: Set<Int> = [
         leftCommand, rightCommand, leftShift, rightShift,
@@ -23,7 +24,7 @@ enum HotkeyKeyCodes {
         11: "B", 12: "Q", 13: "W", 14: "E", 15: "R", 16: "Y", 17: "T", 18: "1", 19: "2",
         20: "3", 21: "4", 22: "6", 23: "5", 24: "=", 25: "9", 26: "7", 27: "-", 28: "8",
         29: "0", 30: "]", 31: "O", 32: "U", 33: "[", 34: "I", 35: "P", 36: "Return",
-        37: "L", 38: "J", 39: "'", 40: "K", 41: ";", 42: "\\", 43: ",", 44: "/", 45: "N",
+        37: "L", 38: "J", 39: "'", 40: "K", 41: ";", backslash: "\\", 43: ",", 44: "/", 45: "N",
         46: "M", 47: ".", 49: "Space", 50: "`", 51: "Delete", 53: "Esc",
         leftCommand: "左 Cmd", rightCommand: "右 Cmd",
         leftShift: "左 Shift", rightShift: "右 Shift",
