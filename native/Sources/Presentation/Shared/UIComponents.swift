@@ -74,7 +74,7 @@ func roundedBox(_ content: NSView, hPad: CGFloat = 15, vPad: CGFloat = 14) -> NS
 
 /// A rounded surface containing a vertical list of rows, with hairline separators between them.
 @MainActor
-func listCard(_ rows: [NSView], hPad: CGFloat = 15) -> NSView {
+func listCard(_ rows: [NSView], hPad: CGFloat = 15, vPad: CGFloat = 3) -> NSView {
     let stack = NSStackView()
     stack.orientation = .vertical
     stack.alignment = .width
@@ -86,7 +86,7 @@ func listCard(_ rows: [NSView], hPad: CGFloat = 15) -> NSView {
             stack.addArrangedSubview(hairlineView())
         }
     }
-    return roundedBox(stack, hPad: hPad, vPad: 3)
+    return roundedBox(stack, hPad: hPad, vPad: vPad)
 }
 
 /// A keycap-styled wrapper around a label, used to display hotkeys.

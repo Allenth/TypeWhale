@@ -9,6 +9,15 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.2.42 (Build 199)",
+            date: "2026-06-24",
+            changes: [
+                "修复主界面左侧录音状态卡片长提示文字贴边的问题。",
+                "修复快捷键卡片在垂直方向被压缩后两行按钮重叠的问题。",
+                "提高快捷键卡片最小高度，并为列表卡片增加可配置上下留白。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.2.41 (Build 198)",
             date: "2026-06-24",
             changes: [

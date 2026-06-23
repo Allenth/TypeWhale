@@ -15,7 +15,7 @@ final class MainViewController: NSViewController {
     private let contentHeight: CGFloat = 858
     private let leftColumnWidth: CGFloat = 212
     private let topInset: CGFloat = 38
-    private let recentViewportHeight: CGFloat = 258
+    private let recentViewportHeight: CGFloat = 150
     private let brandIconVisibleSize: CGFloat = 64
 
     let status = label("等待录音", size: 15, weight: .semibold)
@@ -296,10 +296,11 @@ final class MainViewController: NSViewController {
             waveform.widthAnchor.constraint(equalTo: inner.widthAnchor),
             processingProgress.widthAnchor.constraint(equalTo: inner.widthAnchor, multiplier: 0.78),
             processingProgress.heightAnchor.constraint(equalToConstant: 4),
-            box.heightAnchor.constraint(equalToConstant: 128),
+            box.heightAnchor.constraint(equalToConstant: 142),
             inner.leadingAnchor.constraint(equalTo: box.leadingAnchor, constant: 14),
             inner.trailingAnchor.constraint(equalTo: box.trailingAnchor, constant: -14),
             inner.topAnchor.constraint(equalTo: box.topAnchor, constant: 14),
+            inner.bottomAnchor.constraint(lessThanOrEqualTo: box.bottomAnchor, constant: -14),
             detail.widthAnchor.constraint(equalTo: inner.widthAnchor),
         ])
         return box
@@ -399,6 +400,7 @@ final class MainViewController: NSViewController {
             permissionRow(icon: "accessibility", name: "辅助功能", status: accessibilityStatus, button: accessButton),
             permissionRow(icon: "keyboard", name: "全局快捷键", status: hotkeyStatus, button: keyboardButton),
         ])
+        permissionCard.setContentCompressionResistancePriority(.required, for: .vertical)
 
         [hotkeyValue, secondaryHotkeyValue].forEach {
             $0.lineBreakMode = .byTruncatingMiddle
@@ -435,7 +437,8 @@ final class MainViewController: NSViewController {
             captureButton: secondaryHotkeyCaptureButton,
             fallbackButton: secondaryHotkeyClearButton
         )
-        let hotkeyCard = listCard([primaryRow, secondaryRow], hPad: 12)
+        let hotkeyCard = listCard([primaryRow, secondaryRow], hPad: 12, vPad: 8)
+        hotkeyCard.heightAnchor.constraint(greaterThanOrEqualToConstant: 102).isActive = true
         hotkeyCard.setContentCompressionResistancePriority(.required, for: .vertical)
 
         let smartRewriteControls = NSStackView(views: [smartRewriteMode, promptSettingsButton, developerTermsButton, deepSeekKeyButton])
@@ -462,6 +465,7 @@ final class MainViewController: NSViewController {
             optionRow("录音时降低电脑声音", duckSystemAudio),
             optionRow("开机自动启动", launchAtLogin),
         ])
+        optionCard.setContentCompressionResistancePriority(.required, for: .vertical)
 
         recentStack.orientation = .vertical
         recentStack.alignment = .width
@@ -668,8 +672,8 @@ final class MainViewController: NSViewController {
 
     private func versionText() -> String {
         let info = Bundle.main.infoDictionary
-        let version = info?["CFBundleShortVersionString"] as? String ?? "1.2.41"
-        let build = info?["CFBundleVersion"] as? String ?? "198"
+        let version = info?["CFBundleShortVersionString"] as? String ?? "1.2.42"
+        let build = info?["CFBundleVersion"] as? String ?? "199"
         return "Version \(version) (\(build))"
     }
 
