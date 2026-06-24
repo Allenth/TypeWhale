@@ -168,7 +168,7 @@ TypeSpeakerNativeRecognizer TypeSpeakerNativeRecognizerCreate(
   config.feat_config.feature_dim = 80;
   config.model_config.sense_voice.model = model_path;
   config.model_config.sense_voice.language = sense_voice_language();
-  config.model_config.sense_voice.use_itn = 0;
+  config.model_config.sense_voice.use_itn = 1;
   config.model_config.tokens = tokens_path;
   config.model_config.num_threads = 4;
   config.model_config.provider = "cpu";

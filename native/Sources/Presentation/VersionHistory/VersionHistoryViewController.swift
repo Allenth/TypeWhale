@@ -9,6 +9,36 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.3.10 (Build 218)",
+            date: "2026-06-24",
+            changes: [
+                "修复当前会话面板被压缩后状态文字和实时文本标题裁切的问题。",
+                "恢复会话面板必要高度，同时收紧内部间距和波形高度。",
+                "最近转录视口微调，保持整体板块比例稳定。",
+                "恢复 SenseVoice ITN，让原文模式重新获得标点和数字文本规范化能力。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.3.9 (Build 217)",
+            date: "2026-06-24",
+            changes: [
+                "继续收紧横屏各板块比例。",
+                "当前会话面板降低高度，将更多空间分配给最近转录。",
+                "右侧 inspector 小组间距进一步收敛，让设置区更紧凑。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.3.8 (Build 216)",
+            date: "2026-06-24",
+            changes: [
+                "按板块重新打磨横屏主界面：左侧栏、当前会话、最近转录、快捷键和选项区分别优化。",
+                "右侧选项区拆分为智能整理、翻译、截图和系统四个 inspector 小组。",
+                "当前会话胶囊收窄，实时文本权重提升，减少搜索框式观感。",
+                "最近转录降低元信息和复制按钮噪音，历史列表更易扫读。",
+                "左侧品牌和权限区收敛尺寸，降低海报感和厚重卡片感。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.3.7 (Build 215)",
             date: "2026-06-24",
             changes: [
