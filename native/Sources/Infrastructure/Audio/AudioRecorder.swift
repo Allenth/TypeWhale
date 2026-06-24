@@ -64,6 +64,7 @@ final class AudioRecorder: @unchecked Sendable {
     private enum RealtimeTiming {
         static let firstSnapshotSeconds: Double = 0.30
         static let snapshotIntervalSeconds: Double = 0.50
+        static let maxBufferedSeconds: Double = 20.0
     }
     private enum Finalization {
         static let tailPaddingSeconds: Double = 0.25
@@ -149,6 +150,7 @@ final class AudioRecorder: @unchecked Sendable {
                     self.state.observePeak(self.peakLevel(from: copy))
                     if self.realtimeEnabled {
                         self.realtimeBuffers.append(copy)
+                        self.trimRealtimeBuffers(for: format)
                         let (frameCount, _, _) = self.state.snapshot()
                         if frameCount >= self.nextRealtimeFrame {
                             self.scheduleRealtimeSnapshot(taskID: taskID, format: format)
@@ -302,6 +304,23 @@ final class AudioRecorder: @unchecked Sendable {
                     self.scheduleRealtimeSnapshot(taskID: taskID, format: format)
                 }
             }
+        }
+    }
+
+    private func trimRealtimeBuffers(for format: AVAudioFormat) {
+        let maxFrames = AVAudioFramePosition(format.sampleRate * RealtimeTiming.maxBufferedSeconds)
+        guard maxFrames > 0 else { return }
+        var retainedFrames: AVAudioFramePosition = 0
+        var firstRetainedIndex = realtimeBuffers.count
+        for index in realtimeBuffers.indices.reversed() {
+            retainedFrames += AVAudioFramePosition(realtimeBuffers[index].frameLength)
+            firstRetainedIndex = index
+            if retainedFrames >= maxFrames {
+                break
+            }
+        }
+        if firstRetainedIndex > 0 {
+            realtimeBuffers.removeFirst(firstRetainedIndex)
         }
     }
 

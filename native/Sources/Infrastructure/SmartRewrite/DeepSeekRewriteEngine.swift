@@ -2,13 +2,14 @@ import Foundation
 
 final class DeepSeekRewriteEngine: SmartRewriteEngine {
     private let endpoint = URL(string: "https://api.deepseek.com/chat/completions")!
+    private static let requiredModel = "deepseek-v4-flash"
     let displayName: String
     private let model: String
     private let apiKeyProvider: () -> String?
     private let session: URLSession
 
     init(
-        model: String = "deepseek-v4-flash",
+        model: String = DeepSeekRewriteEngine.requiredModel,
         displayName: String = "DeepSeek v4 flash",
         apiKeyProvider: @escaping () -> String? = { DeepSeekAPIKeyStore.load() },
         session: URLSession = .shared
@@ -27,6 +28,9 @@ final class DeepSeekRewriteEngine: SmartRewriteEngine {
         guard let apiKey = apiKeyProvider(), !apiKey.isEmpty else {
             throw DeepSeekRewriteError.missingAPIKey
         }
+        guard model == Self.requiredModel else {
+            throw DeepSeekRewriteError.unsupportedModel(model)
+        }
 
         let prompt = SmartRewritePromptBuilder.prompt(
             rawText: rawText,
@@ -34,7 +38,14 @@ final class DeepSeekRewriteEngine: SmartRewriteEngine {
             context: context,
             preference: .automatic
         )
-        return try await complete(prompt: prompt, systemPrompt: rewriteSystemPrompt)
+        return try await complete(
+            prompt: prompt,
+            systemPrompt: rewriteSystemPrompt,
+            mode: mode.displayName,
+            triggeredBy: "final_smart_rewrite",
+            rawText: rawText,
+            rawTextLength: rawText.count
+        )
     }
 
     func translate(
@@ -65,7 +76,27 @@ final class DeepSeekRewriteEngine: SmartRewriteEngine {
         原始语音文本：
         \(source)
         """
-        let translated = try await complete(prompt: prompt, systemPrompt: translationSystemPrompt)
+        switch SmartRewriteCostGuard.check(
+            rawText: source,
+            prompt: prompt,
+            triggeredBy: "final_translation"
+        ) {
+        case .allowed:
+            break
+        case .blocked(let reason):
+            LaunchDiagnostics.mark(
+                "deepseek request_skipped triggered_by=final_translation mode=\(direction.displayName) reason=\(reason) rawText_length=\(source.count) prompt_length=\(prompt.count)"
+            )
+            throw SmartRewriteError.costLimitExceeded(reason)
+        }
+        let translated = try await complete(
+            prompt: prompt,
+            systemPrompt: translationSystemPrompt,
+            mode: direction.displayName,
+            triggeredBy: "final_translation",
+            rawText: source,
+            rawTextLength: source.count
+        )
         return SmartTranslationOutput(
             sourceText: source,
             translatedText: translated.text,
@@ -95,13 +126,40 @@ final class DeepSeekRewriteEngine: SmartRewriteEngine {
         """
     }
 
-    private func complete(prompt: String, systemPrompt: String) async throws -> SmartRewriteEngineOutput {
+    private func complete(
+        prompt: String,
+        systemPrompt: String,
+        mode: String,
+        triggeredBy: String,
+        rawText: String,
+        rawTextLength: Int
+    ) async throws -> SmartRewriteEngineOutput {
         guard let apiKey = apiKeyProvider(), !apiKey.isEmpty else {
             throw DeepSeekRewriteError.missingAPIKey
+        }
+        guard model == Self.requiredModel else {
+            throw DeepSeekRewriteError.unsupportedModel(model)
+        }
+
+        let requestID = UUID().uuidString
+        let fullPromptLength = systemPrompt.count + prompt.count
+        switch SmartRewriteCostGuard.check(
+            rawText: rawText,
+            prompt: systemPrompt + "\n" + prompt,
+            triggeredBy: triggeredBy
+        ) {
+        case .allowed:
+            break
+        case .blocked(let reason):
+            LaunchDiagnostics.mark(
+                "deepseek request_skipped triggered_by=\(triggeredBy) mode=\(mode) reason=\(reason) rawText_length=\(rawTextLength) prompt_length=\(fullPromptLength)"
+            )
+            throw SmartRewriteError.costLimitExceeded(reason)
         }
 
         var request = URLRequest(url: endpoint, timeoutInterval: 15)
         request.httpMethod = "POST"
+        request.setValue(requestID, forHTTPHeaderField: "X-TypeWhale-Request-ID")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONEncoder().encode(DeepSeekChatRequest(
@@ -114,10 +172,13 @@ final class DeepSeekRewriteEngine: SmartRewriteEngine {
                 DeepSeekMessage(role: "user", content: prompt)
             ],
             temperature: 0.2,
-            maxTokens: 400,
+            maxTokens: SmartRewriteCostGuard.maxOutputTokens,
             stream: false,
             thinking: DeepSeekThinking(type: "disabled")
         ))
+        LaunchDiagnostics.mark(
+            "deepseek request_start request_id=\(requestID) triggered_by=\(triggeredBy) model=\(model) mode=\(mode) thinking=disabled prompt_length=\(fullPromptLength) rawText_length=\(rawTextLength)"
+        )
 
         let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -134,12 +195,28 @@ final class DeepSeekRewriteEngine: SmartRewriteEngine {
         guard let content, !content.isEmpty else {
             throw DeepSeekRewriteError.emptyContent
         }
-        return SmartRewriteEngineOutput(text: content, usage: decoded.usage?.smartUsage)
+        let usage = decoded.usage?.smartUsage(
+            model: model,
+            mode: mode,
+            requestID: requestID,
+            triggeredBy: triggeredBy,
+            rawTextLength: rawTextLength,
+            promptLength: fullPromptLength
+        )
+        if let usage {
+            LaunchDiagnostics.mark("deepseek request_done \(usage.requestLogText)")
+        } else {
+            LaunchDiagnostics.mark(
+                "deepseek request_done request_id=\(requestID) triggered_by=\(triggeredBy) model=\(model) mode=\(mode) usage=missing prompt_length=\(fullPromptLength) rawText_length=\(rawTextLength)"
+            )
+        }
+        return SmartRewriteEngineOutput(text: content, usage: usage)
     }
 }
 
 enum DeepSeekRewriteError: Error {
     case missingAPIKey
+    case unsupportedModel(String)
     case invalidResponse
     case httpStatus(Int)
     case emptyContent
@@ -184,9 +261,10 @@ private struct DeepSeekChoice: Decodable {
 private struct DeepSeekUsage: Decodable {
     let completionTokens: Int
     let promptTokens: Int
-    let promptCacheHitTokens: Int
-    let promptCacheMissTokens: Int
-    let totalTokens: Int
+    // 缓存细分与总数都设为可选：即使接口某次没返回这些字段，也不会让整个 usage 解析失败、导致这条费用完全漏记。
+    let promptCacheHitTokens: Int?
+    let promptCacheMissTokens: Int?
+    let totalTokens: Int?
 
     enum CodingKeys: String, CodingKey {
         case completionTokens = "completion_tokens"
@@ -196,13 +274,27 @@ private struct DeepSeekUsage: Decodable {
         case totalTokens = "total_tokens"
     }
 
-    var smartUsage: SmartUsage {
-        SmartUsage.deepSeekV4Flash(
+    func smartUsage(
+        model: String,
+        mode: String,
+        requestID: String,
+        triggeredBy: String,
+        rawTextLength: Int,
+        promptLength: Int
+    ) -> SmartUsage {
+        let hit = promptCacheHitTokens ?? 0
+        return SmartUsage.deepSeekV4Flash(
+            model: model,
+            mode: mode,
+            requestID: requestID,
+            triggeredBy: triggeredBy,
+            rawTextLength: rawTextLength,
+            promptLength: promptLength,
             promptTokens: promptTokens,
             completionTokens: completionTokens,
-            totalTokens: totalTokens,
-            promptCacheHitTokens: promptCacheHitTokens,
-            promptCacheMissTokens: promptCacheMissTokens
+            totalTokens: totalTokens ?? (promptTokens + completionTokens),
+            promptCacheHitTokens: hit,
+            promptCacheMissTokens: promptCacheMissTokens ?? max(0, promptTokens - hit)
         )
     }
 }

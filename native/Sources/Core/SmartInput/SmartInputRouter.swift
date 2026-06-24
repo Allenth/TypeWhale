@@ -99,6 +99,32 @@ final class SmartInputRouter {
             matching: [trimmed, rewriteText].joined(separator: "\n")
         )
         let rewriteContext = context.withDeveloperGlossary(scopedGlossary)
+        let prompt = SmartRewritePromptBuilder.prompt(
+            rawText: rewriteText,
+            mode: profile.mode,
+            context: rewriteContext,
+            preference: preference
+        )
+        switch SmartRewriteCostGuard.check(
+            rawText: rewriteText,
+            prompt: prompt,
+            triggeredBy: "final_smart_rewrite"
+        ) {
+        case .allowed:
+            break
+        case .blocked(let reason):
+            LaunchDiagnostics.mark(
+                "deepseek request_skipped triggered_by=final_smart_rewrite mode=\(profile.mode.displayName) reason=\(reason) rawText_length=\(rewriteText.count) prompt_length=\(prompt.count)"
+            )
+            return SmartRewriteResult(
+                text: normalizedText.isEmpty ? trimmed : normalizedText,
+                rawText: rawText,
+                mode: profile.mode,
+                didFallback: true,
+                normalizedText: normalizedText,
+                termReplacements: normalization.replacements
+            )
+        }
 
         do {
             let output = try await rewriteWithTimeout(
@@ -108,6 +134,10 @@ final class SmartInputRouter {
                 timeoutSeconds: profile.timeoutSeconds
             )
             let rewritten = output.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            // 结果为空仍按原文回退，但请求已计费——把 usage 直接记进账本，避免漏记（不污染转换记录行）。
+            if rewritten.isEmpty {
+                SmartUsageLedgerStore.record(output.usage)
+            }
             return SmartRewriteResult(
                 text: rewritten.isEmpty ? (normalizedText.isEmpty ? trimmed : normalizedText) : rewritten,
                 rawText: rawText,
@@ -151,16 +181,19 @@ final class SmartInputRouter {
         timeoutSeconds: TimeInterval
     ) async throws -> SmartRewriteEngineOutput {
         try await withThrowingTaskGroup(of: SmartRewriteEngineOutput.self) { group in
-            group.addTask {
-                try await self.engine.rewrite(rawText: rawText, mode: mode, context: context)
-            }
+            group.addTask { try await self.engine.rewrite(rawText: rawText, mode: mode, context: context) }
             group.addTask {
                 try await Task.sleep(nanoseconds: UInt64(timeoutSeconds * 1_000_000_000))
                 throw SmartRewriteError.timeout
             }
-            let value = try await group.next() ?? SmartRewriteEngineOutput(text: rawText, usage: nil)
-            group.cancelAll()
-            return value
+            do {
+                let value = try await group.next() ?? SmartRewriteEngineOutput(text: rawText, usage: nil)
+                group.cancelAll()
+                return value
+            } catch {
+                group.cancelAll()
+                throw error
+            }
         }
     }
 }

@@ -9,6 +9,16 @@ final class SpeechInputCoordinator {
         static let holdToRecordSeconds: TimeInterval = 0.28
     }
 
+    /// 基于音频能量的语音活动检测（VAD）阈值，与 ASR 解耦，保证静音/人离判定每次稳定一致。
+    private enum VAD {
+        /// 7 段能量（已归一到 0.12~1）的峰值高于此值即判为"有人声"。环境噪声约 0.12~0.2，留足余量。
+        static let speechBandThreshold: Float = 0.30
+    }
+
+    private var recordingStartedAt: Date?
+    private var lastVoiceAt: Date?
+    private var voiceEverDetected = false
+
     private let controller: MainViewController
     private let hideMainWindow: () -> Void
     private let shouldKeepMainWindowVisibleForScreenshot: () -> Bool
@@ -30,6 +40,7 @@ final class SpeechInputCoordinator {
     private var activeSession: SpeechSession?
     private var pendingPasteResults: [PendingPasteResult] = []
     private var latestSubmittedTaskID: UUID?
+    private var completedFinalTaskIDs: Set<UUID> = []
     private var realtimeBusy = false
     private var pendingRealtimeSnapshot: RealtimeSnapshotRequest?
     private var hotkeyIsPressed = false
@@ -63,6 +74,7 @@ final class SpeechInputCoordinator {
         recorder.onBands = { [weak self] bands in
             self?.popup.updateBands(bands)
             self?.controller.updateInputBands(bands)
+            self?.observeAudioEnergy(bands)
         }
         recorder.onRealtimeSnapshot = { [weak self] taskID, url in
             self?.receiveRealtimeSnapshot(taskID: taskID, url: url)
@@ -238,7 +250,9 @@ final class SpeechInputCoordinator {
                 realtimeEnabled: realtimeEnabled,
                 inputDeviceID: AudioInputDeviceProvider.selectedDeviceID()
             )
-            scheduleInitialSilenceAutoFinishIfNeeded(for: taskID)
+            recordingStartedAt = Date()
+            lastVoiceAt = nil
+            voiceEverDetected = false
         } catch {
             cancelAutoFinishTimer()
             clearActiveRecording()
@@ -396,10 +410,10 @@ final class SpeechInputCoordinator {
                                 let text = cleanRecognitionText(value["text"] as? String ?? "", languageMode: configuration.languageMode)
                                 let hasPriorPreview = self.activeSession?.latestPreviewText.isEmpty == false
                                 if isMeaningfulRecognitionText(text, hasPriorPreview: hasPriorPreview) {
-                                    self.cancelInitialSilenceTimer()
+                                    // 仅用于展示实时预览文本；静音/停顿的结束判定改由能量 VAD 负责。
+                                    self.activeSession?.latestPreviewText = text
                                     self.controller.realtimeDraft.stringValue = text
                                     self.popup.updateDraft(text)
-                                    self.scheduleAutoFinishAfterPauseIfNeeded(text: text, taskID: taskID)
                                 }
                             }
                             self.finishRealtimeSnapshot()
@@ -447,6 +461,10 @@ final class SpeechInputCoordinator {
             let text = cleanRecognitionText(value["text"] as? String ?? "", languageMode: task.configuration.languageMode)
             let elapsed = value["duration_sec"] as? Double ?? 0
             if isMeaningfulRecognitionText(text) {
+                guard markFinalTaskForSubmission(task.id) else {
+                    finishFinalTask(task)
+                    return
+                }
                 if shouldUpdateInterface {
                     controller.realtimeDraft.stringValue = text
                     let preference = controller.smartRewritePreference
@@ -682,9 +700,14 @@ final class SpeechInputCoordinator {
                     try await Task.sleep(nanoseconds: UInt64(timeoutSeconds * 1_000_000_000))
                     throw SmartRewriteError.timeout
                 }
-                let value = try await group.next()
-                group.cancelAll()
-                return value
+                do {
+                    let value = try await group.next()
+                    group.cancelAll()
+                    return value
+                } catch {
+                    group.cancelAll()
+                    throw error
+                }
             }
         } catch {
             return nil
@@ -803,50 +826,45 @@ final class SpeechInputCoordinator {
         taskID == latestSubmittedTaskID && !recorder.isRecording
     }
 
-    private func scheduleAutoFinishAfterPauseIfNeeded(text: String, taskID: UUID) {
-        guard activeSession?.id == taskID,
-              text != activeSession?.latestPreviewText else { return }
-        activeSession?.latestPreviewText = text
-        scheduleAutoFinishAfterPause(for: taskID)
+    private func markFinalTaskForSubmission(_ taskID: UUID) -> Bool {
+        if completedFinalTaskIDs.contains(taskID) {
+            LaunchDiagnostics.mark("final task ignored duplicate task_id=\(taskID.uuidString)")
+            return false
+        }
+        completedFinalTaskIDs.insert(taskID)
+        if completedFinalTaskIDs.count > 20, let first = completedFinalTaskIDs.first {
+            completedFinalTaskIDs.remove(first)
+        }
+        return true
     }
 
-    private func scheduleInitialSilenceAutoFinishIfNeeded(for taskID: UUID) {
-        guard controller.autoFinishAfterPauseEnabled,
-              activeSession?.activation != .hold,
-              recorder.isRecording,
-              taskID == activeSession?.id else { return }
-        initialSilenceWorkItem?.cancel()
-        let workItem = DispatchWorkItem { [weak self] in
-            guard let self,
-                  self.activeSession?.activation != .hold,
-                  self.recorder.isRecording,
-                  self.activeSession?.id == taskID,
-                  self.activeSession?.latestPreviewText.isEmpty == true else { return }
-            self.suppressNextHotkeyUp = self.hotkeyIsPressed
-            self.hotkeyIsPressed = false
-            self.finishRecording()
+    /// 每个音频缓冲都会调用：用 7 段能量峰值判断当前是否有人声，并据此触发静音/人离自动结束。
+    /// 与 ASR 解耦，逐缓冲连续评估，确保每次打开胶囊都能稳定一致地识别静音。
+    private func observeAudioEnergy(_ bands: [Float]) {
+        guard recorder.isRecording else { return }
+        let level = bands.max() ?? 0
+        if level >= VAD.speechBandThreshold {
+            voiceEverDetected = true
+            lastVoiceAt = Date()
         }
-        initialSilenceWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + Timing.initialSilenceAutoFinishSeconds, execute: workItem)
+        evaluateVADAutoFinish()
     }
 
-    private func scheduleAutoFinishAfterPause(for taskID: UUID) {
+    private func evaluateVADAutoFinish() {
         guard controller.autoFinishAfterPauseEnabled,
               activeSession?.activation != .hold,
-              recorder.isRecording,
-              taskID == activeSession?.id else { return }
-        autoFinishWorkItem?.cancel()
-        let workItem = DispatchWorkItem { [weak self] in
-            guard let self,
-                  self.activeSession?.activation != .hold,
-                  self.recorder.isRecording,
-                  self.activeSession?.id == taskID else { return }
-            self.suppressNextHotkeyUp = self.hotkeyIsPressed
-            self.hotkeyIsPressed = false
-            self.finishRecording()
+              recorder.isRecording else { return }
+        let now = Date()
+        if voiceEverDetected {
+            // 说过话之后，持续静音超过停顿时长 → 结束。
+            guard let lastVoiceAt, now.timeIntervalSince(lastVoiceAt) >= Timing.autoFinishPauseSeconds else { return }
+        } else {
+            // 开场一直没人声（人离）→ 超过初始静音时长后结束。
+            guard let recordingStartedAt, now.timeIntervalSince(recordingStartedAt) >= Timing.initialSilenceAutoFinishSeconds else { return }
         }
-        autoFinishWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + Timing.autoFinishPauseSeconds, execute: workItem)
+        suppressNextHotkeyUp = hotkeyIsPressed
+        hotkeyIsPressed = false
+        finishRecording()
     }
 
     private func cancelAutoFinishTimer() {

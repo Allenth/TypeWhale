@@ -27,6 +27,7 @@ final class NoopRewriteEngine: SmartRewriteEngine {
 
 enum SmartRewriteError: Error {
     case timeout
+    case costLimitExceeded(String)
 }
 
 struct SmartRewriteResult {

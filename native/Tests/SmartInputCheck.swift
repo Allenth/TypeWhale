@@ -8,7 +8,7 @@ private final class SlowRewriteEngine: SmartRewriteEngine {
         mode: RewriteMode,
         context: SmartInputContext
     ) async throws -> SmartRewriteEngineOutput {
-        try await Task.sleep(nanoseconds: 4_000_000_000)
+        try await Task.sleep(nanoseconds: 9_000_000_000)
         return SmartRewriteEngineOutput(text: "should-time-out", usage: nil)
     }
 }
@@ -40,7 +40,7 @@ struct SmartInputCheck {
             context: terminal
         )
         precondition(terminalResult.mode == .developerRequirement)
-        precondition(terminalResult.text == "git status")
+        precondition(terminalResult.text == "Git status")
 
         let xcode = SmartInputContext(
             targetAppName: "Xcode",

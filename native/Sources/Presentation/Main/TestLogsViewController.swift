@@ -4,12 +4,14 @@ import AppKit
 final class TestLogsViewController: NSViewController {
     private enum LogSection: Int {
         case launch
+        case deepSeek
         case crash
         case environment
 
         var title: String {
             switch self {
             case .launch: return "启动"
+            case .deepSeek: return "DeepSeek"
             case .crash: return "崩溃"
             case .environment: return "环境"
             }
@@ -20,6 +22,7 @@ final class TestLogsViewController: NSViewController {
     private let textView = NSTextView()
     private let segmented = NSSegmentedControl(labels: [
         LogSection.launch.title,
+        LogSection.deepSeek.title,
         LogSection.crash.title,
         LogSection.environment.title,
     ], trackingMode: .selectOne, target: nil, action: nil)
@@ -104,6 +107,9 @@ final class TestLogsViewController: NSViewController {
         case .launch:
             currentText = launchLogText()
             pathLabel.stringValue = LaunchDiagnostics.logFileURL.path
+        case .deepSeek:
+            currentText = deepSeekLogText()
+            pathLabel.stringValue = LaunchDiagnostics.logFileURL.path
         case .crash:
             let reports = crashReportSummaries()
             currentText = reports.text
@@ -151,6 +157,32 @@ final class TestLogsViewController: NSViewController {
             return tail(text, maxCharacters: 24_000)
         } catch {
             return "未找到启动日志\n\(LaunchDiagnostics.logFileURL.path)\n\n打开或测试一次 App 后这里会出现启动、ASR、权限等诊断记录。"
+        }
+    }
+
+    private func deepSeekLogText() -> String {
+        let header = [
+            "今天调用次数：\(SmartUsageLedgerStore.todayCallCount)",
+            "今天 token：\(SmartUsageLedgerStore.todayTotalTokens)",
+            String(format: "今天估算成本：¥%.6f", SmartUsageLedgerStore.todayCostCNY),
+            "单次输入 token 上限：\(SmartRewriteCostGuard.maxInputTokens)",
+            "单次输出 token 上限：\(SmartRewriteCostGuard.maxOutputTokens)",
+            "每日调用上限：\(SmartRewriteCostGuard.dailyMaxCalls)",
+            String(format: "每日成本上限：¥%.2f", SmartRewriteCostGuard.dailyMaxCostCNY),
+            "",
+            "请求日志：",
+        ].joined(separator: "\n")
+        do {
+            let text = try String(contentsOf: LaunchDiagnostics.logFileURL, encoding: .utf8)
+            let deepSeekLines = text
+                .split(separator: "\n", omittingEmptySubsequences: false)
+                .map(String.init)
+                .filter { $0.contains("deepseek ") || $0.contains("final task ignored duplicate") }
+                .suffix(220)
+                .joined(separator: "\n")
+            return header + "\n" + (deepSeekLines.isEmpty ? "暂无 DeepSeek 请求记录。" : deepSeekLines)
+        } catch {
+            return header + "\n暂无启动日志。"
         }
     }
 
