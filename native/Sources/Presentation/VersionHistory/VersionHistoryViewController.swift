@@ -9,6 +9,17 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.3.12 (Build 220)",
+            date: "2026-06-24",
+            changes: [
+                "为 DeepSeek 智能整理增加调用成本保护：单次输入/输出 token、每日调用次数和每日成本上限。",
+                "补齐 DeepSeek usage 日志，记录模型、模式、token、估算成本、request_id、触发来源和 Prompt 长度。",
+                "Debug 面板新增 DeepSeek 页签，余额弹窗显示今天/昨天消耗、当天调用次数和最近一次 usage。",
+                "避免 Smart Rewrite 超时后后台请求继续消耗 token，并对同一录音最终任务做去重。",
+                "长录音实时预览缓存限制为最近 20 秒，同时保留启动时 ASR 模型预加载以保证首次录音响应速度。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.3.11 (Build 219)",
             date: "2026-06-24",
             changes: [
