@@ -47,3 +47,54 @@ enum AppSettingsStore {
         UserDefaults.standard.set(settings.translationDirection.rawValue, forKey: translationDirectionKey)
     }
 }
+
+enum ScreenshotSaveLocationStore {
+    private static let directoryKey = "screenshotSaveDirectory"
+
+    static var defaultDirectory: URL {
+        FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads", isDirectory: true)
+    }
+
+    static var directory: URL {
+        guard let savedPath = UserDefaults.standard.string(forKey: directoryKey), !savedPath.isEmpty else {
+            return defaultDirectory
+        }
+        let url = URL(fileURLWithPath: savedPath, isDirectory: true)
+        guard isUsableDirectory(url) else {
+            resetToDefault()
+            return defaultDirectory
+        }
+        return url
+    }
+
+    static var displayName: String {
+        let url = directory
+        if url.standardizedFileURL.path == defaultDirectory.standardizedFileURL.path {
+            return "下载"
+        }
+        return url.lastPathComponent.isEmpty ? url.path : url.lastPathComponent
+    }
+
+    static func save(_ url: URL) {
+        let directoryURL = url.standardizedFileURL
+        guard isUsableDirectory(directoryURL) else {
+            resetToDefault()
+            return
+        }
+        UserDefaults.standard.set(directoryURL.path, forKey: directoryKey)
+    }
+
+    static func resetToDefault() {
+        UserDefaults.standard.removeObject(forKey: directoryKey)
+    }
+
+    static func isUsableDirectory(_ url: URL) -> Bool {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            return false
+        }
+        return FileManager.default.isWritableFile(atPath: url.path)
+    }
+}

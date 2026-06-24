@@ -1,0 +1,1052 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TypeWhale macOS 14 Native Layout Mockup</title>
+  <style>
+    :root {
+      --desktop: #d7d3d8;
+      --window: #f7f4f6;
+      --sidebar: #e7e1e6;
+      --sidebar-border: #d3ccd3;
+      --content: #f4f0f3;
+      --surface: #fbf8fa;
+      --surface-2: #efebee;
+      --line: #dfd9de;
+      --text: #1e1d20;
+      --secondary: #67616a;
+      --tertiary: #928b94;
+      --accent: #0a84ff;
+      --green: #2fc35a;
+      --red: #ff453a;
+      --yellow: #d6a936;
+      --orange: #ff9f0a;
+      --shadow: 0 26px 70px rgba(32, 28, 35, 0.22);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.42), transparent 28%),
+        linear-gradient(145deg, #cbc7cf, var(--desktop));
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      padding: 32px;
+    }
+
+    .stage {
+      width: 1180px;
+      height: 820px;
+      position: relative;
+    }
+
+    .window {
+      width: 1120px;
+      height: 780px;
+      border-radius: 14px;
+      background: var(--window);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: 286px 1fr;
+      border: 1px solid rgba(60, 54, 63, 0.14);
+    }
+
+    .sidebar {
+      background: rgba(231, 225, 230, 0.92);
+      border-right: 1px solid var(--sidebar-border);
+      display: flex;
+      flex-direction: column;
+      padding: 18px 14px 14px;
+      min-width: 0;
+    }
+
+    .traffic {
+      height: 38px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding-left: 5px;
+      flex: 0 0 auto;
+    }
+
+    .dot {
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+    }
+
+    .red { background: #ff5f57; }
+    .yellow { background: #ffbd2e; }
+    .green { background: #28c840; }
+
+    .search {
+      height: 36px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.42);
+      border: 1px solid rgba(74, 68, 76, 0.12);
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 0 12px;
+      color: var(--tertiary);
+      font-size: 15px;
+      font-weight: 500;
+      margin: 4px 3px 18px;
+    }
+
+    .magnifier {
+      width: 16px;
+      height: 16px;
+      border: 2px solid #242328;
+      border-radius: 50%;
+      position: relative;
+      opacity: 0.82;
+      flex: 0 0 auto;
+    }
+
+    .magnifier::after {
+      content: "";
+      width: 8px;
+      height: 2px;
+      background: #242328;
+      position: absolute;
+      right: -6px;
+      bottom: -4px;
+      transform: rotate(45deg);
+      border-radius: 2px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 5px 10px 16px;
+      border-bottom: 1px solid rgba(75, 69, 77, 0.10);
+      margin-bottom: 14px;
+    }
+
+    .appicon {
+      width: 52px;
+      height: 52px;
+      border-radius: 13px;
+      background: linear-gradient(145deg, #ffe77a, #f3bd37);
+      display: grid;
+      place-items: center;
+      box-shadow: inset 0 0 0 1px rgba(88, 65, 0, 0.12);
+      position: relative;
+      flex: 0 0 auto;
+    }
+
+    .appicon::before {
+      content: "";
+      width: 23px;
+      height: 6px;
+      border-top: 5px dotted rgba(86, 59, 0, 0.88);
+      border-radius: 10px;
+      transform: translateX(-2px);
+    }
+
+    .brand-title {
+      min-width: 0;
+    }
+
+    .brand-title strong {
+      display: block;
+      font-size: 18px;
+      line-height: 22px;
+      letter-spacing: 0;
+    }
+
+    .brand-title span {
+      display: block;
+      color: var(--secondary);
+      font-size: 13px;
+      line-height: 19px;
+    }
+
+    .nav {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .nav-group {
+      margin-bottom: 13px;
+    }
+
+    .nav-label {
+      color: var(--secondary);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 0 12px 5px;
+    }
+
+    .nav-row {
+      height: 34px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 11px;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      color: #343137;
+      position: relative;
+    }
+
+    .nav-row.active {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .nav-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      font-size: 13px;
+      font-weight: 800;
+      color: #fff;
+      background: #8e8e93;
+      flex: 0 0 auto;
+    }
+
+    .nav-row.active .nav-icon {
+      background: rgba(255, 255, 255, 0.22);
+    }
+
+    .blue-icon { background: #0a84ff; }
+    .green-icon { background: #30d158; }
+    .gray-icon { background: #8e8e93; }
+    .pink-icon { background: #ff375f; }
+
+    .nav-spacer {
+      flex: 1 1 auto;
+      min-height: 18px;
+    }
+
+    .utility {
+      border-top: 1px solid rgba(75, 69, 77, 0.12);
+      padding-top: 10px;
+      display: grid;
+      gap: 7px;
+    }
+
+    .utility-row {
+      height: 32px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 0 11px;
+      border-radius: 8px;
+      color: #363239;
+      font-size: 14px;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.18);
+    }
+
+    .content {
+      background: var(--content);
+      display: grid;
+      grid-template-rows: 74px 1fr;
+      min-width: 0;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 28px 10px 28px;
+    }
+
+    .toolbar-left {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      min-width: 0;
+    }
+
+    .chevron {
+      width: 18px;
+      height: 18px;
+      border-left: 3px solid #b4aeb6;
+      border-bottom: 3px solid #b4aeb6;
+      transform: rotate(45deg);
+      opacity: 0.86;
+    }
+
+    .chevron.forward {
+      transform: rotate(225deg);
+      opacity: 0.58;
+    }
+
+    .toolbar h1 {
+      font-size: 28px;
+      line-height: 34px;
+      margin: 0;
+      letter-spacing: 0;
+      font-weight: 760;
+    }
+
+    .toolbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .segmented {
+      height: 32px;
+      display: flex;
+      padding: 3px;
+      background: rgba(255, 255, 255, 0.48);
+      border: 1px solid rgba(72, 66, 74, 0.14);
+      border-radius: 8px;
+      gap: 3px;
+    }
+
+    .segment {
+      height: 24px;
+      border-radius: 6px;
+      padding: 0 13px;
+      display: flex;
+      align-items: center;
+      font-size: 13px;
+      font-weight: 680;
+      color: var(--secondary);
+    }
+
+    .segment.active {
+      background: #fff;
+      color: var(--text);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.10);
+    }
+
+    .main {
+      padding: 4px 28px 26px;
+      display: grid;
+      grid-template-columns: 330px minmax(360px, 1fr);
+      grid-template-rows: auto 1fr;
+      gap: 18px;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    .status-hero {
+      grid-column: 1 / -1;
+      min-height: 106px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0.42));
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      padding: 20px 22px;
+      gap: 18px;
+    }
+
+    .status-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      min-width: 0;
+    }
+
+    .status-glyph {
+      width: 58px;
+      height: 58px;
+      border-radius: 8px;
+      background: #8e8e93;
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-size: 25px;
+      font-weight: 760;
+      flex: 0 0 auto;
+    }
+
+    .status-copy {
+      min-width: 0;
+    }
+
+    .status-copy h2 {
+      margin: 0;
+      font-size: 26px;
+      line-height: 32px;
+      letter-spacing: 0;
+    }
+
+    .status-copy p {
+      margin: 3px 0 0;
+      color: var(--secondary);
+      font-size: 14px;
+      line-height: 20px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .primary-button {
+      height: 34px;
+      border-radius: 8px;
+      padding: 0 14px;
+      background: var(--accent);
+      color: #fff;
+      border: 0;
+      font-size: 14px;
+      font-weight: 700;
+      box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.12);
+    }
+
+    .column {
+      min-width: 0;
+      min-height: 0;
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+
+    .right-column {
+      grid-template-rows: minmax(236px, 0.84fr) minmax(286px, 1.16fr);
+    }
+
+    .group {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.55);
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    .group-header {
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 11px 16px 9px;
+      gap: 12px;
+      border-bottom: 1px solid rgba(86, 79, 88, 0.10);
+    }
+
+    .group-title {
+      font-size: 14px;
+      font-weight: 760;
+      color: var(--secondary);
+      letter-spacing: 0;
+    }
+
+    .small-action {
+      height: 25px;
+      padding: 0 10px;
+      border-radius: 7px;
+      border: 1px solid rgba(72, 66, 74, 0.12);
+      background: rgba(255, 255, 255, 0.68);
+      color: #343138;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .row {
+      min-height: 54px;
+      display: grid;
+      grid-template-columns: 34px 1fr auto;
+      align-items: center;
+      gap: 12px;
+      padding: 9px 15px;
+      border-bottom: 1px solid rgba(86, 79, 88, 0.10);
+      min-width: 0;
+    }
+
+    .row:last-child {
+      border-bottom: 0;
+    }
+
+    .row-icon {
+      width: 30px;
+      height: 30px;
+      border-radius: 7px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 800;
+      background: #8e8e93;
+    }
+
+    .row-copy {
+      min-width: 0;
+    }
+
+    .row-copy strong {
+      display: block;
+      font-size: 15px;
+      line-height: 20px;
+      letter-spacing: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .row-copy span {
+      display: block;
+      color: var(--secondary);
+      font-size: 12px;
+      line-height: 17px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .status-pill {
+      height: 22px;
+      border-radius: 11px;
+      padding: 0 9px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 760;
+      color: var(--secondary);
+      background: rgba(0, 0, 0, 0.05);
+      white-space: nowrap;
+    }
+
+    .status-pill::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+    }
+
+    .status-pill.warn::before { background: var(--orange); }
+    .status-pill.fail::before { background: var(--red); }
+
+    .chev-small {
+      color: #aaa3ac;
+      font-size: 28px;
+      line-height: 20px;
+      font-weight: 300;
+    }
+
+    .preview {
+      height: 100%;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .preview-body {
+      padding: 16px 18px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-height: 0;
+    }
+
+    .capsule-frame {
+      min-height: 138px;
+      border-radius: 8px;
+      border: 1px solid rgba(86, 79, 88, 0.13);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.46), rgba(255, 255, 255, 0.22)),
+        rgba(158, 151, 139, 0.18);
+      display: grid;
+      grid-template-rows: 54px 34px 1fr;
+      align-items: center;
+      justify-items: center;
+      padding: 14px 16px 12px;
+      overflow: hidden;
+    }
+
+    .capsule-preview {
+      width: fit-content;
+      min-width: 176px;
+      max-width: calc(100% - 2px);
+      height: 42px;
+      border-radius: 21px;
+      background: rgba(44, 41, 47, 0.72);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 0 18px;
+      font-size: 14px;
+      font-weight: 760;
+      box-shadow: 0 10px 24px rgba(45, 40, 47, 0.18);
+      overflow: hidden;
+    }
+
+    .capsule-label {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .pulse {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+    }
+
+    .wave {
+      width: 58px;
+      height: 16px;
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .wave i {
+      width: 4px;
+      border-radius: 3px;
+      background: #d5b058;
+      display: block;
+    }
+
+    .wave i:nth-child(1) { height: 8px; }
+    .wave i:nth-child(2) { height: 13px; }
+    .wave i:nth-child(3) { height: 16px; }
+    .wave i:nth-child(4) { height: 11px; }
+    .wave i:nth-child(5) { height: 7px; }
+
+    .capsule-message {
+      max-width: 300px;
+      text-align: center;
+      color: rgba(68, 62, 70, 0.62);
+      font-size: 14px;
+      line-height: 20px;
+      font-weight: 700;
+    }
+
+    .draft-box {
+      flex: 1;
+      min-height: 0;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.62);
+      border: 1px solid rgba(86, 79, 88, 0.10);
+      padding: 16px;
+      color: #343037;
+      font-size: 16px;
+      line-height: 26px;
+      overflow: hidden;
+    }
+
+    .hint-line {
+      color: var(--tertiary);
+    }
+
+    .history {
+      height: 100%;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .history-list {
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .history-row {
+      min-height: 68px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 16px;
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(86, 79, 88, 0.10);
+    }
+
+    .history-row:last-child {
+      border-bottom: 0;
+    }
+
+    .history-title {
+      font-size: 14px;
+      line-height: 20px;
+      font-weight: 680;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .history-meta {
+      color: var(--secondary);
+      font-size: 12px;
+      line-height: 18px;
+      margin-top: 3px;
+    }
+
+    .history-price {
+      color: var(--secondary);
+      font-size: 12px;
+      font-weight: 720;
+      white-space: nowrap;
+      align-self: center;
+    }
+
+    .log-panel {
+      position: absolute;
+      right: 94px;
+      bottom: 18px;
+      width: 390px;
+      height: 300px;
+      border-radius: 12px;
+      background: rgba(250, 247, 249, 0.96);
+      box-shadow: 0 24px 60px rgba(34, 29, 38, 0.28);
+      border: 1px solid rgba(76, 68, 80, 0.16);
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: 50px 1fr;
+    }
+
+    .log-titlebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .log-titlebar strong {
+      font-size: 15px;
+      letter-spacing: 0;
+    }
+
+    .log-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .icon-button {
+      width: 26px;
+      height: 26px;
+      border-radius: 7px;
+      border: 1px solid rgba(72, 66, 74, 0.12);
+      background: rgba(255, 255, 255, 0.70);
+      display: grid;
+      place-items: center;
+      color: var(--secondary);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .log-body {
+      padding: 14px 16px;
+      background: #26242a;
+      color: #e6e1e7;
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: 12px;
+      line-height: 18px;
+      overflow: hidden;
+    }
+
+    .log-line {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .log-line .time {
+      color: #8fa6ff;
+    }
+
+    .log-line .ok {
+      color: #66d17a;
+    }
+
+    .log-line .warn {
+      color: #e5bd55;
+    }
+
+    .log-line .error {
+      color: #ff7b72;
+    }
+
+    @media (max-width: 1300px) {
+      body {
+        place-items: start center;
+        padding: 24px;
+      }
+
+      .stage {
+        transform: scale(0.78);
+        transform-origin: top center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <main class="window" aria-label="TypeWhale macOS 14 native layout mockup">
+      <aside class="sidebar">
+        <div class="traffic" aria-hidden="true">
+          <span class="dot red"></span>
+          <span class="dot yellow"></span>
+          <span class="dot green"></span>
+        </div>
+
+        <div class="search">
+          <span class="magnifier"></span>
+          <span>搜索</span>
+        </div>
+
+        <div class="brand">
+          <div class="appicon"></div>
+          <div class="brand-title">
+            <strong>TypeWhale</strong>
+            <span>Version 1.2.47</span>
+          </div>
+        </div>
+
+        <nav class="nav">
+          <div class="nav-group">
+            <div class="nav-label">工作区</div>
+            <div class="nav-row active">
+              <span class="nav-icon blue-icon">概</span>
+              <span>总览</span>
+            </div>
+            <div class="nav-row">
+              <span class="nav-icon green-icon">听</span>
+              <span>语音输入</span>
+            </div>
+            <div class="nav-row">
+              <span class="nav-icon gray-icon">文</span>
+              <span>改写与翻译</span>
+            </div>
+            <div class="nav-row">
+              <span class="nav-icon pink-icon">截</span>
+              <span>截图识别</span>
+            </div>
+          </div>
+
+          <div class="nav-group">
+            <div class="nav-label">设置</div>
+            <div class="nav-row">
+              <span class="nav-icon gray-icon">模</span>
+              <span>模型</span>
+            </div>
+            <div class="nav-row">
+              <span class="nav-icon gray-icon">权</span>
+              <span>权限</span>
+            </div>
+            <div class="nav-row">
+              <span class="nav-icon gray-icon">费</span>
+              <span>费用统计</span>
+            </div>
+          </div>
+        </nav>
+
+        <div class="nav-spacer"></div>
+
+        <div class="utility">
+          <div class="utility-row">
+            <span class="nav-icon gray-icon">?</span>
+            <span>使用方法</span>
+          </div>
+          <div class="utility-row">
+            <span class="nav-icon gray-icon">版</span>
+            <span>历史版本</span>
+          </div>
+          <div class="utility-row">
+            <span class="nav-icon gray-icon">志</span>
+            <span>测试日志</span>
+          </div>
+        </div>
+      </aside>
+
+      <section class="content">
+        <header class="toolbar">
+          <div class="toolbar-left">
+            <span class="chevron"></span>
+            <span class="chevron forward"></span>
+            <h1>总览</h1>
+          </div>
+          <div class="toolbar-actions">
+            <div class="segmented">
+              <span class="segment active">今天</span>
+              <span class="segment">7 天</span>
+              <span class="segment">全部</span>
+            </div>
+            <button class="primary-button">开始输入</button>
+          </div>
+        </header>
+
+        <div class="main">
+          <section class="status-hero">
+            <div class="status-left">
+              <div class="status-glyph">听</div>
+              <div class="status-copy">
+                <h2>已就绪</h2>
+                <p>按下快捷键后立即录音，识别完成后自动整理并粘贴到当前应用。</p>
+              </div>
+            </div>
+            <button class="primary-button">打开悬浮胶囊</button>
+          </section>
+
+          <section class="column">
+            <div class="group">
+              <div class="group-header">
+                <span class="group-title">当前模型</span>
+                <button class="small-action">切换</button>
+              </div>
+              <div class="row">
+                <span class="row-icon blue-icon">ASR</span>
+                <div class="row-copy">
+                  <strong>SenseVoice int8</strong>
+                  <span>本地语音识别 · 中文优先</span>
+                </div>
+                <span class="status-pill">已就绪</span>
+              </div>
+              <div class="row">
+                <span class="row-icon gray-icon">AI</span>
+                <div class="row-copy">
+                  <strong>DeepSeek Chat</strong>
+                  <span>用于整理、翻译和术语修正</span>
+                </div>
+                <span class="chev-small">›</span>
+              </div>
+            </div>
+
+            <div class="group">
+              <div class="group-header">
+                <span class="group-title">权限</span>
+                <button class="small-action">检查</button>
+              </div>
+              <div class="row">
+                <span class="row-icon green-icon">麦</span>
+                <div class="row-copy">
+                  <strong>麦克风</strong>
+                  <span>用于录音输入</span>
+                </div>
+                <span class="status-pill">已开启</span>
+              </div>
+              <div class="row">
+                <span class="row-icon green-icon">辅</span>
+                <div class="row-copy">
+                  <strong>辅助功能</strong>
+                  <span>用于自动粘贴文本</span>
+                </div>
+                <span class="status-pill">已开启</span>
+              </div>
+              <div class="row">
+                <span class="row-icon gray-icon">截</span>
+                <div class="row-copy">
+                  <strong>截屏权限</strong>
+                  <span>截图识别时需要</span>
+                </div>
+                <span class="status-pill warn">待开启</span>
+              </div>
+              <div class="row">
+                <span class="row-icon green-icon">键</span>
+                <div class="row-copy">
+                  <strong>快捷键</strong>
+                  <span>正在监听</span>
+                </div>
+                <span class="status-pill">正常</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="column right-column">
+            <div class="group preview">
+              <div class="group-header">
+                <span class="group-title">实时预览</span>
+                <button class="small-action">清空</button>
+              </div>
+              <div class="preview-body">
+                <div class="capsule-frame">
+                  <div class="capsule-preview">
+                    <span class="pulse"></span>
+                    <span class="capsule-label">没有收到有效语音</span>
+                  </div>
+                  <span class="wave"><i></i><i></i><i></i><i></i><i></i></span>
+                  <div class="capsule-message">未检测到人声。通话中请切换输入设备。</div>
+                </div>
+                <div class="draft-box">
+                  今天下午把 macOS 14 的原生布局先确认下来，侧边栏保留常用入口，右侧优先显示实时预览和历史记录。
+                  <span class="hint-line">正在等待下一段实时文本…</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="group history">
+              <div class="group-header">
+                <span class="group-title">历史记录</span>
+                <button class="small-action">导出</button>
+              </div>
+              <div class="history-list">
+                <div class="history-row">
+                  <div>
+                    <div class="history-title">在教堂里看到他把 6 毛 6 分转换成了 6.6 块钱。</div>
+                    <div class="history-meta">语音输入 · 14:32 · 已整理</div>
+                  </div>
+                  <div class="history-price">¥0.0008</div>
+                </div>
+                <div class="history-row">
+                  <div>
+                    <div class="history-title">确认 macOS 12 的 ASR 问题来自运行库符号缺失。</div>
+                    <div class="history-meta">语音输入 · 13:58 · 原文 + AI 整理</div>
+                  </div>
+                  <div class="history-price">¥0.0014</div>
+                </div>
+                <div class="history-row">
+                  <div>
+                    <div class="history-title">把权限模块移动到当前模型下方，实时预览保持在中间。</div>
+                    <div class="history-meta">快捷输入 · 12:41 · 已粘贴</div>
+                  </div>
+                  <div class="history-price">¥0.0011</div>
+                </div>
+                <div class="history-row">
+                  <div>
+                    <div class="history-title">启动后不再等待主窗口完成渲染，先让快捷键和录音链路可用。</div>
+                    <div class="history-meta">语音输入 · 昨天 · 已整理</div>
+                  </div>
+                  <div class="history-price">¥0.0017</div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <aside class="log-panel" aria-label="测试日志弹窗示例">
+      <div class="log-titlebar">
+        <strong>测试日志</strong>
+        <div class="log-actions">
+          <button class="icon-button">拷</button>
+          <button class="icon-button">导</button>
+          <button class="icon-button">×</button>
+        </div>
+      </div>
+      <div class="log-body">
+        <div class="log-line"><span class="time">14:32:08.114</span> <span class="ok">ready</span> native ASR bridge loaded</div>
+        <div class="log-line"><span class="time">14:32:08.120</span> <span class="ok">ready</span> microphone permission granted</div>
+        <div class="log-line"><span class="time">14:32:10.906</span> <span class="ok">record</span> hotkey pressed, recording session started</div>
+        <div class="log-line"><span class="time">14:32:14.229</span> <span class="warn">vad</span> voice activity check took 84 ms</div>
+        <div class="log-line"><span class="time">14:32:14.318</span> <span class="ok">asr</span> sensevoice transcription completed</div>
+        <div class="log-line"><span class="time">14:32:15.447</span> <span class="ok">rewrite</span> smart rewrite completed, tokens=312</div>
+        <div class="log-line"><span class="time">14:32:15.502</span> <span class="ok">paste</span> submitted text to frontmost app</div>
+        <div class="log-line"><span class="time">14:32:15.506</span> <span class="ok">cost</span> local ledger updated, cny=0.0008</div>
+      </div>
+    </aside>
+  </div>
+</body>
+</html>

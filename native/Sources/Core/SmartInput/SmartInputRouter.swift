@@ -141,37 +141,7 @@ final class SmartInputRouter {
             return manualMode
         }
 
-        let app = [context.targetAppName, context.targetBundleIdentifier, context.windowTitle]
-            .compactMap { $0?.lowercased() }
-            .joined(separator: " ")
-
-        if app.contains("codex")
-            || app.contains("cursor")
-            || app.contains("claude")
-            || app.contains("com.openai.chat") {
-            return .developerRequirement
-        }
-        if app.contains("chatgpt") {
-            return .developerRequirement
-        }
-        if app.contains("obsidian") || app.contains("notion") || app.contains("notes") {
-            return .note
-        }
-        if app.contains("wechat")
-            || app.contains("telegram")
-            || app.contains("messages")
-            || app.contains("com.apple.MobileSMS".lowercased()) {
-            return .chat
-        }
-        if app.contains("terminal")
-            || app.contains("iterm")
-            || app.contains("warp")
-            || app.contains("code")
-            || app.contains("xcode")
-            || app.contains("visual studio") {
-            return .developerRequirement
-        }
-        return .polish
+        return SmartRewriteAutoRuleStore.mode(for: context)
     }
 
     private func rewriteWithTimeout(

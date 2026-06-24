@@ -153,8 +153,8 @@ cat > "$CONTENTS/Info.plist" <<'PLIST'
 <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
 <key>CFBundleName</key><string>TypeWhale</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>1.3.0</string>
-<key>CFBundleVersion</key><string>208</string>
+<key>CFBundleShortVersionString</key><string>1.3.6</string>
+<key>CFBundleVersion</key><string>214</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSMicrophoneUsageDescription</key><string>TypeWhale 需要使用麦克风进行本地语音转文字。</string>
@@ -195,4 +195,17 @@ if ! codesign --verify --deep --strict "$APP"; then
   fi
   echo "Warning: local development signature is not trusted for distribution." >&2
 fi
+
+if [[ "${TYPESPEAKER_SKIP_INSTALL:-0}" != "1" ]]; then
+  INSTALL_APP_PATH="${TYPESPEAKER_INSTALL_APP_PATH:-/Applications/TypeWhale.app}"
+  osascript -e 'tell application id "com.waykingah.typewhale" to quit' >/dev/null 2>&1 || true
+  pkill -x -u "$(id -u)" TypeWhale >/dev/null 2>&1 || true
+  sleep 0.5
+  rm -rf "$INSTALL_APP_PATH"
+  ditto "$APP" "$INSTALL_APP_PATH"
+  xattr -dr com.apple.quarantine "$INSTALL_APP_PATH" >/dev/null 2>&1 || true
+  codesign --verify --deep --strict "$INSTALL_APP_PATH"
+  echo "$INSTALL_APP_PATH"
+fi
+
 echo "$APP"

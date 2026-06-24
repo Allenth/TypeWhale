@@ -392,9 +392,10 @@ final class SpeechInputCoordinator {
                             guard let self else { return }
                             if taskID == self.activeSession?.id,
                                case .success(let value) = response,
-                               (value["error"] as? String ?? "").isEmpty {
+                                (value["error"] as? String ?? "").isEmpty {
                                 let text = cleanRecognitionText(value["text"] as? String ?? "", languageMode: configuration.languageMode)
-                                if !text.isEmpty {
+                                let hasPriorPreview = self.activeSession?.latestPreviewText.isEmpty == false
+                                if isMeaningfulRecognitionText(text, hasPriorPreview: hasPriorPreview) {
                                     self.cancelInitialSilenceTimer()
                                     self.controller.realtimeDraft.stringValue = text
                                     self.popup.updateDraft(text)
@@ -445,7 +446,7 @@ final class SpeechInputCoordinator {
             }
             let text = cleanRecognitionText(value["text"] as? String ?? "", languageMode: task.configuration.languageMode)
             let elapsed = value["duration_sec"] as? Double ?? 0
-            if !text.isEmpty {
+            if isMeaningfulRecognitionText(text) {
                 if shouldUpdateInterface {
                     controller.realtimeDraft.stringValue = text
                     let preference = controller.smartRewritePreference
@@ -508,7 +509,7 @@ final class SpeechInputCoordinator {
                     rewriteAndSubmit(text, elapsed: elapsed, task: task)
                 }
             } else if shouldUpdateInterface {
-                popup.hideAnimated()
+                showEmptyRecording()
                 finishFinalTask(task)
             } else {
                 finishFinalTask(task)

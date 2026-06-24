@@ -60,7 +60,11 @@ final class ScreenshotCoordinator {
     private func saved(_ url: URL) {
         invalidatePendingOperations()
         closeAll()
-        onStatus("截图已保存", url.path, .success)
+        showTransientStatus(
+            "截图已保存",
+            "已保存到下载文件夹：\(url.lastPathComponent)",
+            .success
+        )
     }
 
     private func recognizeText(in image: NSImage) {
@@ -80,7 +84,7 @@ final class ScreenshotCoordinator {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(text, forType: .string)
                 closeAll()
-                onStatus("OCR 已复制", "已将识别文字写入剪贴板", .success)
+                showTransientStatus("内容已复制", "OCR 识别结果已复制到剪贴板", .success)
             } catch {
                 guard generation == operationGeneration else { return }
                 onStatus("OCR 识别失败", error.localizedDescription, .error)
@@ -98,6 +102,16 @@ final class ScreenshotCoordinator {
 
     private func invalidatePendingOperations() {
         operationGeneration += 1
+    }
+
+    private func showTransientStatus(_ status: String, _ detail: String, _ tone: MainViewController.PrimaryStatusTone) {
+        let generation = operationGeneration
+        onStatus(status, detail, tone)
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_800_000_000)
+            guard let self, generation == operationGeneration else { return }
+            onStatus("等待录音", "Fn 录音", .idle)
+        }
     }
 
     private func captureFullScreen(_ screen: NSScreen) -> CGImage? {
@@ -165,7 +179,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         var title: String {
             switch self {
             case .copy: return "复制"
-            case .save: return "保存"
+            case .save: return "保存本地"
             case .ocr: return "OCR"
             case .translate: return "翻译"
             case .annotate: return "标注"
@@ -176,6 +190,32 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             case .undo: return "撤销"
             case .done: return "完成"
             case .cancel: return "取消"
+            }
+        }
+
+        var symbolName: String {
+            switch self {
+            case .copy: return "doc.on.doc"
+            case .save: return "square.and.arrow.down"
+            case .ocr: return "text.viewfinder"
+            case .translate: return "character.book.closed"
+            case .annotate: return "pencil.and.outline"
+            case .rectangle: return "rectangle"
+            case .arrow: return "arrow.up.right"
+            case .pen: return "pencil.tip"
+            case .text: return "textformat"
+            case .undo: return "arrow.uturn.backward"
+            case .done: return "checkmark"
+            case .cancel: return "xmark"
+            }
+        }
+
+        var isAnnotationTool: Bool {
+            switch self {
+            case .rectangle, .arrow, .pen, .text:
+                return true
+            case .copy, .save, .ocr, .translate, .annotate, .undo, .done, .cancel:
+                return false
             }
         }
 
@@ -473,58 +513,112 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     }
 
     private func drawToolbar() {
-        let actions: [ToolAction] = isAnnotating
-            ? [.rectangle, .arrow, .pen, .text, .undo, .ocr, .cancel, .save, .done]
-            : ToolAction.allCases.filter { ![.rectangle, .arrow, .pen, .text, .undo, .done].contains($0) }
-        let buttonWidth: CGFloat = isAnnotating ? 52 : 58
-        let buttonHeight: CGFloat = 30
-        let spacing: CGFloat = 6
-        let totalWidth = CGFloat(actions.count) * buttonWidth + CGFloat(actions.count - 1) * spacing + 14
+        let annotationActions: [ToolAction] = [.rectangle, .arrow, .pen, .text, .ocr]
+        let functionActions: [ToolAction] = [.copy, .undo, .save, .cancel]
+        let buttonWidth: CGFloat = 68
+        let buttonHeight: CGFloat = 50
+        let spacing: CGFloat = 7
+        let separatorWidth: CGFloat = 1
+        let groupSpacing: CGFloat = 15
+        let actions = annotationActions + functionActions
+        let totalWidth =
+            CGFloat(actions.count) * buttonWidth
+            + CGFloat(actions.count - 2) * spacing
+            + groupSpacing * 2
+            + separatorWidth
+            + 14
         let x = min(max(selection.maxX - totalWidth, 8), bounds.width - totalWidth - 8)
-        let y = min(selection.maxY + 10, bounds.height - buttonHeight - 12)
+        let y = min(selection.maxY + 10, bounds.height - buttonHeight - 14)
         let toolbarRect = NSRect(x: x, y: y, width: totalWidth, height: buttonHeight + 12)
         NSColor.black.withAlphaComponent(0.78).setFill()
         NSBezierPath(roundedRect: toolbarRect, xRadius: 7, yRadius: 7).fill()
 
         var rects: [ToolAction: NSRect] = [:]
-        for (index, action) in actions.enumerated() {
+        var currentX = toolbarRect.minX + 7
+        for action in annotationActions {
             let rect = NSRect(
-                x: toolbarRect.minX + 7 + CGFloat(index) * (buttonWidth + spacing),
+                x: currentX,
                 y: toolbarRect.minY + 6,
                 width: buttonWidth,
                 height: buttonHeight
             )
             rects[action] = rect
-            let isHovered = action.isEnabled && hoveredAction == action
-            let isSelectedAnnotationTool =
+            drawToolbarButton(action, in: rect)
+            currentX += buttonWidth + spacing
+        }
+
+        currentX += groupSpacing - spacing
+        let separatorRect = NSRect(x: currentX, y: toolbarRect.minY + 9, width: separatorWidth, height: buttonHeight - 6)
+        NSColor.white.withAlphaComponent(0.22).setFill()
+        separatorRect.fill()
+        currentX += separatorWidth + groupSpacing
+
+        for action in functionActions {
+            let rect = NSRect(
+                x: currentX,
+                y: toolbarRect.minY + 6,
+                width: buttonWidth,
+                height: buttonHeight
+            )
+            rects[action] = rect
+            drawToolbarButton(action, in: rect)
+            currentX += buttonWidth + spacing
+        }
+
+        lastToolbarRects = rects
+    }
+
+    private func drawToolbarButton(_ action: ToolAction, in rect: NSRect) {
+        let isHovered = action.isEnabled && hoveredAction == action
+        let isSelectedAnnotationTool =
+            isAnnotating && (
                 (action == .rectangle && annotationTool == .rectangle) ||
                 (action == .arrow && annotationTool == .arrow) ||
                 (action == .pen && annotationTool == .pen) ||
                 (action == .text && annotationTool == .text)
-            let fillColor: NSColor = if !action.isEnabled {
-                NSColor.white.withAlphaComponent(0.06)
-            } else if isAnnotating && isSelectedAnnotationTool {
-                NSColor.systemYellow.withAlphaComponent(0.9)
-            } else if isHovered {
-                NSColor.systemYellow.withAlphaComponent(0.95)
-            } else {
-                NSColor.white.withAlphaComponent(0.14)
-            }
-            fillColor.setFill()
-            NSBezierPath(roundedRect: rect, xRadius: 5, yRadius: 5).fill()
-            let attributes: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 12, weight: .semibold),
-                .foregroundColor: !action.isEnabled
-                    ? NSColor.white.withAlphaComponent(0.38)
-                    : ((isHovered || (isAnnotating && isSelectedAnnotationTool)) ? NSColor.black : NSColor.white),
-            ]
-            let size = action.title.size(withAttributes: attributes)
-            action.title.draw(
-                at: NSPoint(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2),
-                withAttributes: attributes
             )
+        let fillColor: NSColor = if !action.isEnabled {
+            NSColor.white.withAlphaComponent(0.06)
+        } else if isSelectedAnnotationTool {
+            NSColor.systemYellow.withAlphaComponent(0.92)
+        } else if isHovered {
+            NSColor.systemYellow.withAlphaComponent(0.95)
+        } else {
+            NSColor.white.withAlphaComponent(0.14)
         }
-        lastToolbarRects = rects
+        fillColor.setFill()
+        NSBezierPath(roundedRect: rect, xRadius: 6, yRadius: 6).fill()
+
+        let foregroundColor: NSColor = !action.isEnabled
+            ? NSColor.white.withAlphaComponent(0.38)
+            : ((isHovered || isSelectedAnnotationTool) ? NSColor.black : NSColor.white)
+        let imageConfig = NSImage.SymbolConfiguration(pointSize: 15, weight: .semibold)
+        if let image = NSImage(systemSymbolName: action.symbolName, accessibilityDescription: nil)?
+            .withSymbolConfiguration(imageConfig) {
+            let imageRect = NSRect(x: rect.midX - 8, y: rect.minY + 7, width: 16, height: 16)
+            tintedSymbolImage(image, color: foregroundColor, size: imageRect.size)?.draw(in: imageRect)
+        }
+
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 10, weight: .medium),
+            .foregroundColor: foregroundColor,
+        ]
+        let size = action.title.size(withAttributes: attributes)
+        action.title.draw(
+            at: NSPoint(x: rect.midX - min(size.width, rect.width - 8) / 2, y: rect.maxY - size.height - 6),
+            withAttributes: attributes
+        )
+    }
+
+    private func tintedSymbolImage(_ image: NSImage, color: NSColor, size: NSSize) -> NSImage? {
+        let tinted = NSImage(size: size)
+        tinted.lockFocus()
+        let rect = NSRect(origin: .zero, size: size)
+        image.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1)
+        color.setFill()
+        rect.fill(using: .sourceIn)
+        tinted.unlockFocus()
+        return tinted
     }
 
     private func action(at point: NSPoint) -> ToolAction? {
@@ -560,17 +654,13 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             onStatus("截图标注", "可直接在截图框内添加矩形、箭头、画笔和文字", .processing)
             needsDisplay = true
         case .rectangle:
-            annotationTool = .rectangle
-            needsDisplay = true
+            selectAnnotationTool(.rectangle)
         case .arrow:
-            annotationTool = .arrow
-            needsDisplay = true
+            selectAnnotationTool(.arrow)
         case .pen:
-            annotationTool = .pen
-            needsDisplay = true
+            selectAnnotationTool(.pen)
         case .text:
-            annotationTool = .text
-            needsDisplay = true
+            selectAnnotationTool(.text)
         case .undo:
             undoMarkup()
         case .done:
@@ -578,6 +668,14 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         case .cancel:
             onCancel()
         }
+    }
+
+    private func selectAnnotationTool(_ tool: AnnotationTool) {
+        isAnnotating = true
+        annotationTool = tool
+        selectedMarkupIndex = nil
+        onStatus("截图标注", "在截图框内直接添加和调整标注", .processing)
+        needsDisplay = true
     }
 
     private func copySelection() {
@@ -622,19 +720,30 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             return
         }
 
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [.png]
-        panel.canCreateDirectories = true
-        panel.nameFieldStringValue = "TypeWhale-Screenshot-\(Self.timestamp()).png"
-        panel.begin { [weak self] response in
-            guard response == .OK, let url = panel.url else { return }
-            do {
-                try data.write(to: url, options: .atomic)
-                self?.onSaved(url)
-            } catch {
-                self?.onStatus("无法保存截图", error.localizedDescription, .error)
-            }
+        do {
+            let url = try writeScreenshotData(data, to: ScreenshotSaveLocationStore.defaultDirectory)
+            onSaved(url)
+        } catch {
+            onStatus("无法保存截图", error.localizedDescription, .error)
         }
+    }
+
+    private func writeScreenshotData(_ data: Data, to directory: URL) throws -> URL {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = availableScreenshotURL(in: directory)
+        try data.write(to: url, options: .atomic)
+        return url
+    }
+
+    private func availableScreenshotURL(in directory: URL) -> URL {
+        let baseName = "TW-Shot-\(Self.timestamp())"
+        var candidate = directory.appendingPathComponent("\(baseName).png")
+        var index = 2
+        while FileManager.default.fileExists(atPath: candidate.path) {
+            candidate = directory.appendingPathComponent("\(baseName)-\(index).png")
+            index += 1
+        }
+        return candidate
     }
 
     private var pixelScale: CGFloat {
@@ -977,7 +1086,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
 
     private static func timestamp() -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        formatter.dateFormat = "MMdd-HHmmss"
         return formatter.string(from: Date())
     }
 
