@@ -63,9 +63,10 @@ final class ScreenshotCoordinator {
     private func saved(_ url: URL) {
         invalidatePendingOperations()
         closeAll()
+        let directoryName = url.deletingLastPathComponent().lastPathComponent
         showTransientStatus(
             "截图已保存",
-            "已保存到下载文件夹：\(url.lastPathComponent)",
+            "已保存到\(directoryName)：\(url.lastPathComponent)",
             .success
         )
     }
@@ -724,7 +725,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         }
 
         do {
-            let url = try writeScreenshotData(data, to: ScreenshotSaveLocationStore.defaultDirectory)
+            let url = try writeScreenshotData(data, to: ScreenshotSaveLocationStore.directory)
             onSaved(url)
         } catch {
             onStatus("无法保存截图", error.localizedDescription, .error)

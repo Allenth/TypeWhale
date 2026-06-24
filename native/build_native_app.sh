@@ -198,6 +198,15 @@ fi
 
 if [[ "${TYPESPEAKER_SKIP_INSTALL:-0}" != "1" ]]; then
   INSTALL_APP_PATH="${TYPESPEAKER_INSTALL_APP_PATH:-/Applications/TypeWhale.app}"
+  if [[ -z "$INSTALL_APP_PATH" || "$INSTALL_APP_PATH" != /* || "$INSTALL_APP_PATH" == "/" || "$INSTALL_APP_PATH" != *.app ]]; then
+    echo "Refusing unsafe install path: $INSTALL_APP_PATH" >&2
+    echo "TYPESPEAKER_INSTALL_APP_PATH must be an absolute .app bundle path." >&2
+    exit 1
+  fi
+  if [[ "$(basename "$INSTALL_APP_PATH")" != "TypeWhale.app" ]]; then
+    echo "Refusing to replace a non-TypeWhale app bundle: $INSTALL_APP_PATH" >&2
+    exit 1
+  fi
   osascript -e 'tell application id "com.waykingah.typewhale" to quit' >/dev/null 2>&1 || true
   pkill -x -u "$(id -u)" TypeWhale >/dev/null 2>&1 || true
   sleep 0.5
