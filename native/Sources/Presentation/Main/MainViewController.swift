@@ -11,14 +11,14 @@ final class MainViewController: NSViewController {
         case error
     }
 
-    private let contentWidth: CGFloat = 1120
-    private let contentHeight: CGFloat = 640
-    private let leftColumnWidth: CGFloat = 240
-    private let rightColumnWidth: CGFloat = 370
-    private let leftTopInset: CGFloat = 34
-    private let rightTopInset: CGFloat = 20
-    private let recentViewportHeight: CGFloat = 250
-    private let brandIconVisibleSize: CGFloat = 64
+    private let contentWidth: CGFloat = 1000
+    private let contentHeight: CGFloat = 620
+    private let leftColumnWidth: CGFloat = 220
+    private let rightColumnWidth: CGFloat = 320
+    private let leftTopInset: CGFloat = 30
+    private let rightTopInset: CGFloat = 18
+    private let recentViewportHeight: CGFloat = 300
+    private let brandIconVisibleSize: CGFloat = 58
 
     let status = label("等待录音", size: 15, weight: .semibold)
     let detail = label("Fn 录音", size: 12)
@@ -163,11 +163,11 @@ final class MainViewController: NSViewController {
             left.topAnchor.constraint(equalTo: view.topAnchor),
             left.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             left.widthAnchor.constraint(equalToConstant: leftColumnWidth),
-            center.leadingAnchor.constraint(equalTo: left.trailingAnchor, constant: 20),
+            center.leadingAnchor.constraint(equalTo: left.trailingAnchor, constant: 16),
             center.topAnchor.constraint(equalTo: view.topAnchor, constant: rightTopInset),
             center.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -20),
-            right.leadingAnchor.constraint(equalTo: center.trailingAnchor, constant: 20),
-            right.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -22),
+            right.leadingAnchor.constraint(equalTo: center.trailingAnchor, constant: 16),
+            right.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -18),
             right.widthAnchor.constraint(equalToConstant: rightColumnWidth),
             right.topAnchor.constraint(equalTo: view.topAnchor, constant: rightTopInset),
             right.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -20),
@@ -293,10 +293,9 @@ final class MainViewController: NSViewController {
     }
 
     private func buildCenterColumn() -> NSView {
-        let statusPanel = buildStatusPanel()
-        let draftEntry = buildRealtimeDraftEntry()
-        draftEntry.setContentHuggingPriority(.required, for: .vertical)
-        draftEntry.setContentCompressionResistancePriority(.required, for: .vertical)
+        let sessionPanel = buildSessionPanel()
+        sessionPanel.setContentHuggingPriority(.required, for: .vertical)
+        sessionPanel.setContentCompressionResistancePriority(.required, for: .vertical)
 
         recentStack.orientation = .vertical
         recentStack.alignment = .width
@@ -315,8 +314,7 @@ final class MainViewController: NSViewController {
         let recentCard = roundedBox(recentScroll, hPad: 8, vPad: 6)
 
         let sections = [
-            section("录音状态", statusPanel),
-            draftEntry,
+            section("当前会话", sessionPanel),
             section("最近转录", recentCard),
         ]
         let stack = NSStackView(views: sections)
@@ -329,9 +327,112 @@ final class MainViewController: NSViewController {
         }
         NSLayoutConstraint.activate([
             recentStack.widthAnchor.constraint(equalTo: recentScroll.contentView.widthAnchor),
-            draftEntry.heightAnchor.constraint(equalToConstant: 108),
+            sessionPanel.heightAnchor.constraint(equalToConstant: 220),
         ])
         return stack
+    }
+
+    private func buildSessionPanel() -> NSView {
+        status.alignment = .center
+        status.maximumNumberOfLines = 1
+        status.lineBreakMode = .byTruncatingTail
+        status.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        status.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        detail.alignment = .center
+        detail.textColor = .secondaryLabelColor
+        detail.maximumNumberOfLines = 2
+        detail.lineBreakMode = .byWordWrapping
+
+        statusDot.translatesAutoresizingMaskIntoConstraints = false
+        statusDot.wantsLayer = true
+        statusDot.layer?.cornerRadius = 3.5
+        statusDot.layer?.backgroundColor = NSColor.systemGreen.cgColor
+
+        let pillStack = NSStackView(views: [statusDot, status])
+        pillStack.orientation = .horizontal
+        pillStack.alignment = .centerY
+        pillStack.spacing = 7
+        pillStack.translatesAutoresizingMaskIntoConstraints = false
+        pillStack.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        let pill = NSView()
+        pill.translatesAutoresizingMaskIntoConstraints = false
+        pill.wantsLayer = true
+        pill.layer?.backgroundColor = NSColor(calibratedWhite: 1, alpha: 0.07).cgColor
+        pill.layer?.cornerRadius = 11
+        pill.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        pill.addSubview(pillStack)
+
+        waveform.translatesAutoresizingMaskIntoConstraints = false
+        processingProgress.translatesAutoresizingMaskIntoConstraints = false
+        processingProgress.style = .bar
+        processingProgress.controlSize = .small
+        processingProgress.isIndeterminate = true
+        processingProgress.isDisplayedWhenStopped = false
+        processingProgress.isHidden = true
+
+        realtimeDraft.textColor = .secondaryLabelColor
+        realtimeDraft.maximumNumberOfLines = 4
+        realtimeDraft.lineBreakMode = .byWordWrapping
+        (realtimeDraft.cell as? NSTextFieldCell)?.truncatesLastVisibleLine = true
+        realtimeDraft.translatesAutoresizingMaskIntoConstraints = false
+
+        let draftContent = NSView()
+        draftContent.translatesAutoresizingMaskIntoConstraints = false
+        draftContent.addSubview(realtimeDraft)
+
+        let draftCaption = label("实时文本", size: 11, weight: .medium)
+        draftCaption.textColor = UITheme.sectionTitle
+
+        let draftStack = NSStackView(views: [draftCaption, draftContent])
+        draftStack.orientation = .vertical
+        draftStack.alignment = .leading
+        draftStack.spacing = 7
+
+        let divider = hairlineView()
+        let inner = NSStackView(views: [pill, waveform, processingProgress, detail, divider, draftStack])
+        inner.orientation = .vertical
+        inner.alignment = .centerX
+        inner.spacing = 10
+        inner.detachesHiddenViews = true
+        inner.translatesAutoresizingMaskIntoConstraints = false
+
+        let box = NSView()
+        box.translatesAutoresizingMaskIntoConstraints = false
+        box.wantsLayer = true
+        box.layer?.backgroundColor = UITheme.cardFill.cgColor
+        box.layer?.cornerRadius = 10
+        box.layer?.borderWidth = 0.5
+        box.layer?.borderColor = UITheme.cardBorder.cgColor
+        box.addSubview(inner)
+
+        NSLayoutConstraint.activate([
+            pillStack.leadingAnchor.constraint(equalTo: pill.leadingAnchor, constant: 14),
+            pillStack.trailingAnchor.constraint(equalTo: pill.trailingAnchor, constant: -14),
+            pillStack.topAnchor.constraint(equalTo: pill.topAnchor, constant: 6),
+            pillStack.bottomAnchor.constraint(equalTo: pill.bottomAnchor, constant: -6),
+            statusDot.widthAnchor.constraint(equalToConstant: 7),
+            statusDot.heightAnchor.constraint(equalToConstant: 7),
+            pill.widthAnchor.constraint(equalTo: inner.widthAnchor),
+            waveform.heightAnchor.constraint(equalToConstant: 30),
+            waveform.widthAnchor.constraint(equalTo: inner.widthAnchor, multiplier: 0.46),
+            processingProgress.widthAnchor.constraint(equalTo: inner.widthAnchor, multiplier: 0.56),
+            processingProgress.heightAnchor.constraint(equalToConstant: 4),
+            detail.widthAnchor.constraint(equalTo: inner.widthAnchor),
+            divider.widthAnchor.constraint(equalTo: inner.widthAnchor),
+            draftStack.widthAnchor.constraint(equalTo: inner.widthAnchor),
+            draftContent.widthAnchor.constraint(equalTo: draftStack.widthAnchor),
+            draftContent.heightAnchor.constraint(greaterThanOrEqualToConstant: 52),
+            realtimeDraft.leadingAnchor.constraint(equalTo: draftContent.leadingAnchor),
+            realtimeDraft.trailingAnchor.constraint(equalTo: draftContent.trailingAnchor),
+            realtimeDraft.topAnchor.constraint(equalTo: draftContent.topAnchor),
+            realtimeDraft.bottomAnchor.constraint(lessThanOrEqualTo: draftContent.bottomAnchor),
+            inner.leadingAnchor.constraint(equalTo: box.leadingAnchor, constant: 14),
+            inner.trailingAnchor.constraint(equalTo: box.trailingAnchor, constant: -14),
+            inner.topAnchor.constraint(equalTo: box.topAnchor, constant: 14),
+            inner.bottomAnchor.constraint(lessThanOrEqualTo: box.bottomAnchor, constant: -14),
+        ])
+        return box
     }
 
     private func buildStatusPanel() -> NSView {
@@ -557,8 +658,8 @@ final class MainViewController: NSViewController {
             $0.controlSize = .regular
             $0.font = .systemFont(ofSize: 12)
         }
-        let captureWidth: CGFloat = 124
-        let trailingWidth: CGFloat = 96
+        let captureWidth: CGFloat = 96
+        let trailingWidth: CGFloat = 76
         [hotkeyCaptureButton, secondaryHotkeyCaptureButton, screenshotHotkeyCaptureButton].forEach {
             $0.widthAnchor.constraint(equalToConstant: captureWidth).isActive = true
         }
@@ -580,28 +681,28 @@ final class MainViewController: NSViewController {
             captureButton: screenshotHotkeyCaptureButton,
             fallbackButton: screenshotHotkeyResetButton
         )
-        let hotkeyCard = listCard([primaryRow, secondaryRow, screenshotRow], hPad: 12, vPad: 8)
-        hotkeyCard.heightAnchor.constraint(equalToConstant: 144).isActive = true
+        let hotkeyCard = listCard([primaryRow, secondaryRow, screenshotRow], hPad: 12, vPad: 6)
+        hotkeyCard.heightAnchor.constraint(equalToConstant: 126).isActive = true
         hotkeyCard.setContentCompressionResistancePriority(.required, for: .vertical)
 
         let smartRewriteControls = NSStackView(views: [smartRewriteMode, autoScopeButton, promptSettingsButton, developerTermsButton, deepSeekKeyButton, deepSeekBalanceButton])
         smartRewriteControls.orientation = .horizontal
         smartRewriteControls.alignment = .centerY
-        smartRewriteControls.spacing = 6
-        smartRewriteMode.widthAnchor.constraint(equalToConstant: 84).isActive = true
-        autoScopeButton.widthAnchor.constraint(equalToConstant: 50).isActive = true
-        promptSettingsButton.widthAnchor.constraint(equalToConstant: 62).isActive = true
-        developerTermsButton.widthAnchor.constraint(equalToConstant: 50).isActive = true
-        deepSeekKeyButton.widthAnchor.constraint(equalToConstant: 44).isActive = true
+        smartRewriteControls.spacing = 4
+        smartRewriteMode.widthAnchor.constraint(equalToConstant: 72).isActive = true
+        autoScopeButton.widthAnchor.constraint(equalToConstant: 42).isActive = true
+        promptSettingsButton.widthAnchor.constraint(equalToConstant: 50).isActive = true
+        developerTermsButton.widthAnchor.constraint(equalToConstant: 42).isActive = true
+        deepSeekKeyButton.widthAnchor.constraint(equalToConstant: 36).isActive = true
         deepSeekBalanceButton.widthAnchor.constraint(equalToConstant: 24).isActive = true
 
         let translationControls = NSStackView(views: [translationDirectionMode, translationPromptButton])
         translationControls.orientation = .horizontal
         translationControls.alignment = .centerY
         translationControls.spacing = 6
-        translationDirectionMode.widthAnchor.constraint(equalToConstant: 90).isActive = true
-        translationPromptButton.widthAnchor.constraint(equalToConstant: 62).isActive = true
-        screenshotSaveLocationButton.widthAnchor.constraint(equalToConstant: 126).isActive = true
+        translationDirectionMode.widthAnchor.constraint(equalToConstant: 84).isActive = true
+        translationPromptButton.widthAnchor.constraint(equalToConstant: 56).isActive = true
+        screenshotSaveLocationButton.widthAnchor.constraint(equalToConstant: 112).isActive = true
 
         let optionCard = listCard([
             stackedOptionRow("智能整理", smartRewriteControls),
@@ -622,7 +723,7 @@ final class MainViewController: NSViewController {
         let stack = NSStackView(views: sections)
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 12
+        stack.spacing = 10
         stack.translatesAutoresizingMaskIntoConstraints = false
         for sectionView in sections {
             sectionView.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
@@ -644,7 +745,7 @@ final class MainViewController: NSViewController {
         captureButton: NSButton,
         fallbackButton: NSButton
     ) -> NSView {
-        let titleLabel = label(title, size: 14)
+        let titleLabel = label(title, size: 13)
         titleLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
 
         let row = NSStackView(views: [titleLabel, flexSpacer(), captureButton, fallbackButton])
@@ -653,19 +754,19 @@ final class MainViewController: NSViewController {
         row.spacing = 8
         row.translatesAutoresizingMaskIntoConstraints = false
         row.setContentCompressionResistancePriority(.required, for: .vertical)
-        row.heightAnchor.constraint(equalToConstant: 42).isActive = true
+        row.heightAnchor.constraint(equalToConstant: 36).isActive = true
         return row
     }
 
     private func optionRow(_ title: String, _ control: NSView) -> NSView {
-        let titleLabel = label(title, size: 14)
+        let titleLabel = label(title, size: 13)
         control.translatesAutoresizingMaskIntoConstraints = false
         control.setAccessibilityLabel(title)
         let row = NSStackView(views: [titleLabel, flexSpacer(), control])
         row.orientation = .horizontal
         row.alignment = .centerY
         row.spacing = 10
-        row.heightAnchor.constraint(equalToConstant: 36).isActive = true
+        row.heightAnchor.constraint(equalToConstant: 32).isActive = true
         return row
     }
 
@@ -677,10 +778,10 @@ final class MainViewController: NSViewController {
         let row = NSStackView(views: [titleLabel, control])
         row.orientation = .vertical
         row.alignment = .leading
-        row.spacing = 7
+        row.spacing = 6
         row.translatesAutoresizingMaskIntoConstraints = false
         control.widthAnchor.constraint(lessThanOrEqualTo: row.widthAnchor).isActive = true
-        row.heightAnchor.constraint(equalToConstant: 66).isActive = true
+        row.heightAnchor.constraint(equalToConstant: 58).isActive = true
         return row
     }
 

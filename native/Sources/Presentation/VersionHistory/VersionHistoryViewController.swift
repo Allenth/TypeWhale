@@ -9,6 +9,16 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.3.7 (Build 215)",
+            date: "2026-06-24",
+            changes: [
+                "收敛横屏主窗口比例，避免界面过宽、过散。",
+                "将录音状态与实时文本合并为“当前会话”面板，减少卡片割裂感。",
+                "右侧设置区改为更紧凑的 inspector 密度，降低设置项的视觉噪音。",
+                "压缩快捷键与复杂设置控件尺寸，改善横屏布局的视觉层级。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.3.6 (Build 214)",
             date: "2026-06-24",
             changes: [
