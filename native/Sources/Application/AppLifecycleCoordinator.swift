@@ -8,7 +8,7 @@ final class AppLifecycleCoordinator: NSObject {
     private var thirdPartyNoticesWindow: NSWindow?
     private var allowsTermination = false
     private var workspaceObserver: NSObjectProtocol?
-    private let windowSize = NSSize(width: 660, height: 858)
+    private let windowSize = NSSize(width: 1080, height: 640)
 
     init(controller: MainViewController) {
         self.controller = controller

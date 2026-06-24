@@ -11,14 +11,14 @@ final class MainViewController: NSViewController {
         case error
     }
 
-    private let contentWidth: CGFloat = 1000
-    private let contentHeight: CGFloat = 620
-    private let leftColumnWidth: CGFloat = 210
-    private let rightColumnWidth: CGFloat = 320
-    private let leftTopInset: CGFloat = 30
+    private let contentWidth: CGFloat = 1080
+    private let contentHeight: CGFloat = 640
+    private let leftColumnWidth: CGFloat = 200
+    private let rightColumnWidth: CGFloat = 300
+    private let leftTopInset: CGFloat = 28
     private let rightTopInset: CGFloat = 18
     private let recentViewportHeight: CGFloat = 305
-    private let brandIconVisibleSize: CGFloat = 50
+    private let brandIconVisibleSize: CGFloat = 48
 
     let status = label("等待录音", size: 15, weight: .semibold)
     let detail = label("Fn 录音", size: 12)
@@ -690,13 +690,13 @@ final class MainViewController: NSViewController {
         let smartRewriteControls = NSStackView(views: [smartRewriteMode, autoScopeButton, promptSettingsButton, developerTermsButton, deepSeekKeyButton, deepSeekBalanceButton])
         smartRewriteControls.orientation = .horizontal
         smartRewriteControls.alignment = .centerY
-        smartRewriteControls.spacing = 4
-        smartRewriteMode.widthAnchor.constraint(equalToConstant: 72).isActive = true
-        autoScopeButton.widthAnchor.constraint(equalToConstant: 42).isActive = true
-        promptSettingsButton.widthAnchor.constraint(equalToConstant: 50).isActive = true
-        developerTermsButton.widthAnchor.constraint(equalToConstant: 42).isActive = true
-        deepSeekKeyButton.widthAnchor.constraint(equalToConstant: 36).isActive = true
-        deepSeekBalanceButton.widthAnchor.constraint(equalToConstant: 24).isActive = true
+        smartRewriteControls.spacing = 3
+        smartRewriteMode.widthAnchor.constraint(equalToConstant: 66).isActive = true
+        autoScopeButton.widthAnchor.constraint(equalToConstant: 40).isActive = true
+        promptSettingsButton.widthAnchor.constraint(equalToConstant: 48).isActive = true
+        developerTermsButton.widthAnchor.constraint(equalToConstant: 40).isActive = true
+        deepSeekKeyButton.widthAnchor.constraint(equalToConstant: 34).isActive = true
+        deepSeekBalanceButton.widthAnchor.constraint(equalToConstant: 22).isActive = true
 
         let translationControls = NSStackView(views: [translationDirectionMode, translationPromptButton])
         translationControls.orientation = .horizontal
