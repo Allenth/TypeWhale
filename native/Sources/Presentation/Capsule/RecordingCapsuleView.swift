@@ -78,7 +78,8 @@ final class RecordingCapsuleView: NSView {
         if let bands {
             for index in smoothedBands.indices {
                 let target = index < bands.count ? bands[index] : 0.08
-                let smoothing: Float = target > smoothedBands[index] ? 0.52 : 0.16
+                // 起音快、落音也跟得紧，避免说话时线条拖沓不灵敏。
+                let smoothing: Float = target > smoothedBands[index] ? 0.6 : 0.3
                 smoothedBands[index] += (target - smoothedBands[index]) * smoothing
             }
         }
@@ -287,23 +288,34 @@ final class RecordingCapsuleView: NSView {
     }
 
     private func drawWaveform(in rect: NSRect, color: NSColor) {
-        let barWidth: CGFloat = 3
-        let spacing: CGFloat = 6.5
-        color.setFill()
+        // 一条水平直线，静音时保持平直，有声音时按声纹强度上下波动。
+        let midY = rect.midY
+        let maxAmplitude = rect.height / 2 - 1
+        let count = smoothedBands.count
 
+        var points: [NSPoint] = [NSPoint(x: rect.minX, y: midY)]
         for (index, band) in smoothedBands.enumerated() {
-            let centerDistance = abs(CGFloat(index) - 3) / 3
-            let centerWeight = 0.62 + (1 - centerDistance) * 0.48
-            let activeBand = max(0, (CGFloat(band) - 0.10) / 0.90)
-            let emphasized = pow(activeBand, 0.40)
-            let height = max(4, min(rect.height, rect.height * (0.16 + emphasized * centerWeight * 0.88)))
-            let x = rect.minX + CGFloat(index) * (barWidth + spacing)
-            let bar = NSBezierPath(
-                roundedRect: NSRect(x: x, y: rect.midY - height / 2, width: barWidth, height: height),
-                xRadius: 1.5,
-                yRadius: 1.5
-            )
-            bar.fill()
+            let centerDistance = abs(CGFloat(index) - CGFloat(count - 1) / 2) / (CGFloat(count - 1) / 2)
+            // 各点权重接近一致，让说话时整条线一起波动（多个折痕），而不是只有中间动。
+            let centerWeight = 0.86 + (1 - centerDistance) * 0.22
+            // 噪声门限：环境噪声落入死区输出 0，安静时是一条平直线；门限略放低让人声一起就有反应。
+            let activeBand = max(0, (CGFloat(band) - 0.13) / 0.87)
+            // 接近线性的映射：幅度真正随响度起伏，有动态层次而不是一过门限就顶满。
+            let emphasized = activeBand <= 0 ? 0 : pow(activeBand, 0.9)
+            let direction: CGFloat = index % 2 == 0 ? 1 : -1
+            let offset = emphasized * centerWeight * maxAmplitude * direction
+            let x = rect.minX + rect.width * (CGFloat(index) + 0.5) / CGFloat(count)
+            points.append(NSPoint(x: x, y: midY + offset))
         }
+        points.append(NSPoint(x: rect.maxX, y: midY))
+
+        let path = NSBezierPath()
+        path.move(to: points[0])
+        points.dropFirst().forEach { path.line(to: $0) }
+        path.lineWidth = 2
+        path.lineCapStyle = .round
+        path.lineJoinStyle = .round
+        color.setStroke()
+        path.stroke()
     }
 }

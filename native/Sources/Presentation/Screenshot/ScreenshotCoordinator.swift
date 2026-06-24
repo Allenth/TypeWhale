@@ -38,7 +38,10 @@ final class ScreenshotCoordinator {
             return
         }
         overlays = screenOverlays
+        NSApp.activate(ignoringOtherApps: true)
         overlays.forEach { $0.orderFrontRegardless() }
+        // 必须让某个覆盖窗口成为 key window，否则 keyDown（含 Esc）不会传到视图，导致无法用 Esc 退出截图。
+        overlays.first?.makeKey()
         onStatus("截图模式", "拖拽选择区域，复制后会写入剪贴板", .processing)
     }
 

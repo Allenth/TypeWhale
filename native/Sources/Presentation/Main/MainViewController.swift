@@ -327,7 +327,7 @@ final class MainViewController: NSViewController {
         }
         NSLayoutConstraint.activate([
             recentStack.widthAnchor.constraint(equalTo: recentScroll.contentView.widthAnchor),
-            sessionPanel.heightAnchor.constraint(equalToConstant: 218),
+            sessionPanel.heightAnchor.constraint(equalToConstant: 170),
         ])
         return stack
     }
@@ -337,11 +337,14 @@ final class MainViewController: NSViewController {
         status.maximumNumberOfLines = 1
         status.lineBreakMode = .byTruncatingTail
         status.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        status.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        detail.alignment = .center
+        status.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+        // 说明性文字移到声纹波形右侧，故改为左对齐。
+        detail.alignment = .left
         detail.textColor = .secondaryLabelColor
         detail.maximumNumberOfLines = 2
         detail.lineBreakMode = .byWordWrapping
+        detail.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        detail.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         statusDot.translatesAutoresizingMaskIntoConstraints = false
         statusDot.wantsLayer = true
@@ -354,13 +357,15 @@ final class MainViewController: NSViewController {
         pillStack.spacing = 7
         pillStack.translatesAutoresizingMaskIntoConstraints = false
         pillStack.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        pillStack.setContentHuggingPriority(.required, for: .horizontal)
 
         let pill = NSView()
         pill.translatesAutoresizingMaskIntoConstraints = false
         pill.wantsLayer = true
         pill.layer?.backgroundColor = NSColor(calibratedWhite: 1, alpha: 0.07).cgColor
-        pill.layer?.cornerRadius = 11
+        pill.layer?.cornerRadius = 13
         pill.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        pill.setContentHuggingPriority(.required, for: .horizontal)
         pill.addSubview(pillStack)
 
         waveform.translatesAutoresizingMaskIntoConstraints = false
@@ -370,6 +375,17 @@ final class MainViewController: NSViewController {
         processingProgress.isIndeterminate = true
         processingProgress.isDisplayedWhenStopped = false
         processingProgress.isHidden = true
+
+        // 声纹波形（左）｜ 竖线 ｜ 说明性文字（右）
+        let waveDivider = NSView()
+        waveDivider.translatesAutoresizingMaskIntoConstraints = false
+        waveDivider.wantsLayer = true
+        waveDivider.layer?.backgroundColor = UITheme.hairline.cgColor
+        let waveRow = NSStackView(views: [waveform, waveDivider, detail])
+        waveRow.orientation = .horizontal
+        waveRow.alignment = .centerY
+        waveRow.spacing = 12
+        waveRow.translatesAutoresizingMaskIntoConstraints = false
 
         realtimeDraft.textColor = NSColor(calibratedWhite: 1, alpha: 0.82)
         realtimeDraft.maximumNumberOfLines = 4
@@ -390,10 +406,15 @@ final class MainViewController: NSViewController {
         draftStack.spacing = 7
 
         let divider = hairlineView()
-        let inner = NSStackView(views: [pill, waveform, processingProgress, detail, divider, draftStack])
+        let pillRow = NSStackView(views: [pill, flexSpacer()])
+        pillRow.orientation = .horizontal
+        pillRow.alignment = .centerY
+        pillRow.translatesAutoresizingMaskIntoConstraints = false
+        let inner = NSStackView(views: [pillRow, waveRow, processingProgress, divider, draftStack])
         inner.orientation = .vertical
         inner.alignment = .centerX
-        inner.spacing = 7
+        inner.spacing = 8
+        inner.setCustomSpacing(10, after: waveRow)
         inner.detachesHiddenViews = true
         inner.translatesAutoresizingMaskIntoConstraints = false
 
@@ -401,26 +422,28 @@ final class MainViewController: NSViewController {
         box.translatesAutoresizingMaskIntoConstraints = false
         box.wantsLayer = true
         box.layer?.backgroundColor = UITheme.cardFill.cgColor
-        box.layer?.cornerRadius = 10
+        box.layer?.cornerRadius = UILayout.cornerRadius
         box.layer?.borderWidth = 0.5
         box.layer?.borderColor = UITheme.cardBorder.cgColor
         box.addSubview(inner)
 
         NSLayoutConstraint.activate([
-            pillStack.leadingAnchor.constraint(equalTo: pill.leadingAnchor, constant: 14),
-            pillStack.trailingAnchor.constraint(equalTo: pill.trailingAnchor, constant: -14),
-            pillStack.topAnchor.constraint(equalTo: pill.topAnchor, constant: 6),
-            pillStack.bottomAnchor.constraint(equalTo: pill.bottomAnchor, constant: -6),
+            pillStack.leadingAnchor.constraint(equalTo: pill.leadingAnchor, constant: 13),
+            pillStack.trailingAnchor.constraint(equalTo: pill.trailingAnchor, constant: -13),
+            pillStack.topAnchor.constraint(equalTo: pill.topAnchor, constant: 5),
+            pillStack.bottomAnchor.constraint(equalTo: pill.bottomAnchor, constant: -5),
             statusDot.widthAnchor.constraint(equalToConstant: 7),
             statusDot.heightAnchor.constraint(equalToConstant: 7),
-            pill.heightAnchor.constraint(equalToConstant: 32),
-            pill.widthAnchor.constraint(lessThanOrEqualToConstant: 360),
-            pill.widthAnchor.constraint(greaterThanOrEqualToConstant: 240),
+            pill.heightAnchor.constraint(equalToConstant: 26),
+            pill.widthAnchor.constraint(lessThanOrEqualTo: inner.widthAnchor),
+            pillRow.widthAnchor.constraint(equalTo: inner.widthAnchor),
+            waveRow.widthAnchor.constraint(equalTo: inner.widthAnchor),
             waveform.heightAnchor.constraint(equalToConstant: 26),
-            waveform.widthAnchor.constraint(equalTo: inner.widthAnchor, multiplier: 0.40),
+            waveform.widthAnchor.constraint(equalToConstant: 96),
+            waveDivider.widthAnchor.constraint(equalToConstant: 1),
+            waveDivider.heightAnchor.constraint(equalToConstant: 22),
             processingProgress.widthAnchor.constraint(equalTo: inner.widthAnchor, multiplier: 0.56),
             processingProgress.heightAnchor.constraint(equalToConstant: 4),
-            detail.widthAnchor.constraint(equalTo: inner.widthAnchor),
             divider.widthAnchor.constraint(equalTo: inner.widthAnchor),
             draftStack.widthAnchor.constraint(equalTo: inner.widthAnchor),
             draftContent.widthAnchor.constraint(equalTo: draftStack.widthAnchor),
@@ -442,7 +465,7 @@ final class MainViewController: NSViewController {
         status.maximumNumberOfLines = 1
         status.lineBreakMode = .byTruncatingTail
         status.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        status.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        status.setContentHuggingPriority(.defaultHigh, for: .horizontal)
         detail.alignment = .center
         detail.textColor = .secondaryLabelColor
         detail.maximumNumberOfLines = 2
@@ -459,6 +482,7 @@ final class MainViewController: NSViewController {
         pillStack.spacing = 7
         pillStack.translatesAutoresizingMaskIntoConstraints = false
         pillStack.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        pillStack.setContentHuggingPriority(.required, for: .horizontal)
         let pill = NSView()
         pill.translatesAutoresizingMaskIntoConstraints = false
         pill.wantsLayer = true
@@ -486,7 +510,7 @@ final class MainViewController: NSViewController {
         box.translatesAutoresizingMaskIntoConstraints = false
         box.wantsLayer = true
         box.layer?.backgroundColor = UITheme.cardFill.cgColor
-        box.layer?.cornerRadius = 12
+        box.layer?.cornerRadius = UILayout.cornerRadius
         box.layer?.borderWidth = 0.5
         box.layer?.borderColor = UITheme.cardBorder.cgColor
         box.addSubview(inner)
@@ -683,10 +707,6 @@ final class MainViewController: NSViewController {
             captureButton: screenshotHotkeyCaptureButton,
             fallbackButton: screenshotHotkeyResetButton
         )
-        let hotkeyCard = listCard([primaryRow, secondaryRow, screenshotRow], hPad: 11, vPad: 5)
-        hotkeyCard.heightAnchor.constraint(equalToConstant: 108).isActive = true
-        hotkeyCard.setContentCompressionResistancePriority(.required, for: .vertical)
-
         let smartRewriteControls = NSStackView(views: [smartRewriteMode, autoScopeButton, promptSettingsButton, developerTermsButton, deepSeekKeyButton, deepSeekBalanceButton])
         smartRewriteControls.orientation = .horizontal
         smartRewriteControls.alignment = .centerY
@@ -707,36 +727,37 @@ final class MainViewController: NSViewController {
         screenshotSaveLocationButton.widthAnchor.constraint(equalToConstant: 112).isActive = true
 
         let optionGroups = NSStackView(views: [
+            inspectorGroup("快捷键", [primaryRow, secondaryRow, screenshotRow]),
             inspectorGroup("智能整理", [
                 stackedOptionRow("模式", smartRewriteControls),
             ]),
             inspectorGroup("翻译", [
                 optionRow("自动翻译", autoTranslate),
-                stackedOptionRow("方向", translationControls),
-            ]),
-            inspectorGroup("截图", [
-                optionRow("保存位置", screenshotSaveLocationButton),
+                optionRow("方向", translationControls),
             ]),
             inspectorGroup("系统", [
                 optionRow("胶囊实时预览", realtime),
                 optionRow("停顿自动完成", autoFinish),
                 optionRow("录音时降低电脑声音", duckSystemAudio),
                 optionRow("开机自动启动", launchAtLogin),
+                optionRow("截图保存位置", screenshotSaveLocationButton),
             ]),
         ])
         optionGroups.orientation = .vertical
-        optionGroups.alignment = .width
-        optionGroups.spacing = 6
+        optionGroups.alignment = .leading
+        optionGroups.spacing = UILayout.groupSpacing
         optionGroups.translatesAutoresizingMaskIntoConstraints = false
+        for groupView in optionGroups.arrangedSubviews {
+            groupView.widthAnchor.constraint(equalTo: optionGroups.widthAnchor).isActive = true
+        }
 
         let sections = [
-            section("快捷键", hotkeyCard),
             section("选项", optionGroups),
         ]
         let stack = NSStackView(views: sections)
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 9
+        stack.spacing = UILayout.sectionSpacing
         stack.translatesAutoresizingMaskIntoConstraints = false
         for sectionView in sections {
             sectionView.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
@@ -748,7 +769,7 @@ final class MainViewController: NSViewController {
         let stack = NSStackView(views: [sectionHeader(title), card])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 8
+        stack.spacing = UILayout.headerSpacing
         card.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         return stack
     }
@@ -767,18 +788,18 @@ final class MainViewController: NSViewController {
         row.spacing = 6
         row.translatesAutoresizingMaskIntoConstraints = false
         row.setContentCompressionResistancePriority(.required, for: .vertical)
-        row.heightAnchor.constraint(equalToConstant: 30).isActive = true
+        row.heightAnchor.constraint(equalToConstant: UILayout.rowHeight).isActive = true
         return row
     }
 
     private func inspectorGroup(_ title: String, _ rows: [NSView]) -> NSView {
         let titleLabel = label(title, size: 11, weight: .medium)
         titleLabel.textColor = UITheme.sectionTitle
-        let card = listCard(rows, hPad: 10, vPad: 4)
+        let card = listCard(rows, hPad: UILayout.cardPadH, vPad: UILayout.cardPadV)
         let stack = NSStackView(views: [titleLabel, card])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 4
+        stack.spacing = 6
         stack.translatesAutoresizingMaskIntoConstraints = false
         card.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         return stack
@@ -792,7 +813,7 @@ final class MainViewController: NSViewController {
         row.orientation = .horizontal
         row.alignment = .centerY
         row.spacing = 8
-        row.heightAnchor.constraint(equalToConstant: 30).isActive = true
+        row.heightAnchor.constraint(equalToConstant: UILayout.rowHeight).isActive = true
         return row
     }
 
@@ -868,7 +889,7 @@ final class MainViewController: NSViewController {
         deepSeekBalanceButton.bezelStyle = .circular
         deepSeekBalanceButton.controlSize = .small
         deepSeekBalanceButton.font = .systemFont(ofSize: 12, weight: .bold)
-        deepSeekBalanceButton.toolTip = "查看 DeepSeek 当前余额和 TypeWhale 本机记录消费"
+        deepSeekBalanceButton.toolTip = "查看 DeepSeek 实时余额和 TypeWhale 本机估算消费"
         refreshDeepSeekKeyButton()
     }
 
@@ -1300,7 +1321,7 @@ final class MainViewController: NSViewController {
         let content = DeepSeekBalancePopoverViewController()
         let popover = NSPopover()
         popover.behavior = .transient
-        popover.contentSize = NSSize(width: 280, height: 210)
+        popover.contentSize = NSSize(width: 280, height: 268)
         popover.contentViewController = content
         deepSeekBalancePopover = popover
         popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxY)
@@ -1409,7 +1430,7 @@ final class MainViewController: NSViewController {
         screenshotHotkeyValue.stringValue = screenshot.screenshotDisplayName
         screenshotHotkeyValue.textColor = NSColor(calibratedWhite: 1, alpha: 0.92)
         screenshotHotkeyCaptureButton.title = screenshot.screenshotDisplayName
-        screenshotHotkeyCaptureButton.toolTip = "点击录入截图快捷键，触发方式为双击"
+        screenshotHotkeyCaptureButton.toolTip = "点击录入截图快捷键：双击修饰键，或修饰键+按键组合（组合单击触发）"
         detail.stringValue = "\(primary.displayName) 录音"
     }
 

@@ -176,12 +176,14 @@ final class HotkeyMonitor {
               requiredModifiersAreActive(for: screenshotBinding, eventFlags: eventFlags) else {
             return false
         }
-        guard isDown != screenshotTriggerDown else { return false }
-        screenshotTriggerDown = isDown
-        if !isDown {
-            return registerScreenshotTap() || screenshotConflictsWithSpeechBinding
+        // 修饰键+普通键的组合：单击即触发（区别于纯修饰键的双击）。
+        if isDown != screenshotTriggerDown {
+            screenshotTriggerDown = isDown
+            if isDown {
+                onScreenshot?()
+            }
         }
-        return screenshotConflictsWithSpeechBinding
+        return true
     }
 
     private func registerScreenshotTap() -> Bool {

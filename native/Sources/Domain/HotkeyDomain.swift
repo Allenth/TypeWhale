@@ -168,7 +168,12 @@ struct HotkeyBinding: Codable, Equatable {
     }
 
     var screenshotDisplayName: String {
-        "双击\(displayName)"
+        switch kind {
+        case .function, .modifier:
+            return "双击\(displayName)"
+        case .combo:
+            return displayName
+        }
     }
 
     var pressInstruction: String {

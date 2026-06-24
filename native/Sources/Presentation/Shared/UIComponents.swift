@@ -13,6 +13,18 @@ enum UITheme {
     static let iconTint = NSColor(calibratedWhite: 1, alpha: 0.5)
 }
 
+/// Shared layout scale so cards, rows and gaps stay on one consistent grid.
+@MainActor
+enum UILayout {
+    static let cornerRadius: CGFloat = 10
+    static let rowHeight: CGFloat = 30
+    static let cardPadH: CGFloat = 12
+    static let cardPadV: CGFloat = 4
+    static let sectionSpacing: CGFloat = 16
+    static let groupSpacing: CGFloat = 10
+    static let headerSpacing: CGFloat = 8
+}
+
 @MainActor
 func sectionHeader(_ text: String) -> NSTextField {
     let value = label(text, size: 12, weight: .medium)
@@ -58,7 +70,7 @@ func roundedBox(_ content: NSView, hPad: CGFloat = 15, vPad: CGFloat = 14) -> NS
     box.translatesAutoresizingMaskIntoConstraints = false
     box.wantsLayer = true
     box.layer?.backgroundColor = UITheme.cardFill.cgColor
-    box.layer?.cornerRadius = 12
+    box.layer?.cornerRadius = UILayout.cornerRadius
     box.layer?.borderWidth = 0.5
     box.layer?.borderColor = UITheme.cardBorder.cgColor
     content.translatesAutoresizingMaskIntoConstraints = false
@@ -184,25 +196,34 @@ final class MiniWaveformView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        let barWidth: CGFloat = 4
-        let spacing: CGFloat = 12
+        // 一条水平直线：静音时保持平直，有人声时按声纹强度剧烈上下波动。
+        let midY = bounds.midY
+        let maxAmplitude = bounds.height / 2 - 1
         let count = bands.count
-        let total = CGFloat(count) * barWidth + CGFloat(count - 1) * spacing
-        var x = (bounds.width - total) / 2
+        var peakActivity: CGFloat = 0
+
+        var points: [NSPoint] = [NSPoint(x: 0, y: midY)]
         for (index, band) in bands.enumerated() {
-            let centerDistance = abs(CGFloat(index) - 3) / 3
-            let centerWeight = 0.55 + (1 - centerDistance) * 0.60
-            let activeBand = max(0, (CGFloat(band) - 0.08) / 0.92)
-            let emphasized = pow(activeBand, 0.32)
-            let height = max(3, min(bounds.height, bounds.height * (0.08 + emphasized * centerWeight * 1.05)))
-            UITheme.brandYellow.withAlphaComponent(0.45 + 0.55 * min(1, Double(activeBand))).setFill()
-            let bar = NSBezierPath(
-                roundedRect: NSRect(x: x, y: (bounds.height - height) / 2, width: barWidth, height: height),
-                xRadius: 2,
-                yRadius: 2
-            )
-            bar.fill()
-            x += barWidth + spacing
+            let centerDistance = abs(CGFloat(index) - CGFloat(count - 1) / 2) / (CGFloat(count - 1) / 2)
+            // 各点权重接近一致，说话时整条线一起波动；噪声门限保证安静时是一条平直线。
+            let centerWeight = 0.86 + (1 - centerDistance) * 0.22
+            let activeBand = max(0, (CGFloat(band) - 0.16) / 0.84)
+            peakActivity = max(peakActivity, activeBand)
+            let emphasized = activeBand <= 0 ? 0 : pow(activeBand, 0.62)
+            let direction: CGFloat = index % 2 == 0 ? 1 : -1
+            let offset = emphasized * centerWeight * maxAmplitude * direction
+            let x = bounds.width * (CGFloat(index) + 0.5) / CGFloat(count)
+            points.append(NSPoint(x: x, y: midY + offset))
         }
+        points.append(NSPoint(x: bounds.width, y: midY))
+
+        let path = NSBezierPath()
+        path.move(to: points[0])
+        points.dropFirst().forEach { path.line(to: $0) }
+        path.lineWidth = 2
+        path.lineCapStyle = .round
+        path.lineJoinStyle = .round
+        UITheme.brandYellow.withAlphaComponent(0.5 + 0.5 * min(1, Double(peakActivity))).setStroke()
+        path.stroke()
     }
 }
