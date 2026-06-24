@@ -2,8 +2,21 @@ import Foundation
 import ServiceManagement
 
 enum LoginItemManager {
-    static var status: SMAppService.Status {
-        SMAppService.mainApp.status
+    enum Status {
+        case enabled
+        case requiresApproval
+        case disabled
+    }
+
+    static var status: Status {
+        switch SMAppService.mainApp.status {
+        case .enabled:
+            return .enabled
+        case .requiresApproval:
+            return .requiresApproval
+        default:
+            return .disabled
+        }
     }
 
     static var isEnabled: Bool {

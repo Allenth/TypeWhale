@@ -34,6 +34,52 @@ struct DeveloperTermNormalizerCheck {
             normalizer.normalize("我想把内容保存到欧布西迪安里面", context: context).text,
             equals: "我想把内容保存到 Obsidian 里面"
         )
+        assert(
+            normalizer.normalize("把接口返回整理成杰森格式", context: context).text,
+            equals: "把接口返回整理成 JSON 格式"
+        )
+        assert(
+            normalizer.normalize("把 Jason 输出给接口", context: context).text,
+            equals: "把 JSON 输出给接口"
+        )
+        assert(
+            normalizer.normalize("保存到欧布西迪安笔记里", context: context).text,
+            equals: "保存到 Obsidian 里"
+        )
+        assert(
+            normalizer.normalize("保存到 Oseing 里面", context: context).text,
+            equals: "保存到 Obsidian 里面"
+        )
+        assert(
+            normalizer.normalize("把这段同步到 Oosing", context: context).text,
+            equals: "把这段同步到 Obsidian"
+        )
+        assert(
+            normalizer.normalize("整理成 Oing 笔记", context: context).text,
+            equals: "整理成 Obsidian 笔记"
+        )
+        assert(
+            normalizer.normalize("打开 Osing 的知识库", context: context).text,
+            equals: "打开 Obsidian 的知识库"
+        )
+
+        let storageKey = "developerLexicon.terms.v1"
+        let originalData = UserDefaults.standard.data(forKey: storageKey)
+        defer {
+            if let originalData {
+                UserDefaults.standard.set(originalData, forKey: storageKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: storageKey)
+            }
+        }
+        DeveloperLexiconStore.save([
+            DeveloperTerm(canonical: "JSON", aliases: ["json", "j son"], category: .api)
+        ])
+        let migratedNormalizer = DeveloperTermNormalizer(termsProvider: { DeveloperLexiconStore.load() })
+        assert(
+            migratedNormalizer.normalize("把 Jason 输出给接口", context: context).text,
+            equals: "把 JSON 输出给接口"
+        )
 
         let secure = normalizer.normalize(
             "让扣德克斯帮我整理开发需求",

@@ -9,6 +9,95 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.3.0 (Build 208)",
+            date: "2026-06-24",
+            changes: [
+                "新增截图功能：通过独立可设置的截图快捷键随时发起屏幕区域截图。",
+                "截图支持拖拽选区与边角缩放，并内置标注工具（矩形、箭头、画笔、文字、撤销）。",
+                "截图可一键复制到剪贴板或保存为文件。",
+                "内置 OCR 文字识别与翻译：识别选区文字并写入剪贴板。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.2.50 (Build 207)",
+            date: "2026-06-24",
+            changes: [
+                "放弃 macOS 12 兼容尝试，最低系统要求恢复为 macOS 14。",
+                "语音识别运行库恢复为 onnxruntime 1.24.4，重新启用 Qwen3-ASR 与原生 VAD 人声检测。",
+                "移除 macOS 12 兼容残留：旧版 sherpa-onnx、libc++ 兼容垫片、VAD 旁路开关与登录项降级分支。",
+                "保留启动与崩溃诊断（LaunchProbe / CrashReporter / 测试日志面板），增强稳定性排查能力。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.2.49 (Build 206)",
+            date: "2026-06-24",
+            changes: [
+                "重新简化智能整理默认提示词。",
+                "开发需求模式改为轻量任务整理，不再默认输出待确认、验收标准等重结构。",
+                "润色、笔记、聊天和极致归纳模式也收敛为更轻的输入整理规则。",
+                "新增检查覆盖开发需求轻量输出规则和极致归纳待确认触发条件。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.2.48 (Build 205)",
+            date: "2026-06-24",
+            changes: [
+                "修复智能整理偶尔输出“根据规则、我不能执行、整理后如下”等元说明的问题。",
+                "强化提示词边界：禁止解释安全规则，只输出整理后的正文。",
+                "新增 SmartRewriteOutputSanitizer，兜底清理整理结果前面的模型解释性前缀。",
+                "新增检查覆盖“不改代码，先查看日志”样例。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.2.47 (Build 204)",
+            date: "2026-06-24",
+            changes: [
+                "DeepSeek Key 按钮文案统一改为“Key”。",
+                "已录入 Key 时使用品牌色高亮按钮，未录入时保持弱提示色。",
+                "Key 按钮 tooltip 会提示当前录入状态。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.2.46 (Build 203)",
+            date: "2026-06-24",
+            changes: [
+                "重新审核 DeepSeek 内容整理和翻译 token 费用统计口径。",
+                "余额弹窗中的已消费金额改为“官方后台基准 + TypeWhale 后续记录 usage”。",
+                "将截至今天 DeepSeek 后台已消费 ¥0.66 作为本机账本基准。",
+                "新增检查覆盖官方消费基准、本机新增 usage 和累计消费金额。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.2.45 (Build 202)",
+            date: "2026-06-24",
+            changes: [
+                "DeepSeek Key 按钮旁新增余额提示按钮。",
+                "点击后通过 DeepSeek 余额接口查询当前账号余额。",
+                "余额弹窗显示当前余额、总金额、本机记录已消费金额和消费占比进度条。",
+                "本机记录的消费继续基于 TypeWhale 收到的 usage 估算，并在界面中明确不等同于官方账单。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.2.44 (Build 201)",
+            date: "2026-06-24",
+            changes: [
+                "最近转录的 token 费用增加详细说明，可查看输入、缓存命中、缓存未命中、输出 token 和美元/人民币估算。",
+                "DeepSeek 智能整理等待时间从 3 秒放宽到 8 秒，自动翻译等待时间放宽到 10 秒，减少后台已扣费但本地超时未记录 usage 的情况。",
+                "DeepSeek HTTP 请求超时放宽到 15 秒。",
+                "费用公式继续按 deepseek-v4-flash 官方当前价格估算。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.2.43 (Build 200)",
+            date: "2026-06-24",
+            changes: [
+                "新增截图模式 MVP：三连按当前录音快捷键进入全屏截图界面。",
+                "截图界面支持拖拽框选区域、显示选区尺寸、复制截图到剪贴板和取消退出。",
+                "截图工具条预留 OCR 和覆盖翻译入口，后续接入截图文字识别、中文转英文和版面覆盖。",
+                "开发计划记录下个版本截图输入、截图 OCR 和覆盖翻译需求。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.2.42 (Build 199)",
             date: "2026-06-24",
             changes: [

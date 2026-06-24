@@ -18,6 +18,19 @@ struct SmartUsage: Codable, Equatable {
         String(format: "%d tok · ¥%.6f", totalTokens, estimatedCostCNY)
     }
 
+    var detailText: String {
+        String(
+            format: "总计 %d tok · 输入 %d（缓存命中 %d / 未命中 %d）· 输出 %d · 估算 $%.8f / ¥%.6f",
+            totalTokens,
+            promptTokens,
+            promptCacheHitTokens,
+            promptCacheMissTokens,
+            completionTokens,
+            estimatedCostUSD,
+            estimatedCostCNY
+        )
+    }
+
     static func deepSeekV4Flash(
         promptTokens: Int,
         completionTokens: Int,

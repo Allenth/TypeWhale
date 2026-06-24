@@ -5,13 +5,15 @@ import Foundation
 struct PermissionDiagnostics {
     let microphoneAuthorized: Bool
     let accessibilityTrusted: Bool
+    let screenRecordingAuthorized: Bool
 }
 
 enum PermissionDiagnosticsProvider {
     static func current() -> PermissionDiagnostics {
         PermissionDiagnostics(
             microphoneAuthorized: AVCaptureDevice.authorizationStatus(for: .audio) == .authorized,
-            accessibilityTrusted: AXIsProcessTrusted()
+            accessibilityTrusted: AXIsProcessTrusted(),
+            screenRecordingAuthorized: CGPreflightScreenCaptureAccess()
         )
     }
 

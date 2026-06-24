@@ -14,14 +14,16 @@ final class MainViewController: NSViewController {
     private let contentWidth: CGFloat = 660
     private let contentHeight: CGFloat = 858
     private let leftColumnWidth: CGFloat = 212
-    private let topInset: CGFloat = 38
-    private let recentViewportHeight: CGFloat = 150
+    private let leftTopInset: CGFloat = 38
+    private let rightTopInset: CGFloat = 20
+    private let recentViewportHeight: CGFloat = 270
     private let brandIconVisibleSize: CGFloat = 64
 
     let status = label("等待录音", size: 15, weight: .semibold)
     let detail = label("Fn 录音", size: 12)
     let micStatus = label("检测中", size: 12, weight: .medium)
     let accessibilityStatus = label("检测中", size: 12, weight: .medium)
+    let screenRecordingStatus = label("检测中", size: 12, weight: .medium)
     let hotkeyStatus = label("检测中", size: 12, weight: .medium)
     let hotkeyValue = label(
         HotkeyBinding.load(storageKey: HotkeyBinding.chineseStorageKey, fallback: .defaultBinding).displayName,
@@ -33,10 +35,17 @@ final class MainViewController: NSViewController {
         size: 13,
         weight: .medium
     )
+    let screenshotHotkeyValue = label(
+        HotkeyBinding.load(storageKey: HotkeyBinding.screenshotStorageKey, fallback: .screenshotDefaultBinding).screenshotDisplayName,
+        size: 13,
+        weight: .medium
+    )
     let hotkeyCaptureButton = NSButton(title: "录入", target: nil, action: nil)
     let hotkeyResetButton = NSButton(title: "恢复 Fn", target: nil, action: nil)
     let secondaryHotkeyCaptureButton = NSButton(title: "录入", target: nil, action: nil)
     let secondaryHotkeyClearButton = NSButton(title: "清空", target: nil, action: nil)
+    let screenshotHotkeyCaptureButton = NSButton(title: "录入", target: nil, action: nil)
+    let screenshotHotkeyResetButton = NSButton(title: "恢复默认", target: nil, action: nil)
     let modelValue = label("正在检查模型", size: 12, weight: .medium)
     let modelProgress = NSProgressIndicator()
     let modelInstallButton = NSButton(title: "安装模型", target: nil, action: nil)
@@ -46,15 +55,16 @@ final class MainViewController: NSViewController {
     let launchAtLogin = BrandSwitch()
     let asrBackendMode = NSPopUpButton()
     let smartRewriteMode = NSPopUpButton()
-    let deepSeekKeyButton = NSButton(title: "设置 Key", target: nil, action: nil)
+    let deepSeekKeyButton = NSButton(title: "Key", target: nil, action: nil)
+    let deepSeekBalanceButton = NSButton(title: "!", target: nil, action: nil)
     let promptSettingsButton = NSButton(title: "提示词", target: nil, action: nil)
     let developerTermsButton = NSButton(title: "术语", target: nil, action: nil)
     let autoTranslate = BrandSwitch()
     let translationDirectionMode = NSPopUpButton()
     let translationPromptButton = NSButton(title: "提示词", target: nil, action: nil)
-    let realtimeDraft = label("等待实时草稿", size: 12)
+    let realtimeDraft = label("等待实时文本", size: 12)
     var onInstallModel: (() -> Void)?
-    var onHotkeysChange: ((HotkeyBinding, HotkeyBinding?) -> Void)?
+    var onHotkeysChange: ((HotkeyBinding, HotkeyBinding?, HotkeyBinding) -> Void)?
 
     private let modelEntryName = label("SenseVoice int8", size: 13, weight: .semibold)
     private let modelEntryStatus = label("检查中", size: 11, weight: .medium)
@@ -75,13 +85,19 @@ final class MainViewController: NSViewController {
     private var hotkeyCaptureSource: CFRunLoopSource?
     private var captureModifierKeyCodes: Set<Int> = []
     private var captureConfirmWorkItem: DispatchWorkItem?
+    private var usageGuidePopover: NSPopover?
     private var versionHistoryPopover: NSPopover?
+    private var testLogsPopover: NSPopover?
     private var modelDetailPopover: NSPopover?
+    private var deepSeekBalancePopover: NSPopover?
+    private let deepSeekBalanceClient = DeepSeekBalanceClient()
     private lazy var versionHistoryViewController = VersionHistoryViewController()
+    private lazy var testLogsViewController = TestLogsViewController()
 
     private enum HotkeySlot {
         case primary
         case secondary
+        case screenshot
     }
 
     override func loadView() {
@@ -142,13 +158,14 @@ final class MainViewController: NSViewController {
             left.widthAnchor.constraint(equalToConstant: leftColumnWidth),
             right.leadingAnchor.constraint(equalTo: left.trailingAnchor, constant: 22),
             right.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -22),
-            right.topAnchor.constraint(equalTo: view.topAnchor, constant: topInset),
+            right.topAnchor.constraint(equalTo: view.topAnchor, constant: rightTopInset),
             right.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -20),
         ])
 
         updateHotkeys(
             primary: HotkeyBinding.load(storageKey: HotkeyBinding.chineseStorageKey, fallback: .defaultBinding),
-            secondary: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryChineseStorageKey)
+            secondary: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryChineseStorageKey),
+            screenshot: HotkeyBinding.load(storageKey: HotkeyBinding.screenshotStorageKey, fallback: .screenshotDefaultBinding)
         )
         DispatchQueue.main.async { [weak self] in
             _ = self?.versionHistoryViewController.view
@@ -191,22 +208,40 @@ final class MainViewController: NSViewController {
         let draftEntry = buildRealtimeDraftEntry()
         draftEntry.setContentHuggingPriority(.required, for: .vertical)
         draftEntry.setContentCompressionResistancePriority(.required, for: .vertical)
+        let permissionEntry = buildPermissionEntry()
+        permissionEntry.setContentHuggingPriority(.required, for: .vertical)
+        permissionEntry.setContentCompressionResistancePriority(.required, for: .vertical)
 
-        let historyButton = NSButton(title: " 版本历史", target: self, action: #selector(showVersionHistory(_:)))
+        let usageGuideButton = NSButton(title: " 使用", target: self, action: #selector(showUsageGuide(_:)))
+        usageGuideButton.image = NSImage(systemSymbolName: "questionmark.circle", accessibilityDescription: nil)
+        usageGuideButton.imagePosition = .imageLeading
+        usageGuideButton.bezelStyle = .rounded
+        usageGuideButton.controlSize = .regular
+
+        let historyButton = NSButton(title: " 历史", target: self, action: #selector(showVersionHistory(_:)))
         historyButton.image = NSImage(systemSymbolName: "clock.arrow.circlepath", accessibilityDescription: nil)
         historyButton.imagePosition = .imageLeading
         historyButton.bezelStyle = .rounded
         historyButton.controlSize = .regular
 
-        let usageGuide = buildUsageGuideEntry()
-        usageGuide.setContentHuggingPriority(.required, for: .vertical)
-        usageGuide.setContentCompressionResistancePriority(.required, for: .vertical)
+        let testLogsButton = NSButton(title: " 日志", target: self, action: #selector(showTestLogs(_:)))
+        testLogsButton.image = NSImage(systemSymbolName: "doc.text.magnifyingglass", accessibilityDescription: nil)
+        testLogsButton.imagePosition = .imageLeading
+        testLogsButton.bezelStyle = .rounded
+        testLogsButton.controlSize = .regular
 
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .vertical)
         spacer.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
 
-        let stack = NSStackView(views: [brandStack, statusPanel, modelEntry, draftEntry, spacer, usageGuide, historyButton])
+        let footerButtons = NSStackView(views: [usageGuideButton, historyButton, testLogsButton])
+        footerButtons.orientation = .horizontal
+        footerButtons.alignment = .centerY
+        footerButtons.distribution = .fillEqually
+        footerButtons.spacing = 6
+        footerButtons.translatesAutoresizingMaskIntoConstraints = false
+
+        let stack = NSStackView(views: [brandStack, modelEntry, permissionEntry, statusPanel, draftEntry, spacer, footerButtons])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 14
@@ -220,15 +255,15 @@ final class MainViewController: NSViewController {
             border.widthAnchor.constraint(equalToConstant: 0.5),
             stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 18),
             stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -18),
-            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: topInset),
+            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: leftTopInset),
             stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -16),
             brandStack.widthAnchor.constraint(equalTo: stack.widthAnchor),
             statusPanel.widthAnchor.constraint(equalTo: stack.widthAnchor),
             modelEntry.widthAnchor.constraint(equalTo: stack.widthAnchor),
             draftEntry.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            usageGuide.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            permissionEntry.widthAnchor.constraint(equalTo: stack.widthAnchor),
             draftEntry.heightAnchor.constraint(equalToConstant: 108),
-            historyButton.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            footerButtons.widthAnchor.constraint(equalTo: stack.widthAnchor),
             brandIcon.widthAnchor.constraint(equalToConstant: brandIconVisibleSize),
             brandIcon.heightAnchor.constraint(equalToConstant: brandIconVisibleSize),
         ])
@@ -239,6 +274,8 @@ final class MainViewController: NSViewController {
         status.alignment = .center
         status.maximumNumberOfLines = 1
         status.lineBreakMode = .byTruncatingTail
+        status.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        status.setContentHuggingPriority(.defaultLow, for: .horizontal)
         detail.alignment = .center
         detail.textColor = .secondaryLabelColor
         detail.maximumNumberOfLines = 2
@@ -254,11 +291,13 @@ final class MainViewController: NSViewController {
         pillStack.alignment = .centerY
         pillStack.spacing = 7
         pillStack.translatesAutoresizingMaskIntoConstraints = false
+        pillStack.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         let pill = NSView()
         pill.translatesAutoresizingMaskIntoConstraints = false
         pill.wantsLayer = true
         pill.layer?.backgroundColor = NSColor(calibratedWhite: 1, alpha: 0.06).cgColor
         pill.layer?.cornerRadius = 12
+        pill.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         pill.addSubview(pillStack)
 
         waveform.translatesAutoresizingMaskIntoConstraints = false
@@ -292,6 +331,7 @@ final class MainViewController: NSViewController {
             pillStack.bottomAnchor.constraint(equalTo: pill.bottomAnchor, constant: -6),
             statusDot.widthAnchor.constraint(equalToConstant: 7),
             statusDot.heightAnchor.constraint(equalToConstant: 7),
+            pill.widthAnchor.constraint(lessThanOrEqualTo: inner.widthAnchor, constant: -2),
             waveform.heightAnchor.constraint(equalToConstant: 34),
             waveform.widthAnchor.constraint(equalTo: inner.widthAnchor),
             processingProgress.widthAnchor.constraint(equalTo: inner.widthAnchor, multiplier: 0.78),
@@ -361,48 +401,71 @@ final class MainViewController: NSViewController {
             realtimeDraft.bottomAnchor.constraint(lessThanOrEqualTo: draftContent.bottomAnchor),
             draftContent.heightAnchor.constraint(greaterThanOrEqualToConstant: 56),
         ])
-        return section("实时草稿", roundedBox(draftContent, hPad: 12, vPad: 10))
+        return section("实时文本", roundedBox(draftContent, hPad: 12, vPad: 10))
     }
 
-    private func buildUsageGuideEntry() -> NSView {
-        let title = label("使用方法", size: 11, weight: .semibold)
-        title.textColor = UITheme.sectionTitle
+    private func buildPermissionEntry() -> NSView {
+        let micButton = sidebarPermissionButton(accessibilityLabel: "打开麦克风权限设置", action: #selector(openMicrophone))
+        let accessButton = sidebarPermissionButton(accessibilityLabel: "打开辅助功能权限设置", action: #selector(openAccessibility))
+        let screenButton = sidebarPermissionButton(accessibilityLabel: "打开屏幕录制权限设置", action: #selector(openScreenRecording))
+        let keyboardButton = sidebarPermissionButton(accessibilityLabel: "打开全局快捷键设置", action: #selector(openKeyboard))
+        let card = listCard([
+            sidebarPermissionRow(icon: "mic", name: "麦克风", status: micStatus, button: micButton),
+            sidebarPermissionRow(icon: "accessibility", name: "辅助功能", status: accessibilityStatus, button: accessButton),
+            sidebarPermissionRow(icon: "rectangle.on.rectangle", name: "截图权限", status: screenRecordingStatus, button: screenButton),
+            sidebarPermissionRow(icon: "keyboard", name: "快捷键", status: hotkeyStatus, button: keyboardButton),
+        ], hPad: 10, vPad: 4)
+        return section("权限", card)
+    }
 
-        let body = label(
-            """
-            先开启麦克风和辅助功能。
-            按 Fn 开始录音，再按一次或松开结束。
-            首次打开测试版：右键 App 选“打开”；若被拦截，到 系统设置 > 隐私与安全性，点“仍要打开”。
-            """,
-            size: 10
-        )
-        body.textColor = .secondaryLabelColor
-        body.maximumNumberOfLines = 0
-        body.lineBreakMode = .byWordWrapping
+    private func sidebarPermissionButton(accessibilityLabel: String, action: Selector) -> NSButton {
+        let button = NSButton()
+        button.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: accessibilityLabel)
+        button.bezelStyle = .inline
+        button.isBordered = false
+        button.imagePosition = .imageOnly
+        button.contentTintColor = .secondaryLabelColor
+        button.toolTip = accessibilityLabel
+        button.setAccessibilityLabel(accessibilityLabel)
+        button.target = self
+        button.action = action
+        button.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            button.widthAnchor.constraint(equalToConstant: 24),
+            button.heightAnchor.constraint(equalToConstant: 24),
+        ])
+        return button
+    }
 
-        let stack = NSStackView(views: [title, body])
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 6
-        title.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-        body.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-        return roundedBox(stack, hPad: 12, vPad: 10)
+    private func sidebarPermissionRow(icon: String, name: String, status: NSTextField, button: NSButton) -> NSView {
+        let iconView = symbolIcon(icon, size: 13)
+        let nameLabel = label(name, size: 11, weight: .medium)
+        nameLabel.maximumNumberOfLines = 1
+        nameLabel.lineBreakMode = .byTruncatingTail
+
+        status.font = .systemFont(ofSize: 10, weight: .medium)
+        status.alignment = .left
+        status.maximumNumberOfLines = 1
+        status.lineBreakMode = .byTruncatingTail
+
+        let textStack = NSStackView(views: [nameLabel, status])
+        textStack.orientation = .vertical
+        textStack.alignment = .leading
+        textStack.spacing = 1
+        textStack.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        let row = NSStackView(views: [iconView, textStack, flexSpacer(), button])
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 7
+        row.heightAnchor.constraint(equalToConstant: 38).isActive = true
+        return row
     }
 
     // MARK: - Right column
 
     private func buildRightColumn() -> NSView {
-        let micButton = settingsButton("设置", action: #selector(openMicrophone))
-        let accessButton = settingsButton("设置", action: #selector(openAccessibility))
-        let keyboardButton = settingsButton("设置", action: #selector(openKeyboard))
-        let permissionCard = listCard([
-            permissionRow(icon: "mic", name: "麦克风", status: micStatus, button: micButton),
-            permissionRow(icon: "accessibility", name: "辅助功能", status: accessibilityStatus, button: accessButton),
-            permissionRow(icon: "keyboard", name: "全局快捷键", status: hotkeyStatus, button: keyboardButton),
-        ])
-        permissionCard.setContentCompressionResistancePriority(.required, for: .vertical)
-
-        [hotkeyValue, secondaryHotkeyValue].forEach {
+        [hotkeyValue, secondaryHotkeyValue, screenshotHotkeyValue].forEach {
             $0.lineBreakMode = .byTruncatingMiddle
         }
         hotkeyCaptureButton.target = self
@@ -413,7 +476,18 @@ final class MainViewController: NSViewController {
         secondaryHotkeyCaptureButton.action = #selector(beginSecondaryHotkeyCapture)
         secondaryHotkeyClearButton.target = self
         secondaryHotkeyClearButton.action = #selector(clearSecondaryHotkey)
-        let hotkeyButtons = [hotkeyCaptureButton, hotkeyResetButton, secondaryHotkeyCaptureButton, secondaryHotkeyClearButton]
+        screenshotHotkeyCaptureButton.target = self
+        screenshotHotkeyCaptureButton.action = #selector(beginScreenshotHotkeyCapture)
+        screenshotHotkeyResetButton.target = self
+        screenshotHotkeyResetButton.action = #selector(resetScreenshotHotkey)
+        let hotkeyButtons = [
+            hotkeyCaptureButton,
+            hotkeyResetButton,
+            secondaryHotkeyCaptureButton,
+            secondaryHotkeyClearButton,
+            screenshotHotkeyCaptureButton,
+            screenshotHotkeyResetButton,
+        ]
         hotkeyButtons.forEach {
             $0.bezelStyle = .rounded
             $0.controlSize = .regular
@@ -421,10 +495,10 @@ final class MainViewController: NSViewController {
         }
         let captureWidth: CGFloat = 124
         let trailingWidth: CGFloat = 96
-        [hotkeyCaptureButton, secondaryHotkeyCaptureButton].forEach {
+        [hotkeyCaptureButton, secondaryHotkeyCaptureButton, screenshotHotkeyCaptureButton].forEach {
             $0.widthAnchor.constraint(equalToConstant: captureWidth).isActive = true
         }
-        [hotkeyResetButton, secondaryHotkeyClearButton].forEach {
+        [hotkeyResetButton, secondaryHotkeyClearButton, screenshotHotkeyResetButton].forEach {
             $0.widthAnchor.constraint(equalToConstant: trailingWidth).isActive = true
         }
         let primaryRow = shortcutRow(
@@ -437,17 +511,23 @@ final class MainViewController: NSViewController {
             captureButton: secondaryHotkeyCaptureButton,
             fallbackButton: secondaryHotkeyClearButton
         )
-        let hotkeyCard = listCard([primaryRow, secondaryRow], hPad: 12, vPad: 8)
-        hotkeyCard.heightAnchor.constraint(greaterThanOrEqualToConstant: 102).isActive = true
+        let screenshotRow = shortcutRow(
+            title: "截图快捷键",
+            captureButton: screenshotHotkeyCaptureButton,
+            fallbackButton: screenshotHotkeyResetButton
+        )
+        let hotkeyCard = listCard([primaryRow, secondaryRow, screenshotRow], hPad: 12, vPad: 8)
+        hotkeyCard.heightAnchor.constraint(equalToConstant: 144).isActive = true
         hotkeyCard.setContentCompressionResistancePriority(.required, for: .vertical)
 
-        let smartRewriteControls = NSStackView(views: [smartRewriteMode, promptSettingsButton, developerTermsButton, deepSeekKeyButton])
+        let smartRewriteControls = NSStackView(views: [smartRewriteMode, promptSettingsButton, developerTermsButton, deepSeekKeyButton, deepSeekBalanceButton])
         smartRewriteControls.orientation = .horizontal
         smartRewriteControls.alignment = .centerY
         smartRewriteControls.spacing = 6
         promptSettingsButton.widthAnchor.constraint(equalToConstant: 62).isActive = true
         developerTermsButton.widthAnchor.constraint(equalToConstant: 50).isActive = true
-        deepSeekKeyButton.widthAnchor.constraint(equalToConstant: 74).isActive = true
+        deepSeekKeyButton.widthAnchor.constraint(equalToConstant: 44).isActive = true
+        deepSeekBalanceButton.widthAnchor.constraint(equalToConstant: 24).isActive = true
 
         let translationControls = NSStackView(views: [translationDirectionMode, translationPromptButton])
         translationControls.orientation = .horizontal
@@ -456,7 +536,6 @@ final class MainViewController: NSViewController {
         translationPromptButton.widthAnchor.constraint(equalToConstant: 62).isActive = true
 
         let optionCard = listCard([
-            optionRow("识别模型", asrBackendMode),
             optionRow("智能整理", smartRewriteControls),
             optionRow("自动翻译", autoTranslate),
             optionRow("翻译方向", translationControls),
@@ -484,7 +563,6 @@ final class MainViewController: NSViewController {
         let recentCard = roundedBox(recentScroll, hPad: 8, vPad: 6)
 
         let sections = [
-            section("权限", permissionCard),
             section("快捷键", hotkeyCard),
             section("选项", optionCard),
             section("最近转录", recentCard),
@@ -509,31 +587,6 @@ final class MainViewController: NSViewController {
         stack.spacing = 8
         card.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         return stack
-    }
-
-    private func settingsButton(_ title: String, action: Selector) -> NSButton {
-        let button = NSButton(title: title, target: self, action: action)
-        button.bezelStyle = .rounded
-        button.controlSize = .regular
-        button.font = .systemFont(ofSize: 12)
-        button.widthAnchor.constraint(equalToConstant: 54).isActive = true
-        return button
-    }
-
-    private func permissionRow(icon: String, name: String, status: NSTextField, button: NSButton) -> NSView {
-        let iconView = symbolIcon(icon, size: 16)
-        let nameLabel = label(name, size: 14)
-        status.alignment = .left
-        status.maximumNumberOfLines = 1
-        status.lineBreakMode = .byTruncatingTail
-        status.setContentCompressionResistancePriority(.required, for: .horizontal)
-        status.widthAnchor.constraint(equalToConstant: 86).isActive = true
-        let row = NSStackView(views: [iconView, nameLabel, flexSpacer(), status, button])
-        row.orientation = .horizontal
-        row.alignment = .centerY
-        row.spacing = 10
-        row.heightAnchor.constraint(equalToConstant: 40).isActive = true
-        return row
     }
 
     private func shortcutRow(
@@ -615,6 +668,12 @@ final class MainViewController: NSViewController {
         deepSeekKeyButton.controlSize = .regular
         deepSeekKeyButton.font = .systemFont(ofSize: 12, weight: .medium)
         deepSeekKeyButton.toolTip = "录入 DeepSeek API Key，保存到 macOS Keychain"
+        deepSeekBalanceButton.target = self
+        deepSeekBalanceButton.action = #selector(showDeepSeekBalance)
+        deepSeekBalanceButton.bezelStyle = .circular
+        deepSeekBalanceButton.controlSize = .small
+        deepSeekBalanceButton.font = .systemFont(ofSize: 12, weight: .bold)
+        deepSeekBalanceButton.toolTip = "查看 DeepSeek 当前余额和 TypeWhale 本机记录消费"
         refreshDeepSeekKeyButton()
     }
 
@@ -646,7 +705,19 @@ final class MainViewController: NSViewController {
     }
 
     private func refreshDeepSeekKeyButton() {
-        deepSeekKeyButton.title = DeepSeekAPIKeyStore.hasAPIKey() ? "Key 已设" : "设置 Key"
+        let hasKey = DeepSeekAPIKeyStore.hasAPIKey()
+        deepSeekKeyButton.title = "Key"
+        deepSeekKeyButton.contentTintColor = hasKey ? UITheme.brandYellow : .secondaryLabelColor
+        deepSeekKeyButton.toolTip = hasKey
+            ? "DeepSeek API Key 已录入，点击可覆盖或清除"
+            : "DeepSeek API Key 未录入，点击设置"
+        deepSeekKeyButton.attributedTitle = NSAttributedString(
+            string: "Key",
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 12, weight: hasKey ? .semibold : .medium),
+                .foregroundColor: hasKey ? UITheme.brandYellow : NSColor.secondaryLabelColor,
+            ]
+        )
     }
 
     func toggleAutoTranslateFromShortcut() {
@@ -703,6 +774,55 @@ final class MainViewController: NSViewController {
         return NSImage(named: NSImage.applicationIconName)
     }
 
+    @objc private func showUsageGuide(_ sender: NSButton) {
+        if let popover = usageGuidePopover, popover.isShown {
+            popover.performClose(nil)
+            return
+        }
+        let popover = usageGuidePopover ?? NSPopover()
+        popover.behavior = .transient
+        popover.animates = true
+        popover.contentSize = NSSize(width: 300, height: 184)
+        popover.contentViewController = makeUsageGuideController()
+        usageGuidePopover = popover
+        popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxY)
+    }
+
+    private func makeUsageGuideController() -> NSViewController {
+        let title = label("使用方法", size: 14, weight: .semibold)
+        let body = label(
+            """
+            先开启麦克风和辅助功能。
+            按 Fn 开始录音，再按一次或松开结束。
+            首次打开测试版：右键 App 选“打开”；若被拦截，到 系统设置 > 隐私与安全性，点“仍要打开”。
+            """,
+            size: 12
+        )
+        body.textColor = .secondaryLabelColor
+        body.maximumNumberOfLines = 0
+
+        let stack = NSStackView(views: [title, hairlineView(), body])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 10
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        title.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        body.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+
+        let content = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 184))
+        content.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
+            stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 16),
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -16),
+        ])
+
+        let controller = NSViewController()
+        controller.view = content
+        return controller
+    }
+
     @objc private func showVersionHistory(_ sender: NSButton) {
         if let popover = versionHistoryPopover, popover.isShown {
             popover.performClose(nil)
@@ -717,6 +837,21 @@ final class MainViewController: NSViewController {
         popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxX)
     }
 
+    @objc private func showTestLogs(_ sender: NSButton) {
+        if let popover = testLogsPopover, popover.isShown {
+            popover.performClose(nil)
+            return
+        }
+        testLogsViewController.reload()
+        let popover = testLogsPopover ?? NSPopover()
+        popover.behavior = .transient
+        popover.animates = true
+        popover.contentSize = NSSize(width: 520, height: 430)
+        popover.contentViewController = testLogsViewController
+        testLogsPopover = popover
+        popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxX)
+    }
+
     @objc private func showModelDetail(_ sender: NSGestureRecognizer) {
         guard let anchor = sender.view else { return }
         if let popover = modelDetailPopover, popover.isShown {
@@ -727,7 +862,7 @@ final class MainViewController: NSViewController {
         if modelDetailPopover == nil {
             popover.behavior = .transient
             popover.animates = true
-            popover.contentSize = NSSize(width: 300, height: 240)
+            popover.contentSize = NSSize(width: 300, height: 282)
             popover.contentViewController = makeModelDetailController()
             modelDetailPopover = popover
         }
@@ -744,6 +879,15 @@ final class MainViewController: NSViewController {
 
         modelValue.maximumNumberOfLines = 2
         modelValue.lineBreakMode = .byWordWrapping
+
+        let backendCaption = label("识别模型", size: 11, weight: .medium)
+        backendCaption.textColor = UITheme.sectionTitle
+        asrBackendMode.setContentHuggingPriority(.required, for: .horizontal)
+        asrBackendMode.widthAnchor.constraint(equalToConstant: 154).isActive = true
+        let backendRow = NSStackView(views: [backendCaption, flexSpacer(), asrBackendMode])
+        backendRow.orientation = .horizontal
+        backendRow.alignment = .centerY
+        backendRow.spacing = 10
 
         let desc = label("本地离线语音识别模型，全程在本机推理，不上传音频。Qwen3-ASR 使用原生 sherpa-onnx 链路。", size: 12)
         desc.textColor = .secondaryLabelColor
@@ -768,13 +912,13 @@ final class MainViewController: NSViewController {
         let installRow = NSStackView(views: [flexSpacer(), modelInstallButton])
         installRow.orientation = .horizontal
 
-        let stack = NSStackView(views: [titleRow, hairlineView(), modelValue, modelProgress, desc, pathCaption, modelPathLabel, installRow])
+        let stack = NSStackView(views: [titleRow, hairlineView(), backendRow, modelValue, modelProgress, desc, pathCaption, modelPathLabel, installRow])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 9
         stack.translatesAutoresizingMaskIntoConstraints = false
 
-        let content = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 240))
+        let content = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 282))
         content.addSubview(stack)
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
@@ -783,6 +927,7 @@ final class MainViewController: NSViewController {
             stack.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -16),
             stack.widthAnchor.constraint(equalToConstant: 268),
             modelValue.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            backendRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
             desc.widthAnchor.constraint(equalTo: stack.widthAnchor),
             modelPathLabel.widthAnchor.constraint(equalTo: stack.widthAnchor),
             modelProgress.widthAnchor.constraint(equalTo: stack.widthAnchor),
@@ -894,6 +1039,37 @@ final class MainViewController: NSViewController {
         alert.runModal()
     }
 
+    @objc private func showDeepSeekBalance(_ sender: NSButton) {
+        if let popover = deepSeekBalancePopover, popover.isShown {
+            popover.close()
+            return
+        }
+
+        let content = DeepSeekBalancePopoverViewController()
+        let popover = NSPopover()
+        popover.behavior = .transient
+        popover.contentSize = NSSize(width: 280, height: 210)
+        popover.contentViewController = content
+        deepSeekBalancePopover = popover
+        popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxY)
+
+        content.showLoading()
+        Task { [weak self, weak content] in
+            guard let self else { return }
+            do {
+                let balance = try await self.deepSeekBalanceClient.fetch()
+                let localSpent = SmartUsageLedgerStore.totalEstimatedCostCNY
+                await MainActor.run {
+                    content?.show(balance: balance, localSpentCNY: localSpent)
+                }
+            } catch {
+                await MainActor.run {
+                    content?.showError(error.localizedDescription)
+                }
+            }
+        }
+    }
+
     @objc private func toggleLaunchAtLogin() {
         do {
             try LoginItemManager.setEnabled(launchAtLogin.state == .on)
@@ -908,6 +1084,7 @@ final class MainViewController: NSViewController {
     }
 
     private func refreshLaunchAtLoginState() {
+        launchAtLogin.isEnabled = true
         launchAtLogin.state = (LoginItemManager.isEnabled || LoginItemManager.isPendingApproval) ? .on : .off
         launchAtLogin.needsDisplay = true
         launchAtLogin.toolTip = LoginItemManager.isPendingApproval
@@ -923,6 +1100,10 @@ final class MainViewController: NSViewController {
         beginHotkeyCaptureForSlot(.secondary)
     }
 
+    @objc private func beginScreenshotHotkeyCapture() {
+        beginHotkeyCaptureForSlot(.screenshot)
+    }
+
     private func beginHotkeyCaptureForSlot(_ slot: HotkeySlot) {
         guard !isCapturingHotkey else { return }
         isCapturingHotkey = true
@@ -932,6 +1113,7 @@ final class MainViewController: NSViewController {
         activeHotkeyButton?.title = "请按快捷键…"
         hotkeyCaptureButton.isEnabled = false
         secondaryHotkeyCaptureButton.isEnabled = false
+        screenshotHotkeyCaptureButton.isEnabled = false
         startHotkeyCaptureTap()
         hotkeyCaptureMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] event in
             guard let self else { return event }
@@ -944,20 +1126,26 @@ final class MainViewController: NSViewController {
         applyHotkey(.defaultBinding, slot: .primary, channel: .chinese)
     }
 
+    @objc private func resetScreenshotHotkey() {
+        applyHotkey(.screenshotDefaultBinding, slot: .screenshot, channel: .chinese)
+    }
+
     @objc private func clearSecondaryHotkey() {
         endHotkeyCapture()
         HotkeyBinding.clear(storageKey: HotkeyBinding.secondaryChineseStorageKey)
         updateHotkeys(
             primary: HotkeyBinding.load(storageKey: HotkeyBinding.chineseStorageKey, fallback: .defaultBinding),
-            secondary: nil
+            secondary: nil,
+            screenshot: HotkeyBinding.load(storageKey: HotkeyBinding.screenshotStorageKey, fallback: .screenshotDefaultBinding)
         )
         onHotkeysChange?(
             HotkeyBinding.load(storageKey: HotkeyBinding.chineseStorageKey, fallback: .defaultBinding),
-            nil
+            nil,
+            HotkeyBinding.load(storageKey: HotkeyBinding.screenshotStorageKey, fallback: .screenshotDefaultBinding)
         )
     }
 
-    func updateHotkeys(primary: HotkeyBinding, secondary: HotkeyBinding?) {
+    func updateHotkeys(primary: HotkeyBinding, secondary: HotkeyBinding?, screenshot: HotkeyBinding) {
         hotkeyValue.stringValue = primary.displayName
         hotkeyValue.textColor = NSColor(calibratedWhite: 1, alpha: 0.92)
         hotkeyCaptureButton.title = primary.displayName
@@ -966,11 +1154,19 @@ final class MainViewController: NSViewController {
         secondaryHotkeyValue.textColor = secondary == nil ? .tertiaryLabelColor : NSColor(calibratedWhite: 1, alpha: 0.92)
         secondaryHotkeyCaptureButton.title = secondary?.displayName ?? "未设置"
         secondaryHotkeyCaptureButton.toolTip = "点击录入备用快捷键"
+        screenshotHotkeyValue.stringValue = screenshot.screenshotDisplayName
+        screenshotHotkeyValue.textColor = NSColor(calibratedWhite: 1, alpha: 0.92)
+        screenshotHotkeyCaptureButton.title = screenshot.screenshotDisplayName
+        screenshotHotkeyCaptureButton.toolTip = "点击录入截图快捷键，触发方式为双击"
         detail.stringValue = "\(primary.displayName) 录音"
     }
 
     func updateHotkey(_ binding: HotkeyBinding) {
-        updateHotkeys(primary: binding, secondary: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryChineseStorageKey))
+        updateHotkeys(
+            primary: binding,
+            secondary: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryChineseStorageKey),
+            screenshot: HotkeyBinding.load(storageKey: HotkeyBinding.screenshotStorageKey, fallback: .screenshotDefaultBinding)
+        )
     }
 
     private func startHotkeyCaptureTap() {
@@ -1135,11 +1331,14 @@ final class MainViewController: NSViewController {
             binding.save(storageKey: HotkeyBinding.chineseStorageKey)
         case .secondary:
             binding.save(storageKey: HotkeyBinding.secondaryChineseStorageKey)
+        case .screenshot:
+            binding.save(storageKey: HotkeyBinding.screenshotStorageKey)
         }
         let primary = HotkeyBinding.load(storageKey: HotkeyBinding.chineseStorageKey, fallback: .defaultBinding)
         let secondary = HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryChineseStorageKey)
-        updateHotkeys(primary: primary, secondary: secondary)
-        onHotkeysChange?(primary, secondary)
+        let screenshot = HotkeyBinding.load(storageKey: HotkeyBinding.screenshotStorageKey, fallback: .screenshotDefaultBinding)
+        updateHotkeys(primary: primary, secondary: secondary, screenshot: screenshot)
+        onHotkeysChange?(primary, secondary, screenshot)
     }
 
     private func endHotkeyCapture() {
@@ -1155,13 +1354,15 @@ final class MainViewController: NSViewController {
         capturingHotkeySlot = nil
         hotkeyCaptureButton.isEnabled = true
         secondaryHotkeyCaptureButton.isEnabled = true
+        screenshotHotkeyCaptureButton.isEnabled = true
         captureModifierKeyCodes.removeAll()
     }
 
     private func refreshHotkeyLabels() {
         updateHotkeys(
             primary: HotkeyBinding.load(storageKey: HotkeyBinding.chineseStorageKey, fallback: .defaultBinding),
-            secondary: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryChineseStorageKey)
+            secondary: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryChineseStorageKey),
+            screenshot: HotkeyBinding.load(storageKey: HotkeyBinding.screenshotStorageKey, fallback: .screenshotDefaultBinding)
         )
     }
 
@@ -1171,6 +1372,8 @@ final class MainViewController: NSViewController {
             return hotkeyCaptureButton
         case .secondary:
             return secondaryHotkeyCaptureButton
+        case .screenshot:
+            return screenshotHotkeyCaptureButton
         case nil:
             return nil
         }
@@ -1320,6 +1523,10 @@ final class MainViewController: NSViewController {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
     }
 
+    @objc private func openScreenRecording() {
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
+    }
+
     @objc private func openKeyboard() {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension")!)
     }
@@ -1369,7 +1576,6 @@ final class MainViewController: NSViewController {
             translationDirection: translationDirection,
             usage: usage
         )
-        recentRecords.removeAll { $0.text == text }
         recentRecords.insert(record, at: 0)
         recentRecords = Array(recentRecords.prefix(5))
         saveRecentTranscriptions()
@@ -1425,6 +1631,7 @@ final class MainViewController: NSViewController {
             usageLabel.lineBreakMode = .byTruncatingTail
             usageLabel.translatesAutoresizingMaskIntoConstraints = false
             usageLabel.isHidden = record.usage == nil
+            usageLabel.toolTip = record.usage?.detailText
 
             let textLabel = label(displayText(for: record), size: 12)
             textLabel.maximumNumberOfLines = record.hasTranslation ? 5 : 3
@@ -1780,7 +1987,7 @@ private final class DeveloperLexiconDialog: NSObject {
     func runModal() -> Result {
         let alert = NSAlert()
         alert.messageText = "开发术语词库"
-        alert.informativeText = "每行一个术语：标准词 | 分类 | 别名1, 别名2。新增、编辑或删除对应行即可管理词库。"
+        alert.informativeText = "每行一个专业术语：标准词 | 分类 | 别名1, 别名2。新增一行即可添加词库，编辑或删除对应行即可管理现有术语。"
         alert.alertStyle = .informational
         alert.addButton(withTitle: "保存")
         alert.addButton(withTitle: "恢复默认")
@@ -1825,7 +2032,7 @@ private final class DeveloperLexiconDialog: NSObject {
         scrollView.documentView = textView
         scrollView.translatesAutoresizingMaskIntoConstraints = false
 
-        let hint = NSTextField(labelWithString: "分类可用：tool、model、framework、language、api、product、project、acronym。无法识别的分类会按 project 保存。")
+        let hint = NSTextField(labelWithString: "示例：OpenTelemetry | framework | open telemetry, otel。分类可用：tool、model、framework、language、api、product、project、acronym；无法识别的分类会按 project 保存。")
         hint.font = .systemFont(ofSize: 11)
         hint.textColor = .secondaryLabelColor
         hint.maximumNumberOfLines = 2

@@ -107,7 +107,22 @@ enum DeveloperLexiconStore {
     }
 
     private static func mergeStoredTermsWithDefaults(_ stored: [DeveloperTerm]) -> [DeveloperTerm] {
-        var merged = stored.map(clean)
+        let defaultsByCanonical = Dictionary(
+            uniqueKeysWithValues: defaultTerms.map { ($0.canonical.lowercased(), clean($0)) }
+        )
+        var merged = stored.map { storedTerm in
+            let cleaned = clean(storedTerm)
+            guard let defaultTerm = defaultsByCanonical[cleaned.canonical.lowercased()] else {
+                return cleaned
+            }
+            return DeveloperTerm(
+                id: cleaned.id,
+                canonical: cleaned.canonical,
+                aliases: uniqueAliases(cleaned.aliases + defaultTerm.aliases),
+                category: cleaned.category,
+                caseSensitive: cleaned.caseSensitive
+            )
+        }
         let existing = Set(merged.map { $0.canonical.lowercased() })
         let missingDefaults = defaultTerms.filter { !existing.contains($0.canonical.lowercased()) }
         merged.append(contentsOf: missingDefaults)
@@ -121,7 +136,7 @@ enum DeveloperLexiconStore {
         DeveloperTerm(canonical: "ChatGPT", aliases: ["chat gpt", "chatgpt", "GPT", "gpt"], category: .tool),
         DeveloperTerm(canonical: "GitHub", aliases: ["github", "git hub"], category: .tool),
         DeveloperTerm(canonical: "Git", aliases: ["git"], category: .tool),
-        DeveloperTerm(canonical: "Obsidian", aliases: ["obsidian", "oppoingpo", "obpoing", "obpoingpo", "oppoing", "欧布西迪安", "黑曜石"], category: .tool),
+        DeveloperTerm(canonical: "Obsidian", aliases: ["obsidian", "obsidian 笔记", "obsidian note", "oseing", "oosing", "oing", "osing", "oppoingpo", "obpoing", "obpoingpo", "oppoing", "欧布西迪安", "欧布西迪安笔记", "黑曜石", "黑曜石笔记"], category: .tool),
         DeveloperTerm(canonical: "Qwen", aliases: ["qwen", "千问", "通义千问"], category: .model),
         DeveloperTerm(canonical: "Qwen3-ASR", aliases: ["qwen3 asr", "qwen asr", "q wen asr", "千问 asr", "Qwen ASR", "Qwen3 ASR"], category: .model),
         DeveloperTerm(canonical: "SenseVoice", aliases: ["sense voice", "sensevoice", "森斯 voice"], category: .model),
@@ -142,7 +157,8 @@ enum DeveloperLexiconStore {
         DeveloperTerm(canonical: "CLI", aliases: ["cli", "c l i"], category: .api),
         DeveloperTerm(canonical: "UI", aliases: ["ui", "u i"], category: .acronym),
         DeveloperTerm(canonical: "UX", aliases: ["ux", "u x"], category: .acronym),
-        DeveloperTerm(canonical: "JSON", aliases: ["json", "j son"], category: .api),
+        DeveloperTerm(canonical: "JSON", aliases: ["json", "j son", "jason", "杰森"], category: .api),
+        DeveloperTerm(canonical: "JSON 格式", aliases: ["json 格式", "j son 格式", "jason 格式", "杰森格式", "JSON format"], category: .api),
         DeveloperTerm(canonical: "Markdown", aliases: ["markdown", "mark down"], category: .api),
         DeveloperTerm(canonical: "Node.js", aliases: ["node js", "node.js", "node"], category: .language),
         DeveloperTerm(canonical: "Python", aliases: ["python", "派森"], category: .language),

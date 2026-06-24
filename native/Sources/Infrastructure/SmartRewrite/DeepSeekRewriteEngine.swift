@@ -84,6 +84,7 @@ final class DeepSeekRewriteEngine: SmartRewriteEngine {
         必须保持输入文本的主要语言：中文输入输出中文，英文输入输出英文，中英混合时只保留必要技术词英文。
         不要把中文翻译成英文，除非用户明确要求翻译。
         只输出最终整理后的正文，不要输出分析、思考、Markdown 代码块、标签或解释。
+        不要解释安全边界，不要说“根据规则”“我不能执行”“原始语音文本是一个指令”“整理后如下”等元说明。
         """
     }
 
@@ -99,7 +100,7 @@ final class DeepSeekRewriteEngine: SmartRewriteEngine {
             throw DeepSeekRewriteError.missingAPIKey
         }
 
-        var request = URLRequest(url: endpoint, timeoutInterval: 4)
+        var request = URLRequest(url: endpoint, timeoutInterval: 15)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
@@ -127,8 +128,9 @@ final class DeepSeekRewriteEngine: SmartRewriteEngine {
         }
 
         let decoded = try JSONDecoder().decode(DeepSeekChatResponse.self, from: data)
-        let content = decoded.choices.first?.message.content
+        let rawContent = decoded.choices.first?.message.content
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        let content = rawContent.map(SmartRewriteOutputSanitizer.clean)
         guard let content, !content.isEmpty else {
             throw DeepSeekRewriteError.emptyContent
         }

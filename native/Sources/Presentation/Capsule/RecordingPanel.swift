@@ -6,6 +6,7 @@ final class RecordingPanel: NSPanel {
     private let capsule = RecordingCapsuleView()
     private let fadeDuration: TimeInterval = 0.25
     private let resizeDuration: TimeInterval = 0.18
+    private var visibilityGeneration = 0
 
     init() {
         super.init(
@@ -42,6 +43,7 @@ final class RecordingPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 
     func show(state: String, draft: String? = nil) {
+        visibilityGeneration += 1
         let shouldFadeIn = !isVisible
         capsule.update(state: state, draft: draft)
         resizeAndPosition()
@@ -67,13 +69,16 @@ final class RecordingPanel: NSPanel {
 
     func hideAnimated() {
         guard isVisible else { return }
+        visibilityGeneration += 1
+        let generation = visibilityGeneration
         NSAnimationContext.runAnimationGroup { context in
             context.duration = fadeDuration
             context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             animator().alphaValue = 0
         } completionHandler: { [weak self] in
-            self?.orderOut(nil)
-            self?.alphaValue = 1
+            guard let self, generation == self.visibilityGeneration else { return }
+            self.orderOut(nil)
+            self.alphaValue = 1
         }
     }
 

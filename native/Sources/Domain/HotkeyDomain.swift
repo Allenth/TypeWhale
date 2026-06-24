@@ -102,6 +102,7 @@ struct HotkeyBinding: Codable, Equatable {
     static let storageKey = "hotkeyBinding"
     static let chineseStorageKey = "chineseHotkeyBinding"
     static let secondaryChineseStorageKey = "secondaryChineseHotkeyBinding"
+    static let screenshotStorageKey = "screenshotHotkeyBinding"
     static let fnDefaultMigrationKey = "hotkeyDefaultMigration.fnDefault.v1"
     let kind: Kind
     let keyCode: Int?
@@ -109,6 +110,10 @@ struct HotkeyBinding: Codable, Equatable {
 
     static var defaultBinding: HotkeyBinding {
         HotkeyBinding(kind: .function, keyCode: HotkeyKeyCodes.function, modifierKeyCodes: [])
+    }
+
+    static var screenshotDefaultBinding: HotkeyBinding {
+        HotkeyBinding(kind: .modifier, keyCode: HotkeyKeyCodes.rightOption, modifierKeyCodes: [])
     }
 
     static func load() -> HotkeyBinding {
@@ -160,6 +165,10 @@ struct HotkeyBinding: Codable, Equatable {
             let key = keyCode.map { HotkeyKeyCodes.displayName(for: $0) } ?? "未设置"
             return (modifiers + [key]).joined(separator: " + ")
         }
+    }
+
+    var screenshotDisplayName: String {
+        "双击\(displayName)"
     }
 
     var pressInstruction: String {

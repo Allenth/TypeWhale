@@ -26,23 +26,39 @@ enum AppPaths {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let lifecycle = AppLifecycleCoordinator(controller: MainViewController())
+    private lazy var lifecycle = AppLifecycleCoordinator(controller: MainViewController())
     private var controller: MainViewController { lifecycle.controller }
     private lazy var speechInput = SpeechInputCoordinator(
         controller: controller,
-        showMainWindow: { [weak self] in self?.lifecycle.showMainWindow() }
+        hideMainWindow: { [weak self] in self?.lifecycle.hideMainWindow() },
+        shouldKeepMainWindowVisibleForScreenshot: { [weak self] in
+            self?.lifecycle.shouldKeepMainWindowVisibleForScreenshot() ?? false
+        }
     )
 
+    override init() {
+        LaunchDiagnostics.mark("AppDelegate init")
+        super.init()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        LaunchDiagnostics.mark("applicationDidFinishLaunching begin")
+        LaunchDiagnostics.mark("lifecycle.setup begin")
         lifecycle.setup()
+        LaunchDiagnostics.mark("lifecycle.setup done")
         do {
+            LaunchDiagnostics.mark("AppPaths.prepare begin")
             try AppPaths.prepare()
+            LaunchDiagnostics.mark("AppPaths.prepare done")
         } catch {
+            LaunchDiagnostics.mark("AppPaths.prepare failed: \(error.localizedDescription)")
             controller.status.stringValue = "无法准备应用目录"
             controller.detail.stringValue = error.localizedDescription
         }
 
+        LaunchDiagnostics.mark("speechInput.start begin")
         speechInput.start()
+        LaunchDiagnostics.mark("speechInput.start done")
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -65,11 +81,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 enum TypeWhaleApplication {
     @MainActor
     static func main() {
+        CrashReporter.install()
+        LaunchDiagnostics.mark("main begin")
         let app = NSApplication.shared
+        LaunchDiagnostics.mark("NSApplication.shared ready")
         app.appearance = NSAppearance(named: .darkAqua)
         let delegate = AppDelegate()
         app.delegate = delegate
         app.setActivationPolicy(.accessory)
+        LaunchDiagnostics.mark("app.run begin")
         app.run()
     }
 }

@@ -36,6 +36,10 @@ int TypeSpeakerNativeVadHasSpeech(
 void TypeSpeakerNativeRecognizerDestroy(TypeSpeakerNativeRecognizer recognizer);
 void TypeSpeakerNativeStringFree(char *value);
 
+// Defined in LaunchProbe.c. Declared here so Swift (via this bridging header)
+// can funnel crash-handler output through the same dependency-free POSIX logger.
+void typewhale_launch_probe_log(const char *message);
+
 #ifdef __cplusplus
 }
 #endif

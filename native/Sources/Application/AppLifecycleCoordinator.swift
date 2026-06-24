@@ -15,11 +15,17 @@ final class AppLifecycleCoordinator: NSObject {
     }
 
     func setup() {
+        LaunchDiagnostics.mark("observeSystemPowerOff begin")
         observeSystemPowerOff()
+        LaunchDiagnostics.mark("setupMainMenu begin")
         setupMainMenu()
+        LaunchDiagnostics.mark("setupStatusItem begin")
         setupStatusItem()
+        LaunchDiagnostics.mark("setupMainWindow begin")
         setupMainWindow()
+        LaunchDiagnostics.mark("showMainWindow begin")
         showMainWindow()
+        LaunchDiagnostics.mark("AppLifecycleCoordinator setup done")
     }
 
     deinit {
@@ -161,8 +167,13 @@ final class AppLifecycleCoordinator: NSObject {
         window?.performClose(nil)
     }
 
-    @objc private func hideMainWindow() {
+    @objc func hideMainWindow() {
         window?.orderOut(nil)
+    }
+
+    func shouldKeepMainWindowVisibleForScreenshot() -> Bool {
+        guard let window, window.isVisible else { return false }
+        return NSApp.isActive || window.isKeyWindow || window.isMainWindow
     }
 
     @objc private func openMainWindowFromStatusItem() {

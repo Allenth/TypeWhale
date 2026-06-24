@@ -2,18 +2,29 @@ import ApplicationServices
 import Foundation
 
 final class HotkeyMonitor {
+    private enum Timing {
+        static let screenshotDoubleTapWindowSeconds: TimeInterval = 0.42
+    }
+
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
     private var bindings = [
         HotkeyBinding.load(storageKey: HotkeyBinding.chineseStorageKey, fallback: .defaultBinding),
     ]
+    private var screenshotBinding = HotkeyBinding.load(
+        storageKey: HotkeyBinding.screenshotStorageKey,
+        fallback: .screenshotDefaultBinding
+    )
     private var activeModifierKeyCodes: Set<Int> = []
     private var triggerDown = false
+    private var screenshotTriggerDown = false
+    private var lastScreenshotTapAt: Date?
     private var activeChannel: SpeechInputChannel?
     private var activeBinding: HotkeyBinding?
     var onDown: ((SpeechInputChannel, HotkeyBinding) -> Void)?
     var onUp: ((SpeechInputChannel, HotkeyBinding) -> Void)?
     var onAutoTranslateToggle: (() -> Void)?
+    var onScreenshot: (() -> Void)?
 
     func start() {
         guard tap == nil || !isTapEnabled else { return }
@@ -65,9 +76,16 @@ final class HotkeyMonitor {
     }
 
     func update(primary: HotkeyBinding, secondary: HotkeyBinding?) {
+        update(primary: primary, secondary: secondary, screenshot: screenshotBinding)
+    }
+
+    func update(primary: HotkeyBinding, secondary: HotkeyBinding?, screenshot: HotkeyBinding) {
         self.bindings = [primary] + (secondary.map { [$0] } ?? [])
+        self.screenshotBinding = screenshot
         activeModifierKeyCodes.removeAll()
         triggerDown = false
+        screenshotTriggerDown = false
+        lastScreenshotTapAt = nil
         activeChannel = nil
         activeBinding = nil
     }
@@ -95,6 +113,9 @@ final class HotkeyMonitor {
             } else {
                 activeModifierKeyCodes.remove(keyCode)
             }
+        }
+        if handleScreenshotFlagsChanged(keyCode: keyCode, eventFlags: eventFlags) {
+            return true
         }
         if triggerDown, let activeChannel, let activeBinding {
             if !isBindingDown(activeBinding, keyCode: keyCode, eventFlags: eventFlags) {
@@ -124,6 +145,10 @@ final class HotkeyMonitor {
             return true
         }
 
+        if handleScreenshotKey(eventKeyCode: eventKeyCode, eventFlags: event.flags, isDown: isDown) {
+            return true
+        }
+
         guard let binding = bindings.first(where: { binding in
             binding.kind == .combo &&
             binding.keyCode == eventKeyCode &&
@@ -132,6 +157,47 @@ final class HotkeyMonitor {
             return false
         }
         return updateTrigger(isDown: isDown, channel: .chinese, binding: binding)
+    }
+
+    private func handleScreenshotFlagsChanged(keyCode: Int, eventFlags: CGEventFlags) -> Bool {
+        guard screenshotBinding.kind == .function || screenshotBinding.kind == .modifier else { return false }
+        let isDown = isBindingDown(screenshotBinding, keyCode: keyCode, eventFlags: eventFlags)
+        guard isDown != screenshotTriggerDown else { return false }
+        screenshotTriggerDown = isDown
+        if !isDown {
+            return registerScreenshotTap() || screenshotConflictsWithSpeechBinding
+        }
+        return screenshotConflictsWithSpeechBinding
+    }
+
+    private func handleScreenshotKey(eventKeyCode: Int, eventFlags: CGEventFlags, isDown: Bool) -> Bool {
+        guard screenshotBinding.kind == .combo,
+              screenshotBinding.keyCode == eventKeyCode,
+              requiredModifiersAreActive(for: screenshotBinding, eventFlags: eventFlags) else {
+            return false
+        }
+        guard isDown != screenshotTriggerDown else { return false }
+        screenshotTriggerDown = isDown
+        if !isDown {
+            return registerScreenshotTap() || screenshotConflictsWithSpeechBinding
+        }
+        return screenshotConflictsWithSpeechBinding
+    }
+
+    private func registerScreenshotTap() -> Bool {
+        let now = Date()
+        guard let previousTapAt = lastScreenshotTapAt,
+              now.timeIntervalSince(previousTapAt) <= Timing.screenshotDoubleTapWindowSeconds else {
+            lastScreenshotTapAt = now
+            return false
+        }
+        lastScreenshotTapAt = nil
+        onScreenshot?()
+        return true
+    }
+
+    private var screenshotConflictsWithSpeechBinding: Bool {
+        bindings.contains(screenshotBinding)
     }
 
     private func isAutoTranslateToggle(eventKeyCode: Int, eventFlags: CGEventFlags) -> Bool {

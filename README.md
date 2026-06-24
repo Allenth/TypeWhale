@@ -24,6 +24,7 @@ Realtime preview is only used as feedback. The final inserted text comes from th
 - Global hotkey recording: press to start/stop, or hold to talk and release to finish.
 - Non-activating recording capsule with animated microphone waveform.
 - Local SenseVoice / sherpa-onnx ASR integration.
+- Screenshot capture via a dedicated hotkey: region selection with resize handles, annotation tools (rectangle, arrow, pen, text, undo), OCR text recognition, translation, copy to clipboard, and save to file.
 - Clipboard-based final insertion with clipboard restoration.
 - Recent transcription history.
 - Microphone, Accessibility, hotkey, model, and login-item status in the main window.
@@ -48,7 +49,7 @@ See [docs/MODEL_SETUP.md](docs/MODEL_SETUP.md) for model placement.
 
 Requirements:
 
-- macOS 13 or later.
+- macOS 14 or later.
 - Xcode Command Line Tools.
 - A local sherpa-onnx installation that provides C headers and dynamic libraries.
 - Local model files prepared outside this repository.

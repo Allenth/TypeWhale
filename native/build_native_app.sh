@@ -8,6 +8,7 @@ SHERPA_ROOT="${TYPESPEAKER_SHERPA_ROOT:-/Library/Frameworks/Python.framework/Ver
 NATIVE_ASR="$CONTENTS/Resources/NativeASR"
 NATIVE_ASR_LIB="$NATIVE_ASR/lib"
 NATIVE_ASR_OBJECT="$ROOT/native/.TypeSpeakerNativeASR.o"
+LAUNCH_PROBE_OBJECT="$ROOT/native/.LaunchProbe.o"
 BUNDLED_MODELS="$CONTENTS/Resources/Models"
 BUNDLED_SENSEVOICE="$BUNDLED_MODELS/sensevoice-native"
 BUNDLED_VAD="$BUNDLED_MODELS/vad"
@@ -99,10 +100,18 @@ fi
 
 xcrun clang \
   -O2 \
-  -target arm64-apple-macosx13.0 \
+  -target arm64-apple-macosx14.0 \
   -I "$SHERPA_ROOT/include" \
   -c "$ROOT/native/TypeSpeakerNativeASR.c" \
   -o "$NATIVE_ASR_OBJECT"
+
+# Earliest-possible, dependency-free launch/crash probe (pure POSIX). Linked into
+# the executable so the Swift CrashReporter can funnel output through it.
+xcrun clang \
+  -O2 \
+  -target arm64-apple-macosx14.0 \
+  -c "$ROOT/native/LaunchProbe.c" \
+  -o "$LAUNCH_PROBE_OBJECT"
 
 swift_sources=("$ROOT/native/TypeSpeakerApp.swift")
 if [[ -d "$ROOT/native/Sources" ]]; then
@@ -113,7 +122,7 @@ fi
 
 xcrun swiftc \
   -O \
-  -target arm64-apple-macosx13.0 \
+  -target arm64-apple-macosx14.0 \
   -import-objc-header "$ROOT/native/TypeSpeakerNativeASR.h" \
   -framework AppKit \
   -framework AVFoundation \
@@ -124,12 +133,13 @@ xcrun swiftc \
   -framework ServiceManagement \
   "${swift_sources[@]}" \
   "$NATIVE_ASR_OBJECT" \
+  "$LAUNCH_PROBE_OBJECT" \
   -L "$NATIVE_ASR_LIB" \
   -l sherpa-onnx-c-api \
   -Xlinker -rpath \
   -Xlinker @executable_path/../Resources/NativeASR/lib \
   -o "$CONTENTS/MacOS/TypeWhale"
-rm -f "$NATIVE_ASR_OBJECT"
+rm -f "$NATIVE_ASR_OBJECT" "$LAUNCH_PROBE_OBJECT"
 
 cat > "$CONTENTS/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -143,9 +153,9 @@ cat > "$CONTENTS/Info.plist" <<'PLIST'
 <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
 <key>CFBundleName</key><string>TypeWhale</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>1.2.42</string>
-<key>CFBundleVersion</key><string>199</string>
-<key>LSMinimumSystemVersion</key><string>13.0</string>
+<key>CFBundleShortVersionString</key><string>1.3.0</string>
+<key>CFBundleVersion</key><string>208</string>
+<key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSMicrophoneUsageDescription</key><string>TypeWhale 需要使用麦克风进行本地语音转文字。</string>
 </dict></plist>

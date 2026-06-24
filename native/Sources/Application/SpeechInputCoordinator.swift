@@ -6,10 +6,12 @@ final class SpeechInputCoordinator {
     private enum Timing {
         static let autoFinishPauseSeconds: TimeInterval = 1.5
         static let initialSilenceAutoFinishSeconds: TimeInterval = 3.0
+        static let holdToRecordSeconds: TimeInterval = 0.28
     }
 
     private let controller: MainViewController
-    private let showMainWindow: () -> Void
+    private let hideMainWindow: () -> Void
+    private let shouldKeepMainWindowVisibleForScreenshot: () -> Bool
     private let recorder = AudioRecorder()
     private let popup = RecordingPanel()
     private let hotkey = HotkeyMonitor()
@@ -20,6 +22,9 @@ final class SpeechInputCoordinator {
     private lazy var asr = SenseVoiceRouter(runtimeName: "final", native: nativeASR)
     private lazy var realtimeASR = SenseVoiceRouter(runtimeName: "realtime", native: nativeASR)
     private lazy var smartInputRouter = SmartInputRouter(engine: smartEngine)
+    private lazy var screenshotCoordinator = ScreenshotCoordinator { [weak self] status, detail, tone in
+        self?.controller.setPrimaryStatus(status, detail: detail, tone: tone, resetWaveform: true)
+    }
     private let pasteCoordinator = PasteCoordinator()
     private var inputState: SpeechInputState = .idle
     private var activeSession: SpeechSession?
@@ -39,10 +44,19 @@ final class SpeechInputCoordinator {
     private var secondaryHotkeyBinding = HotkeyBinding.loadOptional(
         storageKey: HotkeyBinding.secondaryChineseStorageKey
     )
+    private var screenshotHotkeyBinding = HotkeyBinding.load(
+        storageKey: HotkeyBinding.screenshotStorageKey,
+        fallback: .screenshotDefaultBinding
+    )
 
-    init(controller: MainViewController, showMainWindow: @escaping () -> Void) {
+    init(
+        controller: MainViewController,
+        hideMainWindow: @escaping () -> Void,
+        shouldKeepMainWindowVisibleForScreenshot: @escaping () -> Bool
+    ) {
         self.controller = controller
-        self.showMainWindow = showMainWindow
+        self.hideMainWindow = hideMainWindow
+        self.shouldKeepMainWindowVisibleForScreenshot = shouldKeepMainWindowVisibleForScreenshot
     }
 
     func start() {
@@ -53,11 +67,16 @@ final class SpeechInputCoordinator {
         recorder.onRealtimeSnapshot = { [weak self] taskID, url in
             self?.receiveRealtimeSnapshot(taskID: taskID, url: url)
         }
-        controller.updateHotkeys(primary: primaryHotkeyBinding, secondary: secondaryHotkeyBinding)
-        hotkey.update(primary: primaryHotkeyBinding, secondary: secondaryHotkeyBinding)
+        controller.updateHotkeys(
+            primary: primaryHotkeyBinding,
+            secondary: secondaryHotkeyBinding,
+            screenshot: screenshotHotkeyBinding
+        )
+        hotkey.update(primary: primaryHotkeyBinding, secondary: secondaryHotkeyBinding, screenshot: screenshotHotkeyBinding)
         hotkey.onDown = { [weak self] channel, binding in self?.handleHotkeyDown(channel: channel, binding: binding) }
         hotkey.onUp = { [weak self] channel, binding in self?.handleHotkeyUp(channel: channel, binding: binding) }
         hotkey.onAutoTranslateToggle = { [weak self] in self?.toggleAutoTranslateFromHotkey() }
+        hotkey.onScreenshot = { [weak self] in self?.beginScreenshotFromHotkey() }
         modelInstaller.onStateChange = { [weak self] state in
             self?.controller.updateModelState(state)
             if case .ready = state {
@@ -73,19 +92,17 @@ final class SpeechInputCoordinator {
         controller.onInstallModel = { [weak self] in
             self?.modelInstaller.install()
         }
-        controller.onHotkeysChange = { [weak self] primary, secondary in
+        controller.onHotkeysChange = { [weak self] primary, secondary, screenshot in
             self?.primaryHotkeyBinding = primary
             self?.secondaryHotkeyBinding = secondary
-            self?.hotkey.update(primary: primary, secondary: secondary)
+            self?.screenshotHotkeyBinding = screenshot
+            self?.hotkey.update(primary: primary, secondary: secondary, screenshot: screenshot)
             self?.refreshPermissions()
         }
         modelInstaller.refresh()
         hotkey.start()
         asr.start()
         realtimeASR.start()
-        if let error = asr.startupError, SenseVoiceModelManifest.preferredModelDirectory == nil {
-            controller.setPrimaryStatus("需要安装本地模型", detail: error, tone: .warning, resetWaveform: true)
-        }
         refreshPermissions()
         PermissionDiagnosticsProvider.requestAccessibilityIfNeeded()
         Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
@@ -117,6 +134,8 @@ final class SpeechInputCoordinator {
         controller.micStatus.textColor = permissions.microphoneAuthorized ? .systemGreen : .systemRed
         controller.accessibilityStatus.stringValue = permissions.accessibilityTrusted ? "● 已开启" : "● 未开启"
         controller.accessibilityStatus.textColor = permissions.accessibilityTrusted ? .systemGreen : .systemRed
+        controller.screenRecordingStatus.stringValue = permissions.screenRecordingAuthorized ? "● 已开启" : "● 未开启"
+        controller.screenRecordingStatus.textColor = permissions.screenRecordingAuthorized ? .systemGreen : .systemRed
         if globalListening {
             controller.hotkeyStatus.stringValue = "● 监听中"
             controller.hotkeyStatus.textColor = .systemGreen
@@ -127,6 +146,7 @@ final class SpeechInputCoordinator {
     }
 
     private func handleHotkeyDown(channel: SpeechInputChannel, binding: HotkeyBinding) {
+        if screenshotCoordinator.isActive { return }
         hotkeyIsPressed = true
         longPressWorkItem?.cancel()
         guard activeSession == nil, !recorder.isRecording else { return }
@@ -141,13 +161,14 @@ final class SpeechInputCoordinator {
             )
         }
         longPressWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28, execute: workItem)
+        DispatchQueue.main.asyncAfter(deadline: .now() + Timing.holdToRecordSeconds, execute: workItem)
     }
 
     private func handleHotkeyUp(channel: SpeechInputChannel, binding: HotkeyBinding) {
         hotkeyIsPressed = false
         longPressWorkItem?.cancel()
         longPressWorkItem = nil
+        if screenshotCoordinator.isActive { return }
         if suppressNextHotkeyUp {
             suppressNextHotkeyUp = false
             return
@@ -174,22 +195,23 @@ final class SpeechInputCoordinator {
         controller.toggleAutoTranslateFromShortcut()
     }
 
+    private func beginScreenshotFromHotkey() {
+        guard activeSession == nil, !recorder.isRecording else { return }
+        longPressWorkItem?.cancel()
+        longPressWorkItem = nil
+        hotkeyIsPressed = false
+        if !shouldKeepMainWindowVisibleForScreenshot() {
+            hideMainWindow()
+        }
+        screenshotCoordinator.begin()
+    }
+
     private func startRecording(
         instructions: String,
         activation: RecordingActivation,
         channel: SpeechInputChannel? = nil
     ) {
         guard !recorder.isRecording else { return }
-        guard nativeASR.isAvailable else {
-            controller.setPrimaryStatus(
-                "需要安装本地模型",
-                detail: "请先在主窗口点击“安装模型”",
-                tone: .warning,
-                resetWaveform: true
-            )
-            showMainWindow()
-            return
-        }
         let selectedBackend = controller.asrBackend
         let resolvedBackend = selectedBackend.resolvedBackend
         let realtimeEnabled = controller.realtimePreviewEnabled && resolvedBackend == .senseVoice
@@ -265,7 +287,7 @@ final class SpeechInputCoordinator {
             tone: .processing,
             resetWaveform: true
         )
-        popup.hideAnimated()
+        popup.show(state: "检测中")
         asr.containsSpeech(audio: url) { [weak self] response in
             DispatchQueue.main.async {
                 guard let self else { return }
@@ -541,7 +563,7 @@ final class SpeechInputCoordinator {
                 rawText: sourceForTranslation,
                 direction: direction,
                 context: context,
-                timeoutSeconds: 4.5
+                timeoutSeconds: 10.0
             )
             await MainActor.run {
                 let finalText = translation?.translatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
@@ -669,6 +691,8 @@ final class SpeechInputCoordinator {
     }
 
     private func submitPasteResult(_ result: PendingPasteResult) {
+        addRecentTranscription(for: result, completedAt: Date())
+        SmartUsageLedgerStore.record(result.usage)
         pendingPasteResults.append(result)
         drainPendingPasteResultsIfPossible()
     }
@@ -732,15 +756,12 @@ final class SpeechInputCoordinator {
         if shouldUpdateInterface {
             switch outcome {
             case .directInserted:
-                addRecentTranscription(for: result, outcome: outcome)
                 controller.detail.stringValue = "识别结果已直接输入，未改动剪贴板"
                 hidePopup(after: 0, task: task)
             case .restored:
-                addRecentTranscription(for: result, outcome: outcome)
                 controller.detail.stringValue = "识别结果已粘贴，原剪贴板已恢复"
                 hidePopup(after: 0, task: task)
             case .preservedUserClipboard:
-                addRecentTranscription(for: result, outcome: outcome)
                 controller.detail.stringValue = "识别结果已粘贴，检测到新的剪贴板内容并已保留"
                 hidePopup(after: 0, task: task)
             case .failed(let message):
@@ -755,10 +776,10 @@ final class SpeechInputCoordinator {
         drainPendingPasteResultsIfPossible()
     }
 
-    private func addRecentTranscription(for result: PendingPasteResult, outcome: PasteOutcome) {
+    private func addRecentTranscription(for result: PendingPasteResult, completedAt: Date) {
         let totalSeconds = max(
             0,
-            (outcome.pasteCompletedAt ?? Date()).timeIntervalSince(result.task.finishRequestedAt)
+            completedAt.timeIntervalSince(result.task.finishRequestedAt)
         )
         controller.addRecentTranscription(
             result.text,

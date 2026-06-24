@@ -63,7 +63,7 @@ final class SmartInputRouter {
     ) -> SmartRewriteProgressInfo {
         let profile = RewriteProfile(
             mode: chooseMode(preference: preference, context: context),
-            timeoutSeconds: 3.0
+            timeoutSeconds: 8.0
         )
         return SmartRewriteProgressInfo(
             mode: profile.mode,
@@ -85,7 +85,7 @@ final class SmartInputRouter {
 
         let profile = RewriteProfile(
             mode: chooseMode(preference: preference, context: context),
-            timeoutSeconds: 3.0
+            timeoutSeconds: 8.0
         )
 
         guard profile.shouldRewrite else {
