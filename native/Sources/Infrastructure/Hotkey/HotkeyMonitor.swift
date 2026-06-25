@@ -1,7 +1,15 @@
+import AppKit
 import ApplicationServices
 import Foundation
 
 final class HotkeyMonitor {
+    private enum MediaKey {
+        static let systemDefinedEventType = CGEventType(rawValue: 14)!
+        static let auxControlButtonSubtype = 8
+        static let play = 16
+        static let keyDownState = 0x0A
+    }
+
     private enum Timing {
         static let screenshotDoubleTapWindowSeconds: TimeInterval = 0.42
         static let actionTapWindowSeconds: TimeInterval = 0.42
@@ -16,14 +24,17 @@ final class HotkeyMonitor {
         storageKey: HotkeyBinding.screenshotStorageKey,
         fallback: .screenshotDefaultBinding
     )
+    private var secondaryScreenshotBinding = HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryScreenshotStorageKey)
     private var autoTranslateBinding = HotkeyBinding.loadOptional(storageKey: HotkeyBinding.autoTranslateStorageKey)
     private var mainWindowBinding = HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey)
     private var activeModifierKeyCodes: Set<Int> = []
     private var triggerDown = false
     private var screenshotTriggerDown = false
+    private var secondaryScreenshotTriggerDown = false
     private var autoTranslateTriggerDown = false
     private var mainWindowTriggerDown = false
     private var lastScreenshotTapAt: Date?
+    private var lastSecondaryScreenshotTapAt: Date?
     private var actionTapState: [String: (count: Int, lastAt: Date)] = [:]
     private var activeChannel: SpeechInputChannel?
     private var activeBinding: HotkeyBinding?
@@ -39,7 +50,8 @@ final class HotkeyMonitor {
         let mask = CGEventMask(
             (1 << CGEventType.flagsChanged.rawValue) |
             (1 << CGEventType.keyDown.rawValue) |
-            (1 << CGEventType.keyUp.rawValue)
+            (1 << CGEventType.keyUp.rawValue) |
+            (1 << MediaKey.systemDefinedEventType.rawValue)
         )
         let context = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
         tap = CGEvent.tapCreate(
@@ -56,6 +68,10 @@ final class HotkeyMonitor {
                     }
                 } else if type == .keyDown || type == .keyUp {
                     if monitor.handleKey(event: event, isDown: type == .keyDown) {
+                        return nil
+                    }
+                } else if type == MediaKey.systemDefinedEventType {
+                    if monitor.handleSystemDefined(event: event) {
                         return nil
                     }
                 }
@@ -87,6 +103,7 @@ final class HotkeyMonitor {
             primary: primary,
             secondary: secondary,
             screenshot: screenshotBinding,
+            secondaryScreenshot: secondaryScreenshotBinding,
             autoTranslate: autoTranslateBinding,
             mainWindow: mainWindowBinding
         )
@@ -96,19 +113,23 @@ final class HotkeyMonitor {
         primary: HotkeyBinding,
         secondary: HotkeyBinding?,
         screenshot: HotkeyBinding,
+        secondaryScreenshot: HotkeyBinding? = nil,
         autoTranslate: HotkeyBinding? = nil,
         mainWindow: HotkeyBinding? = nil
     ) {
         self.bindings = [primary] + (secondary.map { [$0] } ?? [])
         self.screenshotBinding = screenshot
+        self.secondaryScreenshotBinding = secondaryScreenshot
         self.autoTranslateBinding = autoTranslate
         self.mainWindowBinding = mainWindow
         activeModifierKeyCodes.removeAll()
         triggerDown = false
         screenshotTriggerDown = false
+        secondaryScreenshotTriggerDown = false
         autoTranslateTriggerDown = false
         mainWindowTriggerDown = false
         lastScreenshotTapAt = nil
+        lastSecondaryScreenshotTapAt = nil
         actionTapState.removeAll()
         activeChannel = nil
         activeBinding = nil
@@ -138,7 +159,22 @@ final class HotkeyMonitor {
                 activeModifierKeyCodes.remove(keyCode)
             }
         }
-        if handleScreenshotFlagsChanged(keyCode: keyCode, eventFlags: eventFlags) {
+        if handleScreenshotFlagsChanged(
+            binding: screenshotBinding,
+            keyCode: keyCode,
+            eventFlags: eventFlags,
+            triggerDown: &screenshotTriggerDown,
+            lastTapAt: &lastScreenshotTapAt
+        ) {
+            return true
+        }
+        if handleScreenshotFlagsChanged(
+            binding: secondaryScreenshotBinding,
+            keyCode: keyCode,
+            eventFlags: eventFlags,
+            triggerDown: &secondaryScreenshotTriggerDown,
+            lastTapAt: &lastSecondaryScreenshotTapAt
+        ) {
             return true
         }
         if handleActionFlagsChanged(
@@ -205,7 +241,23 @@ final class HotkeyMonitor {
             return true
         }
 
-        if handleScreenshotKey(eventKeyCode: eventKeyCode, eventFlags: event.flags, isDown: isDown) {
+        if handleScreenshotKey(
+            binding: screenshotBinding,
+            eventKeyCode: eventKeyCode,
+            eventFlags: event.flags,
+            isDown: isDown,
+            triggerDown: &screenshotTriggerDown
+        ) {
+            return true
+        }
+
+        if handleScreenshotKey(
+            binding: secondaryScreenshotBinding,
+            eventKeyCode: eventKeyCode,
+            eventFlags: event.flags,
+            isDown: isDown,
+            triggerDown: &secondaryScreenshotTriggerDown
+        ) {
             return true
         }
 
@@ -219,26 +271,71 @@ final class HotkeyMonitor {
         return updateTrigger(isDown: isDown, channel: .chinese, binding: binding)
     }
 
-    private func handleScreenshotFlagsChanged(keyCode: Int, eventFlags: CGEventFlags) -> Bool {
-        guard screenshotBinding.kind == .function || screenshotBinding.kind == .modifier else { return false }
-        let isDown = isBindingDown(screenshotBinding, keyCode: keyCode, eventFlags: eventFlags)
-        guard isDown != screenshotTriggerDown else { return false }
-        screenshotTriggerDown = isDown
-        if !isDown {
-            return registerScreenshotTap() || screenshotConflictsWithSpeechBinding
+    private func handleSystemDefined(event: CGEvent) -> Bool {
+        guard let isDown = mediaPlayEvent(from: event) else { return false }
+        if handleActionMedia(
+            binding: autoTranslateBinding,
+            isDown: isDown,
+            triggerDown: &autoTranslateTriggerDown,
+            actionKey: "autoTranslate",
+            action: { [weak self] in self?.onAutoTranslateToggle?() }
+        ) {
+            return true
         }
-        return screenshotConflictsWithSpeechBinding
+        if handleActionMedia(
+            binding: mainWindowBinding,
+            isDown: isDown,
+            triggerDown: &mainWindowTriggerDown,
+            actionKey: "mainWindow",
+            action: { [weak self] in self?.onMainWindow?() }
+        ) {
+            return true
+        }
+        if handleScreenshotMedia(binding: screenshotBinding, isDown: isDown, triggerDown: &screenshotTriggerDown) {
+            return true
+        }
+        if handleScreenshotMedia(binding: secondaryScreenshotBinding, isDown: isDown, triggerDown: &secondaryScreenshotTriggerDown) {
+            return true
+        }
+        guard let binding = bindings.first(where: { $0.kind == .mediaPlay }) else {
+            return false
+        }
+        return updateTrigger(isDown: isDown, channel: .chinese, binding: binding)
     }
 
-    private func handleScreenshotKey(eventKeyCode: Int, eventFlags: CGEventFlags, isDown: Bool) -> Bool {
-        guard screenshotBinding.kind == .combo,
-              screenshotBinding.keyCode == eventKeyCode,
-              requiredModifiersAreActive(for: screenshotBinding, eventFlags: eventFlags) else {
+    private func handleScreenshotFlagsChanged(
+        binding: HotkeyBinding?,
+        keyCode: Int,
+        eventFlags: CGEventFlags,
+        triggerDown: inout Bool,
+        lastTapAt: inout Date?
+    ) -> Bool {
+        guard let binding, binding.kind == .function || binding.kind == .modifier else { return false }
+        let isDown = isBindingDown(binding, keyCode: keyCode, eventFlags: eventFlags)
+        guard isDown != triggerDown else { return false }
+        triggerDown = isDown
+        if !isDown {
+            return registerScreenshotTap(lastTapAt: &lastTapAt) || screenshotConflictsWithSpeechBinding(binding)
+        }
+        return screenshotConflictsWithSpeechBinding(binding)
+    }
+
+    private func handleScreenshotKey(
+        binding: HotkeyBinding?,
+        eventKeyCode: Int,
+        eventFlags: CGEventFlags,
+        isDown: Bool,
+        triggerDown: inout Bool
+    ) -> Bool {
+        guard let binding,
+              binding.kind == .combo,
+              binding.keyCode == eventKeyCode,
+              requiredModifiersAreActive(for: binding, eventFlags: eventFlags) else {
             return false
         }
         // 修饰键+普通键的组合：单击即触发（区别于纯修饰键的双击）。
-        if isDown != screenshotTriggerDown {
-            screenshotTriggerDown = isDown
+        if isDown != triggerDown {
+            triggerDown = isDown
             if isDown {
                 onScreenshot?()
             }
@@ -246,14 +343,24 @@ final class HotkeyMonitor {
         return true
     }
 
-    private func registerScreenshotTap() -> Bool {
+    private func handleScreenshotMedia(binding: HotkeyBinding?, isDown: Bool, triggerDown: inout Bool) -> Bool {
+        guard let binding, binding.kind == .mediaPlay else { return false }
+        guard isDown != triggerDown else { return true }
+        triggerDown = isDown
+        if isDown {
+            onScreenshot?()
+        }
+        return true
+    }
+
+    private func registerScreenshotTap(lastTapAt: inout Date?) -> Bool {
         let now = Date()
-        guard let previousTapAt = lastScreenshotTapAt,
+        guard let previousTapAt = lastTapAt,
               now.timeIntervalSince(previousTapAt) <= Timing.screenshotDoubleTapWindowSeconds else {
-            lastScreenshotTapAt = now
+            lastTapAt = now
             return false
         }
-        lastScreenshotTapAt = nil
+        lastTapAt = nil
         onScreenshot?()
         return true
     }
@@ -300,6 +407,22 @@ final class HotkeyMonitor {
         return true
     }
 
+    private func handleActionMedia(
+        binding: HotkeyBinding?,
+        isDown: Bool,
+        triggerDown: inout Bool,
+        actionKey: String,
+        action: () -> Void
+    ) -> Bool {
+        guard let binding, binding.kind == .mediaPlay else { return false }
+        guard isDown != triggerDown else { return true }
+        triggerDown = isDown
+        if isDown {
+            triggerAction(binding: binding, actionKey: actionKey, action: action)
+        }
+        return true
+    }
+
     private func triggerAction(binding: HotkeyBinding, actionKey: String, action: () -> Void) {
         let requiredTapCount = max(binding.tapCount ?? 1, 1)
         guard requiredTapCount > 1 else {
@@ -322,8 +445,8 @@ final class HotkeyMonitor {
         }
     }
 
-    private var screenshotConflictsWithSpeechBinding: Bool {
-        bindings.contains(screenshotBinding)
+    private func screenshotConflictsWithSpeechBinding(_ binding: HotkeyBinding) -> Bool {
+        bindings.contains(binding)
     }
 
     private func isBindingDown(_ binding: HotkeyBinding, keyCode: Int, eventFlags: CGEventFlags) -> Bool {
@@ -336,6 +459,8 @@ final class HotkeyMonitor {
             return activeModifierKeyCodes.contains(keyCode) || (!requiredFlag.isEmpty && eventFlags.contains(requiredFlag))
         case .combo:
             return triggerDown && activeBinding == binding && requiredModifiersAreActive(for: binding, eventFlags: eventFlags)
+        case .mediaPlay:
+            return triggerDown && activeBinding == binding
         }
     }
 
@@ -364,5 +489,18 @@ final class HotkeyMonitor {
             onUp?(channelToEnd, bindingToEnd)
         }
         return true
+    }
+
+    private func mediaPlayEvent(from event: CGEvent) -> Bool? {
+        guard let nsEvent = NSEvent(cgEvent: event),
+              nsEvent.type == .systemDefined,
+              nsEvent.subtype.rawValue == MediaKey.auxControlButtonSubtype else {
+            return nil
+        }
+        let data = nsEvent.data1
+        let keyCode = (data & 0xFFFF0000) >> 16
+        guard keyCode == MediaKey.play else { return nil }
+        let keyState = (data & 0x0000FF00) >> 8
+        return keyState == MediaKey.keyDownState
     }
 }

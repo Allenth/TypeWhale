@@ -41,6 +41,11 @@ final class MainViewController: NSViewController {
         size: 13,
         weight: .medium
     )
+    let secondaryScreenshotHotkeyValue = label(
+        HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryScreenshotStorageKey)?.screenshotDisplayName ?? "未设置",
+        size: 13,
+        weight: .medium
+    )
     let autoTranslateHotkeyValue = label(
         HotkeyBinding.loadOptional(storageKey: HotkeyBinding.autoTranslateStorageKey)?.actionDisplayName ?? "未设置",
         size: 13,
@@ -57,6 +62,8 @@ final class MainViewController: NSViewController {
     let secondaryHotkeyClearButton = NSButton(title: "清空", target: nil, action: nil)
     let screenshotHotkeyCaptureButton = NSButton(title: "录入", target: nil, action: nil)
     let screenshotHotkeyResetButton = NSButton(title: "恢复默认", target: nil, action: nil)
+    let secondaryScreenshotHotkeyCaptureButton = NSButton(title: "未设置", target: nil, action: nil)
+    let secondaryScreenshotHotkeyClearButton = NSButton(title: "清空", target: nil, action: nil)
     let autoTranslateHotkeyCaptureButton = NSButton(title: "未设置", target: nil, action: nil)
     let autoTranslateHotkeyClearButton = NSButton(title: "清空", target: nil, action: nil)
     let mainWindowHotkeyCaptureButton = NSButton(title: "未设置", target: nil, action: nil)
@@ -85,7 +92,7 @@ final class MainViewController: NSViewController {
     private let memoryLabel = label("内存 -- MB", size: 11, weight: .medium)
     private var lastMemoryLevel: MemoryMonitor.Level = .normal
     var onInstallModel: (() -> Void)?
-    var onHotkeysChange: ((HotkeyBinding, HotkeyBinding?, HotkeyBinding, HotkeyBinding?, HotkeyBinding?) -> Void)?
+    var onHotkeysChange: ((HotkeyBinding, HotkeyBinding?, HotkeyBinding, HotkeyBinding?, HotkeyBinding?, HotkeyBinding?) -> Void)?
 
     private let modelEntryName = label("SenseVoice int8", size: 13, weight: .semibold)
     private let modelEntryStatus = label("检查中", size: 11, weight: .medium)
@@ -119,8 +126,16 @@ final class MainViewController: NSViewController {
         case primary
         case secondary
         case screenshot
+        case screenshotSecondary
         case autoTranslate
         case mainWindow
+    }
+
+    private enum MediaKeyCapture {
+        static let systemDefinedEventType = CGEventType(rawValue: 14)!
+        static let auxControlButtonSubtype = 8
+        static let play = 16
+        static let keyDownState = 0x0A
     }
 
     override func loadView() {
@@ -197,6 +212,7 @@ final class MainViewController: NSViewController {
             primary: HotkeyBinding.load(storageKey: HotkeyBinding.chineseStorageKey, fallback: .defaultBinding),
             secondary: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryChineseStorageKey),
             screenshot: HotkeyBinding.load(storageKey: HotkeyBinding.screenshotStorageKey, fallback: .screenshotDefaultBinding),
+            secondaryScreenshot: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryScreenshotStorageKey),
             autoTranslate: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.autoTranslateStorageKey),
             mainWindow: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey)
         )
@@ -744,7 +760,7 @@ final class MainViewController: NSViewController {
     // MARK: - Right column
 
     private func buildRightColumn() -> NSView {
-        [hotkeyValue, secondaryHotkeyValue, screenshotHotkeyValue, autoTranslateHotkeyValue, mainWindowHotkeyValue].forEach {
+        [hotkeyValue, secondaryHotkeyValue, screenshotHotkeyValue, secondaryScreenshotHotkeyValue, autoTranslateHotkeyValue, mainWindowHotkeyValue].forEach {
             $0.lineBreakMode = .byTruncatingMiddle
         }
         hotkeyCaptureButton.target = self
@@ -759,6 +775,10 @@ final class MainViewController: NSViewController {
         screenshotHotkeyCaptureButton.action = #selector(beginScreenshotHotkeyCapture)
         screenshotHotkeyResetButton.target = self
         screenshotHotkeyResetButton.action = #selector(resetScreenshotHotkey)
+        secondaryScreenshotHotkeyCaptureButton.target = self
+        secondaryScreenshotHotkeyCaptureButton.action = #selector(beginSecondaryScreenshotHotkeyCapture)
+        secondaryScreenshotHotkeyClearButton.target = self
+        secondaryScreenshotHotkeyClearButton.action = #selector(clearSecondaryScreenshotHotkey)
         autoTranslateHotkeyCaptureButton.target = self
         autoTranslateHotkeyCaptureButton.action = #selector(beginAutoTranslateHotkeyCapture)
         autoTranslateHotkeyClearButton.target = self
@@ -774,6 +794,8 @@ final class MainViewController: NSViewController {
             secondaryHotkeyClearButton,
             screenshotHotkeyCaptureButton,
             screenshotHotkeyResetButton,
+            secondaryScreenshotHotkeyCaptureButton,
+            secondaryScreenshotHotkeyClearButton,
             autoTranslateHotkeyCaptureButton,
             autoTranslateHotkeyClearButton,
             mainWindowHotkeyCaptureButton,
@@ -786,10 +808,10 @@ final class MainViewController: NSViewController {
         }
         let captureWidth: CGFloat = 88
         let trailingWidth: CGFloat = 56
-        [hotkeyCaptureButton, secondaryHotkeyCaptureButton, screenshotHotkeyCaptureButton, autoTranslateHotkeyCaptureButton, mainWindowHotkeyCaptureButton].forEach {
+        [hotkeyCaptureButton, secondaryHotkeyCaptureButton, screenshotHotkeyCaptureButton, secondaryScreenshotHotkeyCaptureButton, autoTranslateHotkeyCaptureButton, mainWindowHotkeyCaptureButton].forEach {
             $0.widthAnchor.constraint(equalToConstant: captureWidth).isActive = true
         }
-        [hotkeyResetButton, secondaryHotkeyClearButton, screenshotHotkeyResetButton, autoTranslateHotkeyClearButton, mainWindowHotkeyResetButton].forEach {
+        [hotkeyResetButton, secondaryHotkeyClearButton, screenshotHotkeyResetButton, secondaryScreenshotHotkeyClearButton, autoTranslateHotkeyClearButton, mainWindowHotkeyResetButton].forEach {
             $0.widthAnchor.constraint(equalToConstant: trailingWidth).isActive = true
         }
         let primaryRow = shortcutRow(
@@ -806,6 +828,11 @@ final class MainViewController: NSViewController {
             title: "截图快捷键",
             captureButton: screenshotHotkeyCaptureButton,
             fallbackButton: screenshotHotkeyResetButton
+        )
+        let secondaryScreenshotRow = shortcutRow(
+            title: "截图备用",
+            captureButton: secondaryScreenshotHotkeyCaptureButton,
+            fallbackButton: secondaryScreenshotHotkeyClearButton
         )
         let autoTranslateHotkeyRow = shortcutRow(
             title: "自动翻译",
@@ -837,7 +864,7 @@ final class MainViewController: NSViewController {
         screenshotSaveLocationButton.widthAnchor.constraint(equalToConstant: 112).isActive = true
 
         let optionGroups = NSStackView(views: [
-            inspectorGroup("快捷键", [primaryRow, secondaryRow, screenshotRow, autoTranslateHotkeyRow, mainWindowHotkeyRow]),
+            inspectorGroup("快捷键", [primaryRow, secondaryRow, screenshotRow, secondaryScreenshotRow, autoTranslateHotkeyRow, mainWindowHotkeyRow]),
             inspectorGroup("智能整理", [
                 stackedOptionRow("模式", smartRewriteControls),
             ]),
@@ -1487,6 +1514,10 @@ final class MainViewController: NSViewController {
         beginHotkeyCaptureForSlot(.screenshot)
     }
 
+    @objc private func beginSecondaryScreenshotHotkeyCapture() {
+        beginHotkeyCaptureForSlot(.screenshotSecondary)
+    }
+
     @objc private func beginAutoTranslateHotkeyCapture() {
         beginHotkeyCaptureForSlot(.autoTranslate)
     }
@@ -1501,14 +1532,15 @@ final class MainViewController: NSViewController {
         capturingChannel = .chinese
         capturingHotkeySlot = slot
         captureModifierKeyCodes.removeAll()
-        activeHotkeyButton?.title = "请按快捷键…"
+        activeHotkeyButton?.title = "请按快捷键或耳机播放键…"
         hotkeyCaptureButton.isEnabled = false
         secondaryHotkeyCaptureButton.isEnabled = false
         screenshotHotkeyCaptureButton.isEnabled = false
+        secondaryScreenshotHotkeyCaptureButton.isEnabled = false
         autoTranslateHotkeyCaptureButton.isEnabled = false
         mainWindowHotkeyCaptureButton.isEnabled = false
         startHotkeyCaptureTap()
-        hotkeyCaptureMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] event in
+        hotkeyCaptureMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged, .systemDefined]) { [weak self] event in
             guard let self else { return event }
             self.capture(event: event)
             return nil
@@ -1521,6 +1553,13 @@ final class MainViewController: NSViewController {
 
     @objc private func resetScreenshotHotkey() {
         applyHotkey(.screenshotDefaultBinding, slot: .screenshot, channel: .chinese)
+    }
+
+    @objc private func clearSecondaryScreenshotHotkey() {
+        endHotkeyCapture()
+        HotkeyBinding.clear(storageKey: HotkeyBinding.secondaryScreenshotStorageKey)
+        refreshHotkeyLabels()
+        emitHotkeysChange()
     }
 
     @objc private func clearMainWindowHotkey() {
@@ -1544,6 +1583,7 @@ final class MainViewController: NSViewController {
             primary: HotkeyBinding.load(storageKey: HotkeyBinding.chineseStorageKey, fallback: .defaultBinding),
             secondary: nil,
             screenshot: HotkeyBinding.load(storageKey: HotkeyBinding.screenshotStorageKey, fallback: .screenshotDefaultBinding),
+            secondaryScreenshot: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryScreenshotStorageKey),
             autoTranslate: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.autoTranslateStorageKey),
             mainWindow: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey)
         )
@@ -1554,6 +1594,7 @@ final class MainViewController: NSViewController {
         primary: HotkeyBinding,
         secondary: HotkeyBinding?,
         screenshot: HotkeyBinding,
+        secondaryScreenshot: HotkeyBinding?,
         autoTranslate: HotkeyBinding?,
         mainWindow: HotkeyBinding?
     ) {
@@ -1568,15 +1609,19 @@ final class MainViewController: NSViewController {
         screenshotHotkeyValue.stringValue = screenshot.screenshotDisplayName
         screenshotHotkeyValue.textColor = NSColor(calibratedWhite: 1, alpha: 0.92)
         screenshotHotkeyCaptureButton.title = screenshot.screenshotDisplayName
-        screenshotHotkeyCaptureButton.toolTip = "点击录入截图快捷键：双击修饰键，或修饰键+按键组合（组合单击触发）"
+        screenshotHotkeyCaptureButton.toolTip = "点击录入截图快捷键：双击修饰键、修饰键+按键组合，或耳机播放键"
+        secondaryScreenshotHotkeyValue.stringValue = secondaryScreenshot?.screenshotDisplayName ?? "未设置"
+        secondaryScreenshotHotkeyValue.textColor = secondaryScreenshot == nil ? .tertiaryLabelColor : NSColor(calibratedWhite: 1, alpha: 0.92)
+        secondaryScreenshotHotkeyCaptureButton.title = secondaryScreenshot?.screenshotDisplayName ?? "未设置"
+        secondaryScreenshotHotkeyCaptureButton.toolTip = "点击录入截图备用快捷键"
         autoTranslateHotkeyValue.stringValue = autoTranslate?.actionDisplayName ?? "未设置"
         autoTranslateHotkeyValue.textColor = autoTranslate == nil ? .tertiaryLabelColor : NSColor(calibratedWhite: 1, alpha: 0.92)
         autoTranslateHotkeyCaptureButton.title = autoTranslate?.actionDisplayName ?? "未设置"
-        autoTranslateHotkeyCaptureButton.toolTip = "点击录入自动翻译开关快捷键"
+        autoTranslateHotkeyCaptureButton.toolTip = "点击录入自动翻译开关快捷键，可使用耳机播放键"
         mainWindowHotkeyValue.stringValue = mainWindow?.actionDisplayName ?? "未设置"
         mainWindowHotkeyValue.textColor = mainWindow == nil ? .tertiaryLabelColor : NSColor(calibratedWhite: 1, alpha: 0.92)
         mainWindowHotkeyCaptureButton.title = mainWindow?.actionDisplayName ?? "未设置"
-        mainWindowHotkeyCaptureButton.toolTip = "点击录入唤起主页快捷键"
+        mainWindowHotkeyCaptureButton.toolTip = "点击录入唤起主页快捷键，可使用耳机播放键"
         detail.stringValue = "\(primary.displayName) 录音"
     }
 
@@ -1585,6 +1630,7 @@ final class MainViewController: NSViewController {
             primary: binding,
             secondary: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryChineseStorageKey),
             screenshot: HotkeyBinding.load(storageKey: HotkeyBinding.screenshotStorageKey, fallback: .screenshotDefaultBinding),
+            secondaryScreenshot: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryScreenshotStorageKey),
             autoTranslate: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.autoTranslateStorageKey),
             mainWindow: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey)
         )
@@ -1594,7 +1640,8 @@ final class MainViewController: NSViewController {
         stopHotkeyCaptureTap()
         let mask = CGEventMask(
             (1 << CGEventType.flagsChanged.rawValue) |
-            (1 << CGEventType.keyDown.rawValue)
+            (1 << CGEventType.keyDown.rawValue) |
+            (1 << MediaKeyCapture.systemDefinedEventType.rawValue)
         )
         let context = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
         hotkeyCaptureTap = CGEvent.tapCreate(
@@ -1643,6 +1690,9 @@ final class MainViewController: NSViewController {
             captureModifier(keyCode: keyCode, cgFlags: event.flags)
             return true
         }
+        if type == MediaKeyCapture.systemDefinedEventType, captureMediaPlay(event: event) {
+            return true
+        }
         guard type == .keyDown else { return false }
         if keyCode == 53 {
             captureConfirmWorkItem?.cancel()
@@ -1660,6 +1710,9 @@ final class MainViewController: NSViewController {
 
     private func capture(event: NSEvent) {
         let keyCode = Int(event.keyCode)
+        if event.type == .systemDefined, captureMediaPlay(event: event) {
+            return
+        }
         if event.type == .flagsChanged {
             if keyCode == HotkeyKeyCodes.function || event.modifierFlags.contains(.function) {
                 captureFunctionKey()
@@ -1716,6 +1769,31 @@ final class MainViewController: NSViewController {
         commitCapturedHotkey(keyCode: HotkeyKeyCodes.function)
     }
 
+    private func captureMediaPlay(event: CGEvent) -> Bool {
+        guard let nsEvent = NSEvent(cgEvent: event) else { return false }
+        return captureMediaPlay(event: nsEvent)
+    }
+
+    private func captureMediaPlay(event: NSEvent) -> Bool {
+        guard isMediaPlayDown(event) else { return false }
+        captureConfirmWorkItem?.cancel()
+        activeHotkeyButton?.title = "耳机播放键 …"
+        captureModifierKeyCodes = []
+        applyCapturedHotkey(.mediaPlayBinding)
+        return true
+    }
+
+    private func isMediaPlayDown(_ event: NSEvent) -> Bool {
+        guard event.type == .systemDefined,
+              event.subtype.rawValue == MediaKeyCapture.auxControlButtonSubtype else {
+            return false
+        }
+        let data = event.data1
+        let keyCode = (data & 0xFFFF0000) >> 16
+        let keyState = (data & 0x0000FF00) >> 8
+        return keyCode == MediaKeyCapture.play && keyState == MediaKeyCapture.keyDownState
+    }
+
     private func scheduleModifierCaptureConfirmation(keyCode: Int, delay: TimeInterval = 0.45) {
         captureConfirmWorkItem?.cancel()
         let workItem = DispatchWorkItem { [weak self] in
@@ -1754,6 +1832,8 @@ final class MainViewController: NSViewController {
             binding.save(storageKey: HotkeyBinding.secondaryChineseStorageKey)
         case .screenshot:
             binding.save(storageKey: HotkeyBinding.screenshotStorageKey)
+        case .screenshotSecondary:
+            binding.save(storageKey: HotkeyBinding.secondaryScreenshotStorageKey)
         case .autoTranslate:
             binding.save(storageKey: HotkeyBinding.autoTranslateStorageKey)
         case .mainWindow:
@@ -1777,6 +1857,7 @@ final class MainViewController: NSViewController {
         hotkeyCaptureButton.isEnabled = true
         secondaryHotkeyCaptureButton.isEnabled = true
         screenshotHotkeyCaptureButton.isEnabled = true
+        secondaryScreenshotHotkeyCaptureButton.isEnabled = true
         autoTranslateHotkeyCaptureButton.isEnabled = true
         mainWindowHotkeyCaptureButton.isEnabled = true
         captureModifierKeyCodes.removeAll()
@@ -1787,6 +1868,7 @@ final class MainViewController: NSViewController {
             primary: HotkeyBinding.load(storageKey: HotkeyBinding.chineseStorageKey, fallback: .defaultBinding),
             secondary: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryChineseStorageKey),
             screenshot: HotkeyBinding.load(storageKey: HotkeyBinding.screenshotStorageKey, fallback: .screenshotDefaultBinding),
+            secondaryScreenshot: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryScreenshotStorageKey),
             autoTranslate: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.autoTranslateStorageKey),
             mainWindow: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey)
         )
@@ -1797,6 +1879,7 @@ final class MainViewController: NSViewController {
             HotkeyBinding.load(storageKey: HotkeyBinding.chineseStorageKey, fallback: .defaultBinding),
             HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryChineseStorageKey),
             HotkeyBinding.load(storageKey: HotkeyBinding.screenshotStorageKey, fallback: .screenshotDefaultBinding),
+            HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryScreenshotStorageKey),
             HotkeyBinding.loadOptional(storageKey: HotkeyBinding.autoTranslateStorageKey),
             HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey)
         )
@@ -1810,6 +1893,8 @@ final class MainViewController: NSViewController {
             return secondaryHotkeyCaptureButton
         case .screenshot:
             return screenshotHotkeyCaptureButton
+        case .screenshotSecondary:
+            return secondaryScreenshotHotkeyCaptureButton
         case .autoTranslate:
             return autoTranslateHotkeyCaptureButton
         case .mainWindow:

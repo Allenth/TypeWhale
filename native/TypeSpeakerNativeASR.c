@@ -196,7 +196,7 @@ TypeSpeakerNativeRecognizer TypeSpeakerNativeRecognizerCreate(
   config.model_config.sense_voice.language = sense_voice_language();
   config.model_config.sense_voice.use_itn = 1;
   config.model_config.tokens = tokens_path;
-  config.model_config.num_threads = 2;
+  config.model_config.num_threads = 3;
   config.model_config.provider = "cpu";
   config.decoding_method = "greedy_search";
 
@@ -255,7 +255,7 @@ TypeSpeakerNativeRecognizer TypeSpeakerNativeQwen3RecognizerCreate(
   config.model_config.qwen3_asr.max_new_tokens = 256;
   config.model_config.qwen3_asr.hotwords =
       hotwords != NULL && hotwords[0] != '\0' ? hotwords : NULL;
-  config.model_config.num_threads = 2;
+  config.model_config.num_threads = 3;
   config.model_config.provider = "cpu";
   config.model_config.debug = 0;
   config.decoding_method = "greedy_search";

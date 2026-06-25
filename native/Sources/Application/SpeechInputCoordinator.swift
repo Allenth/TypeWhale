@@ -9,8 +9,6 @@ final class SpeechInputCoordinator {
         static let holdToRecordSeconds: TimeInterval = 0.28
         /// 单次录音硬上限：超过即自动结束并识别，封住 ASR 识别时的内存峰值（识别内存随时长增长且不自动回落）。
         static let maxRecordingSeconds: TimeInterval = 180
-        /// 连续输入体验优先：停止输入一段时间后再卸载 ASR/VAD 缓存，而不是每次识别后立即冷启动。
-        static let idleASRUnloadSeconds: TimeInterval = 90
         /// 实时预览分段：停顿超过此值就把当前段冻结提交，重置预览窗口（避免滑窗重识别导致乱码）。
         static let segmentCommitPauseSeconds: TimeInterval = 0.7
         /// 连续说话不停顿时的强制分段上限：超过即强制提交并重置窗口，避免窗口滑动。
@@ -77,6 +75,9 @@ final class SpeechInputCoordinator {
         storageKey: HotkeyBinding.screenshotStorageKey,
         fallback: .screenshotDefaultBinding
     )
+    private var secondaryScreenshotHotkeyBinding = HotkeyBinding.loadOptional(
+        storageKey: HotkeyBinding.secondaryScreenshotStorageKey
+    )
     private var autoTranslateHotkeyBinding = HotkeyBinding.loadOptional(
         storageKey: HotkeyBinding.autoTranslateStorageKey
     )
@@ -111,6 +112,7 @@ final class SpeechInputCoordinator {
             primary: primaryHotkeyBinding,
             secondary: secondaryHotkeyBinding,
             screenshot: screenshotHotkeyBinding,
+            secondaryScreenshot: secondaryScreenshotHotkeyBinding,
             autoTranslate: autoTranslateHotkeyBinding,
             mainWindow: mainWindowHotkeyBinding
         )
@@ -118,6 +120,7 @@ final class SpeechInputCoordinator {
             primary: primaryHotkeyBinding,
             secondary: secondaryHotkeyBinding,
             screenshot: screenshotHotkeyBinding,
+            secondaryScreenshot: secondaryScreenshotHotkeyBinding,
             autoTranslate: autoTranslateHotkeyBinding,
             mainWindow: mainWindowHotkeyBinding
         )
@@ -144,16 +147,18 @@ final class SpeechInputCoordinator {
         controller.onInstallModel = { [weak self] in
             self?.modelInstaller.install()
         }
-        controller.onHotkeysChange = { [weak self] primary, secondary, screenshot, autoTranslate, mainWindow in
+        controller.onHotkeysChange = { [weak self] primary, secondary, screenshot, secondaryScreenshot, autoTranslate, mainWindow in
             self?.primaryHotkeyBinding = primary
             self?.secondaryHotkeyBinding = secondary
             self?.screenshotHotkeyBinding = screenshot
+            self?.secondaryScreenshotHotkeyBinding = secondaryScreenshot
             self?.autoTranslateHotkeyBinding = autoTranslate
             self?.mainWindowHotkeyBinding = mainWindow
             self?.hotkey.update(
                 primary: primary,
                 secondary: secondary,
                 screenshot: screenshot,
+                secondaryScreenshot: secondaryScreenshot,
                 autoTranslate: autoTranslate,
                 mainWindow: mainWindow
             )
@@ -310,6 +315,21 @@ final class SpeechInputCoordinator {
 
     private func handleHotkeyDown(channel: SpeechInputChannel, binding: HotkeyBinding) {
         if screenshotCoordinator.isActive { return }
+        if binding.kind == .mediaPlay {
+            longPressWorkItem?.cancel()
+            longPressWorkItem = nil
+            hotkeyIsPressed = false
+            if activeSession != nil || recorder.isRecording {
+                finishRecording()
+            } else {
+                startRecording(
+                    instructions: "再次按 \(binding.displayName) 完成录音",
+                    activation: .toggle,
+                    channel: channel
+                )
+            }
+            return
+        }
         hotkeyIsPressed = true
         longPressWorkItem?.cancel()
         guard activeSession == nil, !recorder.isRecording else { return }
@@ -328,6 +348,9 @@ final class SpeechInputCoordinator {
     }
 
     private func handleHotkeyUp(channel: SpeechInputChannel, binding: HotkeyBinding) {
+        if binding.kind == .mediaPlay {
+            return
+        }
         hotkeyIsPressed = false
         longPressWorkItem?.cancel()
         longPressWorkItem = nil
@@ -1090,17 +1113,13 @@ final class SpeechInputCoordinator {
     }
 
     private func scheduleIdleASRUnloadIfPossible() {
-        guard isIdleForASRResourceRelease else { return }
+        // 已取消“空闲定时卸载”：模型平时保持热加载，避免久未说话后开口第一句因重载卡顿。
+        // 内存治理只保留“高内存时释放”这条安全网（见 releaseASRResourcesIfMemoryElevated）。
         idleASRUnloadWorkItem?.cancel()
-        if MemoryMonitor.currentFootprintMB >= MemoryMonitor.warnThresholdMB {
-            releaseASRResourcesIfIdle(reason: "memory_warn")
-            return
-        }
-        let workItem = DispatchWorkItem { [weak self] in
-            self?.releaseASRResourcesIfIdle(reason: "idle_timeout")
-        }
-        idleASRUnloadWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + Timing.idleASRUnloadSeconds, execute: workItem)
+        idleASRUnloadWorkItem = nil
+        guard isIdleForASRResourceRelease,
+              MemoryMonitor.currentFootprintMB >= MemoryMonitor.warnThresholdMB else { return }
+        releaseASRResourcesIfIdle(reason: "memory_warn")
     }
 
     private func releaseASRResourcesIfMemoryElevated() {

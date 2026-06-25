@@ -52,7 +52,8 @@ final class DeepSeekRewriteEngine: SmartRewriteEngine {
     func translate(
         rawText: String,
         direction: SmartTranslationDirection,
-        context: SmartInputContext
+        context: SmartInputContext,
+        triggeredBy: String = "final_translation"
     ) async throws -> SmartTranslationOutput {
         let source = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !source.isEmpty else {
@@ -80,13 +81,13 @@ final class DeepSeekRewriteEngine: SmartRewriteEngine {
         switch SmartRewriteCostGuard.check(
             rawText: source,
             prompt: prompt,
-            triggeredBy: "final_translation"
+            triggeredBy: triggeredBy
         ) {
         case .allowed:
             break
         case .blocked(let reason):
             LaunchDiagnostics.mark(
-                "deepseek request_skipped triggered_by=final_translation mode=\(direction.displayName) reason=\(reason) rawText_length=\(source.count) prompt_length=\(prompt.count)"
+                "deepseek request_skipped triggered_by=\(triggeredBy) mode=\(direction.displayName) reason=\(reason) rawText_length=\(source.count) prompt_length=\(prompt.count)"
             )
             throw SmartRewriteError.costLimitExceeded(reason)
         }
@@ -94,7 +95,7 @@ final class DeepSeekRewriteEngine: SmartRewriteEngine {
             prompt: prompt,
             systemPrompt: translationSystemPrompt,
             mode: direction.displayName,
-            triggeredBy: "final_translation",
+            triggeredBy: triggeredBy,
             rawText: source,
             rawTextLength: source.count,
             context: context

@@ -5,6 +5,7 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
     let controller: MainViewController
     private var statusItem: NSStatusItem?
     private let memoryStatusItem = NSMenuItem(title: "内存 -- MB", action: nil, keyEquivalent: "")
+    private let versionStatusItem = NSMenuItem(title: "版本 --", action: nil, keyEquivalent: "")
     private var window: NSWindow?
     private var thirdPartyNoticesWindow: NSWindow?
     private var allowsTermination = false
@@ -88,15 +89,18 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
         memoryStatusItem.isEnabled = false
         updateMemoryStatusItem()
         menu.addItem(memoryStatusItem)
+        versionStatusItem.isEnabled = false
+        updateVersionStatusItem()
+        menu.addItem(versionStatusItem)
         menu.addItem(.separator())
-        let showItem = NSMenuItem(title: "打开 TypeWhale 面板", action: #selector(openMainWindowFromStatusItem), keyEquivalent: "")
+        let showItem = NSMenuItem(title: "打开面板", action: #selector(openMainWindowFromStatusItem), keyEquivalent: "")
         showItem.target = self
         menu.addItem(showItem)
         let noticesItem = NSMenuItem(title: "第三方组件与模型授权", action: #selector(showThirdPartyNotices), keyEquivalent: "")
         noticesItem.target = self
         menu.addItem(noticesItem)
         menu.addItem(.separator())
-        let quitItem = NSMenuItem(title: "完全退出 TypeWhale", action: #selector(quitFromStatusItem), keyEquivalent: "")
+        let quitItem = NSMenuItem(title: "完全退出", action: #selector(quitFromStatusItem), keyEquivalent: "")
         quitItem.target = self
         menu.addItem(quitItem)
         item.menu = menu
@@ -144,6 +148,7 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
 
     func menuWillOpen(_ menu: NSMenu) {
         updateMemoryStatusItem()
+        updateVersionStatusItem()
         controller.updateMemoryReadout()
     }
 
@@ -167,6 +172,17 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
                 attributes: [.foregroundColor: NSColor.systemRed]
             )
         }
+    }
+
+    private func updateVersionStatusItem() {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "--"
+        let build = info?["CFBundleVersion"] as? String ?? "--"
+        versionStatusItem.title = "版本 \(version) (\(build))"
+        versionStatusItem.attributedTitle = NSAttributedString(
+            string: versionStatusItem.title,
+            attributes: [.foregroundColor: NSColor.secondaryLabelColor]
+        )
     }
 
     private func setupMainWindow() {

@@ -97,12 +97,14 @@ struct HotkeyBinding: Codable, Equatable {
         case function
         case modifier
         case combo
+        case mediaPlay
     }
 
     static let storageKey = "hotkeyBinding"
     static let chineseStorageKey = "chineseHotkeyBinding"
     static let secondaryChineseStorageKey = "secondaryChineseHotkeyBinding"
     static let screenshotStorageKey = "screenshotHotkeyBinding"
+    static let secondaryScreenshotStorageKey = "secondaryScreenshotHotkeyBinding"
     static let autoTranslateStorageKey = "autoTranslateHotkeyBinding"
     static let mainWindowStorageKey = "mainWindowHotkeyBinding"
     static let fnDefaultMigrationKey = "hotkeyDefaultMigration.fnDefault.v1"
@@ -174,6 +176,8 @@ struct HotkeyBinding: Codable, Equatable {
             let modifiers = modifierKeyCodes.map { HotkeyKeyCodes.displayName(for: $0) }
             let key = keyCode.map { HotkeyKeyCodes.displayName(for: $0) } ?? "未设置"
             return (modifiers + [key]).joined(separator: " + ")
+        case .mediaPlay:
+            return "耳机播放键"
         }
     }
 
@@ -181,7 +185,7 @@ struct HotkeyBinding: Codable, Equatable {
         switch kind {
         case .function, .modifier:
             return "双击\(displayName)"
-        case .combo:
+        case .combo, .mediaPlay:
             return displayName
         }
     }
@@ -214,6 +218,10 @@ struct HotkeyBinding: Codable, Equatable {
         }
         guard !modifierKeyCodes.isEmpty else { return nil }
         return HotkeyBinding(kind: .combo, keyCode: keyCode, modifierKeyCodes: modifierKeyCodes.sorted())
+    }
+
+    static var mediaPlayBinding: HotkeyBinding {
+        HotkeyBinding(kind: .mediaPlay, keyCode: nil, modifierKeyCodes: [])
     }
 }
 

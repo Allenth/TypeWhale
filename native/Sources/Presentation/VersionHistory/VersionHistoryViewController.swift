@@ -9,6 +9,15 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.3.44 (Build 252)",
+            date: "2026-06-25",
+            changes: [
+                "取消“空闲定时卸载模型”：模型保持热加载，久未说话后开口第一句不再因重载卡顿，实时预览更跟手。",
+                "内存治理只保留“高内存安全网”：仅当内存达到预警阈值且空闲时才释放模型资源。",
+                "识别线程 2→3，兼顾实时识别速度与内存占用。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.3.40 (Build 248)",
             date: "2026-06-25",
             changes: [
