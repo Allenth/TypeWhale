@@ -20,4 +20,4 @@ native/build_native_app.sh
 
 面向用户的应用是原生 macOS App。ASR 识别通过打包进应用的 sherpa-onnx 原生 bridge 执行。
 
-当前本地发布版本：`1.3.48 (256)`。构建脚本默认会覆盖安装到 `/Applications/TypeWhale.app`；如只想生成 `macos/TypeWhale.app`，设置 `TYPESPEAKER_SKIP_INSTALL=1`。
+当前本地发布版本：`1.3.56 (264)`。构建脚本默认会覆盖安装到 `/Applications/TypeWhale.app`；如只想生成 `macos/TypeWhale.app`，设置 `TYPESPEAKER_SKIP_INSTALL=1`。

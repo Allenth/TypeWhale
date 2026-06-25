@@ -10,7 +10,7 @@ This is a public test build. It is not notarized with Developer ID yet, so macOS
 
 中文用户可以直接点击上面的链接下载安装包。如果浏览器没有开始下载，请右键链接选择“链接另存为”，或打开 [TypeWhale 1.3.0 (208) Test Release](https://github.com/Allenth/TypeWhale/releases/tag/v1.3.0-build208) 页面，在 **Assets** 区域下载 `TypeWhale-1.3.0-208.dmg`。
 
-Current local release build in this repository is `1.3.48 (256)`. It has been built, installed locally from source, and packaged as `dist/TypeWhale-1.3.48-256.dmg`. The public GitHub DMG link above still points to the last uploaded public test artifact.
+Current local release build in this repository is `1.3.56 (264)`. It has been built, installed locally from source, and packaged as `dist/TypeWhale-1.3.56-264.dmg`. The public GitHub DMG link above still points to the last uploaded public test artifact.
 
 The current macOS baseline is:
 
@@ -26,7 +26,7 @@ Realtime preview is only used as feedback. The final inserted text comes from th
 - Global hotkey recording: press to start/stop, or hold to talk and release to finish.
 - Non-activating recording capsule with animated microphone waveform.
 - Local SenseVoice / sherpa-onnx ASR integration.
-- Screenshot capture via a dedicated hotkey: region selection with resize handles, hover-to-select window capture, inline annotation tools (rectangle, arrow, pen, text, undo), OCR text recognition, English-to-Chinese screenshot translation, copy to clipboard, and direct save to the configured folder.
+- Screenshot capture via a dedicated hotkey: region selection with resize handles, hover-to-select window capture, inline annotation tools (rectangle, arrow, pen, text, undo), OCR text recognition, English-to-Chinese screenshot translation with source-text covering, copy to clipboard, and direct save to the configured folder.
 - Configurable hotkeys for recording, screenshot, auto-translation toggle, and opening the main panel. Auto-translation and main-panel hotkeys are unset by default.
 - Clipboard-based final insertion with clipboard restoration.
 - Recent transcription history.
@@ -228,7 +228,7 @@ TypeWhale 运行后会出现在 macOS 顶部状态栏。状态栏图标是黄色
 - 悬停窗口并单击，TypeWhale 会先置顶该窗口，再重新截图并自动对齐窗口边框。
 - 在选区内直接标注矩形、箭头、画笔和文字。
 - OCR 识别选区文字并复制到剪贴板。
-- 对英文截图选区进行英译中，并把中文译文贴入截图；双击复制和保存本地都会包含译文层。
+- 对英文截图选区进行英译中，按 OCR 行级坐标遮盖英文原文并贴入中文译文；双击复制和保存本地都会包含译文层。
 - 复制截图或直接保存到配置的截图保存位置。
 
 ### 自动翻译快捷键

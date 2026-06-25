@@ -108,7 +108,7 @@ final class ScreenshotCoordinator {
         Task { [weak self] in
             guard let self else { return }
             do {
-                let text = try await ocrRecognizer.recognize(image: image)
+                let text = try await ocrRecognizer.recognize(image: image).text
                 guard generation == operationGeneration else { return }
                 if text.isEmpty {
                     onStatus("未识别到文字", "可以调整截图范围后再试一次", .warning)
@@ -127,7 +127,7 @@ final class ScreenshotCoordinator {
 
     private func translateText(
         in image: NSImage,
-        completion: @escaping (Result<String, Error>) -> Void
+        completion: @escaping (Result<ScreenshotTranslationResult, Error>) -> Void
     ) {
         operationGeneration += 1
         let generation = operationGeneration
@@ -135,8 +135,8 @@ final class ScreenshotCoordinator {
         Task { [weak self] in
             guard let self else { return }
             do {
-                let text = try await ocrRecognizer.recognize(image: image)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                let ocrResult = try await ocrRecognizer.recognize(image: image)
+                let text = ocrResult.text.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard generation == operationGeneration else { return }
                 guard !text.isEmpty else {
                     completion(.failure(ScreenshotTranslationError.emptyOCR))
@@ -155,7 +155,10 @@ final class ScreenshotCoordinator {
                 )
                 guard generation == operationGeneration else { return }
                 SmartUsageLedgerStore.record(output.usage)
-                completion(.success(output.translatedText.trimmingCharacters(in: .whitespacesAndNewlines)))
+                completion(.success(ScreenshotTranslationResult(
+                    translatedText: output.translatedText.trimmingCharacters(in: .whitespacesAndNewlines),
+                    lines: ocrResult.lines
+                )))
             } catch {
                 guard generation == operationGeneration else { return }
                 completion(.failure(error))
@@ -282,7 +285,7 @@ private final class ScreenshotOverlayWindow: NSWindow {
         onSelectWindow: @escaping (ScreenshotWindowCandidate) -> Void,
         onCopy: @escaping (NSImage) -> Void,
         onOCR: @escaping (NSImage) -> Void,
-        onTranslate: @escaping (NSImage, @escaping (Result<String, Error>) -> Void) -> Void,
+        onTranslate: @escaping (NSImage, @escaping (Result<ScreenshotTranslationResult, Error>) -> Void) -> Void,
         onSaved: @escaping (URL) -> Void,
         onCancel: @escaping () -> Void,
         onStatus: @escaping (String, String, MainViewController.PrimaryStatusTone) -> Void
@@ -394,12 +397,17 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         case text
     }
 
+    private struct TranslationPatch {
+        let rect: NSRect
+        let color: NSColor
+    }
+
     private enum Markup {
         case rectangle(NSRect)
         case arrow(NSPoint, NSPoint)
         case pen([NSPoint])
         case text(String, NSPoint)
-        case translation(String, NSRect)
+        case translation(String, NSRect, [TranslationPatch])
     }
 
     private enum SelectionHandle: CaseIterable {
@@ -430,7 +438,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     private let onSelectWindow: (ScreenshotWindowCandidate) -> Void
     private let onCopy: (NSImage) -> Void
     private let onOCR: (NSImage) -> Void
-    private let onTranslate: (NSImage, @escaping (Result<String, Error>) -> Void) -> Void
+    private let onTranslate: (NSImage, @escaping (Result<ScreenshotTranslationResult, Error>) -> Void) -> Void
     private let onSaved: (URL) -> Void
     private let onCancel: () -> Void
     private let onStatus: (String, String, MainViewController.PrimaryStatusTone) -> Void
@@ -463,7 +471,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         onSelectWindow: @escaping (ScreenshotWindowCandidate) -> Void,
         onCopy: @escaping (NSImage) -> Void,
         onOCR: @escaping (NSImage) -> Void,
-        onTranslate: @escaping (NSImage, @escaping (Result<String, Error>) -> Void) -> Void,
+        onTranslate: @escaping (NSImage, @escaping (Result<ScreenshotTranslationResult, Error>) -> Void) -> Void,
         onSaved: @escaping (URL) -> Void,
         onCancel: @escaping () -> Void,
         onStatus: @escaping (String, String, MainViewController.PrimaryStatusTone) -> Void
@@ -927,17 +935,18 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             self.isTranslating = false
             switch result {
             case .success(let translation):
-                let text = translation.trimmingCharacters(in: .whitespacesAndNewlines)
+                let text = translation.translatedText.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !text.isEmpty else {
                     self.onStatus("截图翻译失败", "翻译结果为空，请稍后重试", .warning)
                     self.needsDisplay = true
                     return
                 }
-                let rect = self.defaultTranslationRect(for: text)
-                self.markups.append(.translation(text, rect))
+                let rect = self.defaultTranslationRect(for: text, covering: translation.lines.map(\.rect))
+                let patches = self.translationPatches(for: translation.lines.map(\.rect), translationRect: rect)
+                self.markups.append(.translation(text, rect, patches))
                 self.selectedMarkupIndex = self.markups.indices.last
                 self.isAnnotating = true
-                self.onStatus("翻译已添加", "双击复制或保存时会包含中文译文", .success)
+                self.onStatus("翻译已覆盖", "已遮盖英文原文并贴入中文译文", .success)
             case .failure(let error):
                 if case ScreenshotTranslationError.emptyOCR = error {
                     self.onStatus("未识别到文字", Self.translationErrorMessage(error), .warning)
@@ -1230,8 +1239,10 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             path.stroke()
         case .text(let text, let point):
             drawText(text, at: transformPoint(point))
-        case .translation(let text, let rect):
-            drawTranslation(text, in: transformRect(rect))
+        case .translation(let text, let rect, let patches):
+            drawTranslation(text, in: transformRect(rect), patches: patches.map {
+                TranslationPatch(rect: transformRect($0.rect), color: $0.color)
+            })
         }
     }
 
@@ -1281,21 +1292,24 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         text.draw(at: NSPoint(x: rect.minX + padding, y: rect.minY + padding * 0.55), withAttributes: attributes)
     }
 
-    private func drawTranslation(_ text: String, in rect: NSRect) {
-        let path = NSBezierPath(roundedRect: rect, xRadius: 8, yRadius: 8)
-        NSColor(calibratedWhite: 0.05, alpha: 0.82).setFill()
-        path.fill()
-        NSColor.systemYellow.withAlphaComponent(0.9).setStroke()
-        path.lineWidth = 1.4
-        path.stroke()
+    private func drawTranslation(_ text: String, in rect: NSRect, patches: [TranslationPatch]) {
+        for patch in patches {
+            patch.color.withAlphaComponent(0.94).setFill()
+            NSBezierPath(roundedRect: patch.rect, xRadius: 3, yRadius: 3).fill()
+        }
 
-        let textRect = rect.insetBy(dx: 10, dy: 10)
+        let backgroundColor = patches.last?.color ?? NSColor(calibratedWhite: 0.96, alpha: 1)
+        backgroundColor.withAlphaComponent(0.88).setFill()
+        NSBezierPath(roundedRect: rect, xRadius: 5, yRadius: 5).fill()
+
+        let inset = translationTextInset(for: rect)
+        let textRect = rect.insetBy(dx: inset, dy: inset)
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineBreakMode = .byWordWrapping
-        paragraph.lineSpacing = 2
+        paragraph.lineSpacing = rect.height < 90 ? 0.5 : 1.5
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: translationFont,
-            .foregroundColor: NSColor.white,
+            .font: translationFont(fitting: text, in: rect),
+            .foregroundColor: readableTextColor(on: backgroundColor),
             .paragraphStyle: paragraph,
         ]
         (text as NSString).draw(
@@ -1305,40 +1319,133 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         )
     }
 
-    private var translationFont: NSFont {
-        let size = selection.width < 260 || selection.height < 140 ? CGFloat(14) : CGFloat(16)
-        return .systemFont(ofSize: size, weight: .semibold)
-    }
-
-    private func defaultTranslationRect(for text: String) -> NSRect {
-        let inset = min(max(selection.width * 0.06, 12), 20)
-        let width = max(96, selection.width - inset * 2)
-        let maxHeight = max(44, selection.height - inset * 2)
-        let measuredHeight = translationTextHeight(text, width: width)
-        let height = min(max(measuredHeight, 44), maxHeight)
+    private func defaultTranslationRect(for text: String, covering lineRects: [NSRect]) -> NSRect {
+        let inset = min(max(selection.width * 0.04, 8), 16)
+        let lineUnion = unionRect(lineRects)?.insetBy(dx: -6, dy: -4)
+        let width = max(80, min(selection.width - inset * 2, lineUnion?.width ?? selection.width - inset * 2))
+        let maxHeight = max(32, selection.height - inset * 2)
+        let fontSize = translationFontSize(fitting: text, width: width, maxHeight: maxHeight)
+        let measuredHeight = translationTextHeight(text, width: width, fontSize: fontSize)
+        let height = min(max(measuredHeight, 32), maxHeight)
+        let x = lineUnion.map { min(max($0.minX, inset), max(inset, selection.width - width - inset)) } ?? inset
+        let preferredY = lineUnion.map { $0.minY } ?? (selection.height - height - inset)
         return NSRect(
-            x: inset,
-            y: max(inset, selection.height - height - inset),
+            x: x,
+            y: min(max(preferredY, inset), max(inset, selection.height - height - inset)),
             width: width,
             height: height
         )
     }
 
-    private func translationTextHeight(_ text: String, width: CGFloat) -> CGFloat {
+    private func translationPatches(for lineRects: [NSRect], translationRect: NSRect) -> [TranslationPatch] {
+        let paddedLines = lineRects.map {
+            $0.insetBy(dx: -3, dy: -2).intersection(NSRect(origin: .zero, size: selection.size))
+        }.filter { !$0.isEmpty }
+        let coverRects = paddedLines + [translationRect]
+        return coverRects.map { rect in
+            TranslationPatch(rect: rect, color: averageScreenshotColor(in: rect))
+        }
+    }
+
+    private func unionRect(_ rects: [NSRect]) -> NSRect? {
+        rects.reduce(nil) { partial, rect in
+            guard !rect.isEmpty else { return partial }
+            return partial?.union(rect) ?? rect
+        }
+    }
+
+    private func averageScreenshotColor(in localRect: NSRect) -> NSColor {
+        let absoluteRect = NSRect(
+            x: selection.minX + localRect.minX,
+            y: selection.minY + localRect.minY,
+            width: localRect.width,
+            height: localRect.height
+        ).intersection(selection)
+        guard let image = crop(absoluteRect) else {
+            return NSColor(calibratedWhite: 0.96, alpha: 1)
+        }
+        return Self.averageColor(in: image) ?? NSColor(calibratedWhite: 0.96, alpha: 1)
+    }
+
+    private func readableTextColor(on backgroundColor: NSColor) -> NSColor {
+        let color = backgroundColor.usingColorSpace(.deviceRGB) ?? backgroundColor
+        let luminance = 0.299 * color.redComponent + 0.587 * color.greenComponent + 0.114 * color.blueComponent
+        return luminance < 0.56 ? .white : .black
+    }
+
+    private func translationFont(fitting text: String, in rect: NSRect) -> NSFont {
+        let fontSize = translationFontSize(fitting: text, width: rect.width, maxHeight: max(1, rect.height))
+        return .systemFont(ofSize: fontSize, weight: .semibold)
+    }
+
+    private func translationFontSize(fitting text: String, width: CGFloat, maxHeight: CGFloat) -> CGFloat {
+        let baseSize: CGFloat = selection.width < 320 || selection.height < 180 ? 12 : 14
+        var size = baseSize
+        while size >= 8 {
+            if translationTextHeight(text, width: width, fontSize: size) <= maxHeight {
+                return size
+            }
+            size -= 1
+        }
+        return 8
+    }
+
+    private func translationTextHeight(_ text: String, width: CGFloat, fontSize: CGFloat) -> CGFloat {
+        let measuringRect = NSRect(x: 0, y: 0, width: width, height: max(1, selection.height))
+        let inset = translationTextInset(for: measuringRect)
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineBreakMode = .byWordWrapping
-        paragraph.lineSpacing = 2
+        paragraph.lineSpacing = selection.height < 90 ? 0.5 : 1.5
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: translationFont,
+            .font: NSFont.systemFont(ofSize: fontSize, weight: .semibold),
             .paragraphStyle: paragraph,
         ]
-        let textWidth = max(1, width - 20)
+        let textWidth = max(1, width - inset * 2)
         let measured = (text as NSString).boundingRect(
             with: NSSize(width: textWidth, height: .greatestFiniteMagnitude),
             options: [.usesLineFragmentOrigin, .usesFontLeading],
             attributes: attributes
         )
-        return ceil(measured.height) + 22
+        return ceil(measured.height) + inset * 2
+    }
+
+    private func translationTextInset(for rect: NSRect) -> CGFloat {
+        rect.width < 180 || rect.height < 80 ? 6 : 8
+    }
+
+    private static func averageColor(in image: CGImage) -> NSColor? {
+        let rep = NSBitmapImageRep(cgImage: image)
+        let width = rep.pixelsWide
+        let height = rep.pixelsHigh
+        guard width > 0, height > 0 else { return nil }
+
+        let strideX = max(1, width / 16)
+        let strideY = max(1, height / 16)
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var count: CGFloat = 0
+        var y = 0
+        while y < height {
+            var x = 0
+            while x < width {
+                if let color = rep.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) {
+                    red += color.redComponent
+                    green += color.greenComponent
+                    blue += color.blueComponent
+                    count += 1
+                }
+                x += strideX
+            }
+            y += strideY
+        }
+        guard count > 0 else { return nil }
+        return NSColor(
+            calibratedRed: red / count,
+            green: green / count,
+            blue: blue / count,
+            alpha: 1
+        )
     }
 
     private func promptForText(at point: NSPoint) {
@@ -1446,8 +1553,8 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             ]
             let size = text.size(withAttributes: attributes)
             return NSRect(x: point.x, y: point.y, width: size.width + 16, height: size.height + 12)
-        case .translation(_, let rect):
-            return rect
+        case .translation(_, let rect, let patches):
+            return ([rect] + patches.map(\.rect)).reduce(rect) { $0.union($1) }
         }
     }
 
@@ -1475,8 +1582,12 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             return .pen(points.map(movedPoint))
         case .text(let text, let point):
             return .text(text, movedPoint(point))
-        case .translation(let text, let rect):
-            return .translation(text, movedRect(rect))
+        case .translation(let text, let rect, let patches):
+            return .translation(
+                text,
+                movedRect(rect),
+                patches.map { TranslationPatch(rect: movedRect($0.rect), color: $0.color) }
+            )
         }
     }
 
@@ -1587,8 +1698,23 @@ private enum ScreenshotTranslationError: Error {
     case emptyOCR
 }
 
+private struct ScreenshotTranslationResult {
+    let translatedText: String
+    let lines: [ScreenshotOCRLine]
+}
+
+private struct ScreenshotOCRResult {
+    let text: String
+    let lines: [ScreenshotOCRLine]
+}
+
+private struct ScreenshotOCRLine {
+    let text: String
+    let rect: NSRect
+}
+
 private final class ScreenshotOCRRecognizer {
-    func recognize(image: NSImage) async throws -> String {
+    func recognize(image: NSImage) async throws -> ScreenshotOCRResult {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             throw NSError(domain: "TypeWhale.ScreenshotOCR", code: 1, userInfo: [
                 NSLocalizedDescriptionKey: "无法读取截图图像"
@@ -1602,10 +1728,22 @@ private final class ScreenshotOCRRecognizer {
                         return
                     }
                     let observations = (request.results as? [VNRecognizedTextObservation]) ?? []
+                    let imageSize = image.size
                     let lines = observations
-                        .compactMap { $0.topCandidates(1).first?.string.trimmingCharacters(in: .whitespacesAndNewlines) }
-                        .filter { !$0.isEmpty }
-                    continuation.resume(returning: lines.joined(separator: "\n"))
+                        .sorted { $0.boundingBox.maxY > $1.boundingBox.maxY }
+                        .compactMap { observation -> ScreenshotOCRLine? in
+                            guard let text = observation.topCandidates(1).first?.string
+                                .trimmingCharacters(in: .whitespacesAndNewlines),
+                                  !text.isEmpty else { return nil }
+                            return ScreenshotOCRLine(
+                                text: text,
+                                rect: Self.localRect(from: observation.boundingBox, imageSize: imageSize)
+                            )
+                        }
+                    continuation.resume(returning: ScreenshotOCRResult(
+                        text: lines.map(\.text).joined(separator: "\n"),
+                        lines: lines
+                    ))
                 }
                 request.recognitionLevel = .accurate
                 request.usesLanguageCorrection = true
@@ -1624,6 +1762,15 @@ private final class ScreenshotOCRRecognizer {
                 }
             }
         }
+    }
+
+    private static func localRect(from normalizedRect: CGRect, imageSize: NSSize) -> NSRect {
+        NSRect(
+            x: normalizedRect.minX * imageSize.width,
+            y: (1 - normalizedRect.maxY) * imageSize.height,
+            width: normalizedRect.width * imageSize.width,
+            height: normalizedRect.height * imageSize.height
+        )
     }
 }
 

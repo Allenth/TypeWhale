@@ -11,7 +11,7 @@
 
 当前截图功能已经支持选区、窗口对齐、标注、OCR、复制和保存，但「翻译」按钮仍是占位状态。截图翻译的目标是让用户选中一块包含英文文字的区域后，TypeWhale 自动 OCR 识别英文内容，翻译成中文，并把中文译文直接贴入截图选区中。
 
-本版本只做「英文识别 -> 中文翻译 -> 译文贴入截图」。不做中文转英文，不做双向自动判断，不做原文擦除或逐行版面替换。
+本版本只做「英文识别 -> 中文翻译 -> 原文遮盖 -> 译文贴入截图」。不做中文转英文，不做双向自动判断。
 
 ## 当前代码状态
 
@@ -19,7 +19,7 @@
 |---|---|
 | `native/Sources/Presentation/Screenshot/ScreenshotCoordinator.swift` | 已有截图覆盖层、选区、复制、保存、标注、OCR 入口。 |
 | `ScreenshotOverlayView.ToolAction.translate` | 「翻译」按钮已启用，点击后执行截图英译中。 |
-| `ScreenshotOCRRecognizer` | 已基于 Vision `VNRecognizeTextRequest` 实现 OCR，当前返回纯文本。 |
+| `ScreenshotOCRRecognizer` | 已基于 Vision `VNRecognizeTextRequest` 实现 OCR，返回纯文本和行级 bounding box。 |
 | `renderedSelectionImage()` | 已能把截图选区和 `markups` 一起渲染成复制/保存图片。 |
 | `DeepSeekRewriteEngine.translate` | 已有语音翻译链路，可复用英译中方向。 |
 | `SmartTranslationDirection.englishToChinese` | 已有英译中方向和默认提示词。 |
@@ -31,7 +31,7 @@
 3. TypeWhale 对当前选区执行 OCR。
 4. 如果 OCR 没有识别到文字，显示提示，不调用 DeepSeek。
 5. 如果识别到文字，固定按英译中调用翻译。
-6. 翻译完成后，将中文译文作为截图内的标注层插入当前选区。
+6. 翻译完成后，根据 OCR 行级坐标遮盖英文原文，并将中文译文作为截图内的标注层插入当前选区。
 7. 用户可以继续移动、删除、撤销译文层。
 8. 用户双击选区复制时，剪贴板图片包含译文层。
 9. 用户点击保存本地时，保存的 PNG 包含译文层。
@@ -40,9 +40,8 @@
 
 - 不做中文转英文。
 - 不做中英自动语言判断。
-- 不做逐行 OCR 文字块定位与逐行替换。
-- 不擦除原图英文内容。
-- 不做背景修复、自动遮罩、仿原字体排版。
+- 不做真正的图像修复或生成式背景重建；当前使用平均背景色近似遮盖。
+- 不做完整仿原字体排版；当前是基于 OCR 区域的系统字体贴入。
 - 不新增截图翻译提示词设置页。
 - 不改变现有 OCR 按钮「识别并复制文本」行为。
 - 不改变当前截图双击复制逻辑。
@@ -118,7 +117,7 @@ triggeredBy: "screenshot_translation"
 在 `ScreenshotOverlayView.Markup` 中新增译文类型：
 
 ```swift
-case translation(String, NSRect)
+case translation(String, NSRect, [TranslationPatch])
 ```
 
 默认插入策略：
@@ -147,9 +146,9 @@ case translation(String, NSRect)
 | P0 | 已完成：失败状态不关闭截图浮层 | OCR 空、API 失败后仍可继续操作 |
 | P1 | 已完成：译文层可移动、撤销、删除 | 与现有标注操作一致 |
 | P1 | 已完成：DeepSeek 日志区分 `screenshot_translation` | 成本审计能识别截图翻译来源 |
-| P2 | OCR 返回行级坐标，为后续逐行覆盖做准备 | 不影响本版交付 |
-| P2 | 中英自动判断与中译英 | 后续版本再做 |
-| P2 | 原文擦除、背景修复、仿原排版 | 后续商业化增强 |
+| P2 | 已完成：OCR 返回行级坐标，为后续逐行覆盖做准备 | 不影响本版交付 |
+| P2 | 已完成第一版：原文遮盖、背景近似修复、区域贴入 | 后续可继续做生成式修复和更完整的仿原字体排版 |
+| P3 / Backlog | 中英自动判断与中译英 | 最低优先级，后续开发再评估 |
 
 ## 验收标准
 
