@@ -12,7 +12,7 @@ final class MainViewController: NSViewController {
     }
 
     private let contentWidth: CGFloat = 920
-    private let contentHeight: CGFloat = 520
+    private let contentHeight: CGFloat = 560
     private let leftColumnWidth: CGFloat = 200
     private let leftTopInset: CGFloat = 28
     private let rightTopInset: CGFloat = 18
@@ -309,7 +309,7 @@ final class MainViewController: NSViewController {
         let stack = NSStackView(views: [brandStack, modelEntry, permissionEntry, spacer, quickSettings, memoryLabel, footerButtons])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 10
+        stack.spacing = 8
         stack.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(stack)
 
@@ -354,8 +354,8 @@ final class MainViewController: NSViewController {
     }
 
     private func buildSidebarQuickSettings() -> NSView {
-        smartRewriteMode.widthAnchor.constraint(equalToConstant: 108).isActive = true
-        translationDirectionMode.widthAnchor.constraint(equalToConstant: 96).isActive = true
+        smartRewriteMode.widthAnchor.constraint(equalToConstant: 86).isActive = true
+        translationDirectionMode.widthAnchor.constraint(equalToConstant: 80).isActive = true
         smartRewriteMode.controlSize = .small
         translationDirectionMode.controlSize = .small
         smartRewriteMode.font = .systemFont(ofSize: 11, weight: .medium)
@@ -516,7 +516,7 @@ final class MainViewController: NSViewController {
         box.addSubview(inner)
 
         // 实时文本区最小高度设为非必需优先级：极端内容时让位给“填满卡片”，避免约束冲突。
-        let draftMinHeight = realtimeScroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 72)
+        let draftMinHeight = realtimeScroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 54)
         draftMinHeight.priority = NSLayoutConstraint.Priority(740)
 
         NSLayoutConstraint.activate([

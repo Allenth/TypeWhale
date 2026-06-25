@@ -10,7 +10,7 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
     private var thirdPartyNoticesWindow: NSWindow?
     private var allowsTermination = false
     private var workspaceObserver: NSObjectProtocol?
-    private let windowSize = NSSize(width: 920, height: 520)
+    private let windowSize = NSSize(width: 920, height: 560)
 
     init(controller: MainViewController) {
         self.controller = controller
