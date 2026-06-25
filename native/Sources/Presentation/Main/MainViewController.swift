@@ -14,10 +14,10 @@ final class MainViewController: NSViewController {
     private let contentWidth: CGFloat = 1080
     private let contentHeight: CGFloat = 640
     private let leftColumnWidth: CGFloat = 200
-    private let rightColumnWidth: CGFloat = 300
+    private let rightColumnWidth: CGFloat = 248
     private let leftTopInset: CGFloat = 28
     private let rightTopInset: CGFloat = 18
-    private let recentViewportHeight: CGFloat = 305
+    private let recentViewportHeight: CGFloat = 232
     private let brandIconVisibleSize: CGFloat = 48
 
     let status = label("等待录音", size: 15, weight: .semibold)
@@ -389,7 +389,7 @@ final class MainViewController: NSViewController {
         sessionSection.setContentHuggingPriority(.defaultLow, for: .vertical)
         recentSection.setContentHuggingPriority(.required, for: .vertical)
         recentSection.setContentCompressionResistancePriority(.required, for: .vertical)
-        let sessionMinHeight = sessionPanel.heightAnchor.constraint(greaterThanOrEqualToConstant: 200)
+        let sessionMinHeight = sessionPanel.heightAnchor.constraint(greaterThanOrEqualToConstant: 168)
         NSLayoutConstraint.activate([
             recentStack.widthAnchor.constraint(equalTo: recentScroll.contentView.widthAnchor),
             sessionMinHeight,

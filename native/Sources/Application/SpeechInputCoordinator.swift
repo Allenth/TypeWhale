@@ -8,7 +8,9 @@ final class SpeechInputCoordinator {
         static let initialSilenceAutoFinishSeconds: TimeInterval = 3.0
         static let holdToRecordSeconds: TimeInterval = 0.28
         /// 单次录音硬上限：超过即自动结束并识别，封住 ASR 识别时的内存峰值（识别内存随时长增长且不自动回落）。
-        static let maxRecordingSeconds: TimeInterval = 180
+        static let maxRecordingSeconds: TimeInterval = 360
+        /// 录音中持续无语音/文字产出的上限：超过即强制取消，避免话筒空开持续耗电发热。
+        static let noTextTimeoutSeconds: TimeInterval = 300
         /// 实时预览分段：停顿超过此值就把当前段冻结提交，重置预览窗口（避免滑窗重识别导致乱码）。
         static let segmentCommitPauseSeconds: TimeInterval = 0.7
         /// 连续说话不停顿时的强制分段上限：超过即强制提交并重置窗口，避免窗口滑动。
@@ -1226,6 +1228,7 @@ final class SpeechInputCoordinator {
     private func observeAudioEnergy(_ bands: [Float]) {
         guard recorder.isRecording else { return }
         if enforceMaxRecordingDuration() { return }
+        if enforceNoTextTimeout() { return }
         let level = bands.max() ?? 0
         if level >= VAD.speechBandThreshold {
             voiceEverDetected = true
@@ -1280,6 +1283,38 @@ final class SpeechInputCoordinator {
         suppressNextHotkeyUp = hotkeyIsPressed
         hotkeyIsPressed = false
         finishRecording()
+        return true
+    }
+
+    /// 录音中持续无语音/文字产出超过上限（默认 5 分钟）→ 强制取消，不做识别，避免话筒空开持续耗电。
+    /// 与硬上限（约 6 分钟）配合：说话有产出就一直续，只有真正卡住/静音才被这条提前收掉。
+    private func enforceNoTextTimeout() -> Bool {
+        guard let startedAt = recordingStartedAt else { return false }
+        // 说过话就从最后一次人声算起；从未出声则从开始录音算起。
+        let reference = voiceEverDetected ? (lastVoiceAt ?? startedAt) : startedAt
+        guard Date().timeIntervalSince(reference) >= Timing.noTextTimeoutSeconds else { return false }
+        let minutes = Int(Timing.noTextTimeoutSeconds / 60)
+        suppressNextHotkeyUp = hotkeyIsPressed
+        hotkeyIsPressed = false
+        longPressWorkItem?.cancel()
+        longPressWorkItem = nil
+        recorder.cancel()
+        clearActiveRecording()
+        trackedTargetTaskID = nil
+        trackedTargetApp = nil
+        inputState = .idle
+        drainPendingPasteResultsIfPossible()
+        scheduleIdleASRUnloadIfPossible()
+        controller.setPrimaryStatus(
+            "无输入已自动停止",
+            detail: "连续约 \(minutes) 分钟无语音输入，已自动结束录音，未做识别。",
+            tone: .warning,
+            resetWaveform: true
+        )
+        popup.show(state: "无输入已停止", draft: "约 \(minutes) 分钟无输入")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
+            self?.popup.hideAnimated()
+        }
         return true
     }
 
