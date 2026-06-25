@@ -2,6 +2,32 @@
 
 This document records architecture decisions made during the refactor. New decisions should be appended in reverse chronological order.
 
+## ADR-004: Screenshot Overlay Must Not Activate The Main App Window
+
+Date: 2026-06-25
+
+Status: Accepted
+
+Decision:
+
+- Starting screenshot mode must not call `NSApp.activate(...)` or otherwise bring the TypeWhale main panel to the front.
+- Screenshot overlays may order themselves front and become key enough to receive keyboard input, but they must preserve the existing z-order of ordinary app windows.
+- If the TypeWhale main panel is hidden, screenshot mode keeps it hidden.
+- If the TypeWhale main panel is visible behind another app, screenshot mode keeps it behind.
+- If the user explicitly chooses a hovered window in screenshot mode, TypeWhale may raise that selected target window, wait briefly, recapture the screen, and preselect the target window bounds.
+
+Reasoning:
+
+- Screenshot is an observation tool. Triggering it should not mutate the desktop by surfacing TypeWhale's own main panel.
+- Window-level selection is an explicit user action. Raising the selected target window there is intentional because the user asked to capture that window, and recapturing avoids saving stale occluded pixels.
+- The rule prevents conflicts between "main panel visibility" and "screenshot content" while keeping window capture convenient.
+
+Consequences:
+
+- `ScreenshotCoordinator.begin()` should keep using overlay ordering/key-window behavior instead of app activation.
+- Future screenshot features must preserve this distinction: entering screenshot mode is non-activating; choosing a target window may activate/raise that target.
+- Tests and manual QA should include a TypeWhale main panel that is hidden, visible behind another app, and visible in front.
+
 ## ADR-001: Use Current English Experiment Branch As Architecture Sandbox
 
 Date: 2026-06-13

@@ -9,6 +9,8 @@ final class RecordingPanel: NSPanel {
     private let appNameLabel = NSTextField(labelWithString: "")
     private let dotLabel = NSTextField(labelWithString: "·")
     private let modeButton = NSButton()
+    private let translationDotLabel = NSTextField(labelWithString: "·")
+    private let translationBadge = NSTextField(labelWithString: "自动翻译")
     private let infoBarHeight: CGFloat = 22
     private var hasContext = false
     private let fadeDuration: TimeInterval = 0.25
@@ -76,11 +78,25 @@ final class RecordingPanel: NSPanel {
         modeButton.toolTip = "点击切换整理模式"
         setModeTitle("自动")
 
+        translationDotLabel.font = .systemFont(ofSize: 11, weight: .bold)
+        translationDotLabel.textColor = NSColor(calibratedWhite: 1, alpha: 0.5)
+        translationDotLabel.isHidden = true
+
+        translationBadge.font = .systemFont(ofSize: 11, weight: .semibold)
+        translationBadge.textColor = NSColor(calibratedRed: 1.0, green: 0.82, blue: 0.36, alpha: 0.98)
+        translationBadge.lineBreakMode = .byTruncatingTail
+        translationBadge.maximumNumberOfLines = 1
+        translationBadge.toolTip = "自动翻译已开启"
+        translationBadge.isHidden = true
+
         infoBar.orientation = .horizontal
         infoBar.alignment = .centerY
         infoBar.spacing = 5
         infoBar.translatesAutoresizingMaskIntoConstraints = false
-        infoBar.setViews([appIconView, appNameLabel, dotLabel, modeButton], in: .leading)
+        infoBar.setViews(
+            [appIconView, appNameLabel, dotLabel, modeButton, translationDotLabel, translationBadge],
+            in: .leading
+        )
         infoBar.isHidden = true
         visualBackground.addSubview(infoBar)
 
@@ -104,22 +120,43 @@ final class RecordingPanel: NSPanel {
     }
 
     /// 设置胶囊顶部的「App 图标 · 模式」信息条。
-    func setContext(appIcon: NSImage?, appName: String?, modeName: String) {
-        let rawName = (appName?.isEmpty == false) ? appName! : "未知应用"
-        appNameLabel.stringValue = String(rawName.prefix(16))
-        appIconView.image = appIcon
-        appIconView.isHidden = (appIcon == nil)
+    func setContext(appIcon: NSImage?, appName: String?, modeName: String, autoTranslateEnabled: Bool) {
+        updateTargetApp(appIcon: appIcon, appName: appName, shouldResize: false)
         setModeTitle(modeName)
+        setTranslationBadgeVisible(autoTranslateEnabled)
         hasContext = true
         infoBar.isHidden = false
         capsule.contextTopInset = infoBarHeight
         resizeAndPosition()
     }
 
+    /// 当前焦点应用变化时，更新胶囊顶部的 App 图标与名称。
+    func updateTargetApp(appIcon: NSImage?, appName: String?) {
+        updateTargetApp(appIcon: appIcon, appName: appName, shouldResize: true)
+    }
+
     /// 仅更新模式标签（手动切换后调用），不改动 App 信息。
     func updateModeName(_ modeName: String) {
         setModeTitle(modeName)
         if hasContext { resizeAndPosition() }
+    }
+
+    func updateAutoTranslateEnabled(_ enabled: Bool) {
+        setTranslationBadgeVisible(enabled)
+        if hasContext { resizeAndPosition() }
+    }
+
+    private func updateTargetApp(appIcon: NSImage?, appName: String?, shouldResize: Bool) {
+        let rawName = (appName?.isEmpty == false) ? appName! : "未知应用"
+        appNameLabel.stringValue = String(rawName.prefix(16))
+        appIconView.image = appIcon
+        appIconView.isHidden = (appIcon == nil)
+        if shouldResize, hasContext { resizeAndPosition() }
+    }
+
+    private func setTranslationBadgeVisible(_ visible: Bool) {
+        translationDotLabel.isHidden = !visible
+        translationBadge.isHidden = !visible
     }
 
     func show(state: String, draft: String? = nil) {

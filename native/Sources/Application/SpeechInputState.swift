@@ -8,7 +8,7 @@ enum RecordingActivation {
 
 struct SpeechSession {
     let id: UUID
-    let targetApp: NSRunningApplication?
+    var targetApp: NSRunningApplication?
     let configuration: ASRConfiguration
     let activation: RecordingActivation
     let realtimeEnabled: Bool

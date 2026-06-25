@@ -1,0 +1,51 @@
+#!/bin/zsh
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+BUILD_SCRIPT="$ROOT/native/build_native_app.sh"
+README="$ROOT/README.md"
+MACOS_README="$ROOT/macos/README.md"
+INSTALL_APP_PATH="${TYPESPEAKER_INSTALL_APP_PATH:-/Applications/TypeWhale.app}"
+
+current_version="$(perl -ne 'print "$1\n" if m{<key>CFBundleShortVersionString</key><string>([^<]+)}' "$BUILD_SCRIPT" | head -1)"
+current_build="$(perl -ne 'print "$1\n" if m{<key>CFBundleVersion</key><string>([^<]+)}' "$BUILD_SCRIPT" | head -1)"
+
+if [[ -z "$current_version" || -z "$current_build" ]]; then
+  echo "Unable to read version/build from $BUILD_SCRIPT" >&2
+  exit 1
+fi
+
+IFS='.' read -r major minor patch <<< "$current_version"
+if [[ -z "${major:-}" || -z "${minor:-}" || -z "${patch:-}" ]]; then
+  echo "Unexpected version format: $current_version" >&2
+  exit 1
+fi
+
+next_patch=$((patch + 1))
+next_build=$((current_build + 1))
+next_version="${major}.${minor}.${next_patch}"
+
+perl -0pi -e "s{(<key>CFBundleShortVersionString</key><string>)\\Q$current_version\\E}{\${1}$next_version}" "$BUILD_SCRIPT"
+perl -0pi -e "s{(<key>CFBundleVersion</key><string>)\\Q$current_build\\E}{\${1}$next_build}" "$BUILD_SCRIPT"
+
+if [[ -f "$README" ]]; then
+  perl -0pi -e 's{Current local release build in this repository is `[^`]+`}{Current local release build in this repository is `'"$next_version ($next_build)"'`}' "$README"
+  perl -0pi -e "s{dist/TypeWhale-[0-9]+\\.[0-9]+\\.[0-9]+-[0-9]+\\.dmg}{dist/TypeWhale-$next_version-$next_build.dmg}g" "$README"
+fi
+
+if [[ -f "$MACOS_README" ]]; then
+  perl -0pi -e 's{当前本地发布版本：`[^`]+`}{当前本地发布版本：`'"$next_version ($next_build)"'`}' "$MACOS_README"
+fi
+
+echo "Bumped TypeWhale to $next_version ($next_build)"
+"$BUILD_SCRIPT"
+sleep 0.8
+if ! open "$INSTALL_APP_PATH"; then
+  sleep 1.2
+  open -n "$INSTALL_APP_PATH"
+fi
+
+echo "Installed app version:"
+/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INSTALL_APP_PATH/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$INSTALL_APP_PATH/Contents/Info.plist"
+codesign --verify --deep --strict --verbose=2 "$INSTALL_APP_PATH"

@@ -9,6 +9,59 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.3.23 (Build 231)",
+            date: "2026-06-25",
+            changes: [
+                "自动粘贴目标不再回退到上一个有效应用：当前焦点不可粘贴时，结果只保存到主页最近转录。",
+                "最终粘贴前检查当前焦点是否为明确文本输入区，避免切到 WebView 或非输入区域后误贴回旧窗口。",
+                "胶囊目标显示继续跟随当前选择，无法自动粘贴时会提示用户到最近转录中复制。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.3.22 (Build 230)",
+            date: "2026-06-25",
+            changes: [
+                "修复从 TypeWhale 主窗口开始录音时，胶囊当前应用显示为「未知应用」的问题。",
+                "胶囊显示的当前应用与最终粘贴目标拆分：显示可展示 TypeWhale，粘贴目标仍避免误选 TypeWhale 主窗口。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.3.21 (Build 229)",
+            date: "2026-06-25",
+            changes: [
+                "胶囊顶部新增自动翻译状态提示，开启后可直接看到本次输入会进入翻译链路。",
+                "录音与整理过程中跟踪前台焦点应用，胶囊 App 图标随焦点变化更新。",
+                "最终粘贴前刷新目标应用，优先把识别和整理后的内容粘贴到用户最新聚焦的输入框。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.3.20 (Build 228)",
+            date: "2026-06-25",
+            changes: [
+                "开发日志补充本轮协作复盘：把关键会话约定固化为 AGENTS.md，避免切换 session 后丢失。",
+                "记录 release_local_build 脚本在正则替换和自动打开 App 上遇到的问题与修正方式。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.3.19 (Build 227)",
+            date: "2026-06-25",
+            changes: [
+                "新增仓库级 AGENTS.md，固定后续 AI session 的变更后构建规则。",
+                "新增 release_local_build 脚本：每次修改后自动递增版本和 build、构建安装并打开本地应用。",
+                "脚本会同步 README / macOS README 当前本地版本说明，并输出安装版版本号和签名校验结果。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.3.16 (Build 224)",
+            date: "2026-06-25",
+            changes: [
+                "截图支持悬停窗口并单击选中：会先将目标窗口置顶，再重新截图并自动对齐窗口边框。",
+                "修复截图快捷键触发时 TypeWhale 主页被主动置顶的问题；只有主页本来在前台时才会进入截图内容。",
+                "自动翻译快捷键改为可配置，默认未设置；移除固定 Shift + \\ 触发。",
+                "新增可配置的唤起主页快捷键，默认未设置，避免与主录音 Fn 快捷键冲突。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.3.15 (Build 223)",
             date: "2026-06-25",
             changes: [

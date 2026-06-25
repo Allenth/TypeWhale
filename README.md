@@ -10,6 +10,8 @@ This is a public test build. It is not notarized with Developer ID yet, so macOS
 
 中文用户可以直接点击上面的链接下载安装包。如果浏览器没有开始下载，请右键链接选择“链接另存为”，或打开 [TypeWhale 1.3.0 (208) Test Release](https://github.com/Allenth/TypeWhale/releases/tag/v1.3.0-build208) 页面，在 **Assets** 区域下载 `TypeWhale-1.3.0-208.dmg`。
 
+Current local release build in this repository is `1.3.23 (231)`. It has been built, installed locally from source, and packaged as `dist/TypeWhale-1.3.23-231.dmg`. The public GitHub DMG link above still points to the last uploaded public test artifact.
+
 The current macOS baseline is:
 
 ```text
@@ -24,7 +26,8 @@ Realtime preview is only used as feedback. The final inserted text comes from th
 - Global hotkey recording: press to start/stop, or hold to talk and release to finish.
 - Non-activating recording capsule with animated microphone waveform.
 - Local SenseVoice / sherpa-onnx ASR integration.
-- Screenshot capture via a dedicated hotkey: region selection with resize handles, annotation tools (rectangle, arrow, pen, text, undo), OCR text recognition, translation, copy to clipboard, and save to file.
+- Screenshot capture via a dedicated hotkey: region selection with resize handles, hover-to-select window capture, inline annotation tools (rectangle, arrow, pen, text, undo), OCR text recognition, copy to clipboard, and direct save to the configured folder.
+- Configurable hotkeys for recording, screenshot, auto-translation toggle, and opening the main panel. Auto-translation and main-panel hotkeys are unset by default.
 - Clipboard-based final insertion with clipboard restoration.
 - Recent transcription history.
 - Microphone, Accessibility, hotkey, model, and login-item status in the main window.
@@ -184,6 +187,7 @@ TypeWhale 运行后会出现在 macOS 顶部状态栏。状态栏图标是黄色
 - 辅助功能权限状态。
 - 全局快捷键监听状态。
 - 主快捷键和备用快捷键。
+- 截图、自动翻译和唤起主页快捷键。
 - 本地识别模型状态。
 - 最近转录记录。
 
@@ -213,6 +217,26 @@ TypeWhale 运行后会出现在 macOS 顶部状态栏。状态栏图标是黄色
 ### 备用快捷键
 
 备用快捷键可以作为第二个入口，例如右 Option。适合你想保留两个不同触发方式的情况。
+
+### 截图快捷键
+
+截图快捷键默认是双击右 Option。触发后会进入截图覆盖层，不会主动把 TypeWhale 主面板切到最前。
+
+截图时可以：
+
+- 拖拽选择区域。
+- 悬停窗口并单击，TypeWhale 会先置顶该窗口，再重新截图并自动对齐窗口边框。
+- 在选区内直接标注矩形、箭头、画笔和文字。
+- OCR 识别选区文字并复制到剪贴板。
+- 复制截图或直接保存到配置的截图保存位置。
+
+### 自动翻译快捷键
+
+自动翻译快捷键默认未设置。设置后，它只用于快速打开或关闭自动翻译，不占用录音快捷键。
+
+### 唤起主页快捷键
+
+唤起主页快捷键默认未设置。这样可以避免和默认主录音快捷键 `Fn` 冲突。需要这个能力时，可以在快捷键设置中自行录入。
 
 ### 录音时降低电脑声音
 

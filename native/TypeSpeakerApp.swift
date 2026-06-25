@@ -43,6 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         LaunchDiagnostics.mark("applicationDidFinishLaunching begin")
+        TypeWhaleApplication.terminateStaleInstances()
         LaunchDiagnostics.mark("lifecycle.setup begin")
         lifecycle.setup()
         LaunchDiagnostics.mark("lifecycle.setup done")
@@ -79,6 +80,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 @main
 enum TypeWhaleApplication {
+    /// 单实例保护：刚启动的实例（最新二进制）接管，强制结束其它更早启动的同包实例，
+    /// 避免出现多个 TypeWhale 同时抢全局快捷键、重复调用 DeepSeek 造成幽灵进程偷偷计费。
+    @MainActor
+    static func terminateStaleInstances() {
+        let me = NSRunningApplication.current
+        let myStart = me.launchDate ?? Date()
+        func others() -> [NSRunningApplication] {
+            NSWorkspace.shared.runningApplications.filter {
+                $0.bundleIdentifier == me.bundleIdentifier && $0.processIdentifier != me.processIdentifier
+            }
+        }
+        let stale = others().filter { ($0.launchDate ?? .distantPast) < myStart }
+        LaunchDiagnostics.mark("single-instance: check others=\(others().count) stale=\(stale.count)")
+        guard !stale.isEmpty else { return }
+        for instance in stale {
+            LaunchDiagnostics.mark("single-instance: forceTerminate stale pid=\(instance.processIdentifier)")
+            instance.forceTerminate()
+        }
+        // 等残留实例退出（最多 ~2 秒），确保不会新旧并存重复触发。
+        let deadline = Date().addingTimeInterval(2.0)
+        while Date() < deadline, !others().isEmpty {
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+    }
+
     @MainActor
     static func main() {
         CrashReporter.install()

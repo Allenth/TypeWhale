@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import Foundation
 
 @MainActor
@@ -43,6 +44,9 @@ final class SpeechInputCoordinator {
     private var completedFinalTaskIDs: Set<UUID> = []
     private var realtimeBusy = false
     private var pendingRealtimeSnapshot: RealtimeSnapshotRequest?
+    private var workspaceActivationObserver: NSObjectProtocol?
+    private var trackedTargetTaskID: UUID?
+    private var trackedTargetApp: NSRunningApplication?
     private var hotkeyIsPressed = false
     private var longPressWorkItem: DispatchWorkItem?
     private var autoFinishWorkItem: DispatchWorkItem?
@@ -58,6 +62,12 @@ final class SpeechInputCoordinator {
     private var screenshotHotkeyBinding = HotkeyBinding.load(
         storageKey: HotkeyBinding.screenshotStorageKey,
         fallback: .screenshotDefaultBinding
+    )
+    private var autoTranslateHotkeyBinding = HotkeyBinding.loadOptional(
+        storageKey: HotkeyBinding.autoTranslateStorageKey
+    )
+    private var mainWindowHotkeyBinding = HotkeyBinding.loadOptional(
+        storageKey: HotkeyBinding.mainWindowStorageKey
     )
 
     init(
@@ -82,13 +92,22 @@ final class SpeechInputCoordinator {
         controller.updateHotkeys(
             primary: primaryHotkeyBinding,
             secondary: secondaryHotkeyBinding,
-            screenshot: screenshotHotkeyBinding
+            screenshot: screenshotHotkeyBinding,
+            autoTranslate: autoTranslateHotkeyBinding,
+            mainWindow: mainWindowHotkeyBinding
         )
-        hotkey.update(primary: primaryHotkeyBinding, secondary: secondaryHotkeyBinding, screenshot: screenshotHotkeyBinding)
+        hotkey.update(
+            primary: primaryHotkeyBinding,
+            secondary: secondaryHotkeyBinding,
+            screenshot: screenshotHotkeyBinding,
+            autoTranslate: autoTranslateHotkeyBinding,
+            mainWindow: mainWindowHotkeyBinding
+        )
         hotkey.onDown = { [weak self] channel, binding in self?.handleHotkeyDown(channel: channel, binding: binding) }
         hotkey.onUp = { [weak self] channel, binding in self?.handleHotkeyUp(channel: channel, binding: binding) }
         hotkey.onAutoTranslateToggle = { [weak self] in self?.toggleAutoTranslateFromHotkey() }
         hotkey.onScreenshot = { [weak self] in self?.beginScreenshotFromHotkey() }
+        hotkey.onMainWindow = { [weak self] in self?.showMainWindowFromHotkey() }
         popup.onCycleMode = { [weak self] in self?.cycleSmartRewriteModeFromCapsule() }
         modelInstaller.onStateChange = { [weak self] state in
             self?.controller.updateModelState(state)
@@ -105,17 +124,26 @@ final class SpeechInputCoordinator {
         controller.onInstallModel = { [weak self] in
             self?.modelInstaller.install()
         }
-        controller.onHotkeysChange = { [weak self] primary, secondary, screenshot in
+        controller.onHotkeysChange = { [weak self] primary, secondary, screenshot, autoTranslate, mainWindow in
             self?.primaryHotkeyBinding = primary
             self?.secondaryHotkeyBinding = secondary
             self?.screenshotHotkeyBinding = screenshot
-            self?.hotkey.update(primary: primary, secondary: secondary, screenshot: screenshot)
+            self?.autoTranslateHotkeyBinding = autoTranslate
+            self?.mainWindowHotkeyBinding = mainWindow
+            self?.hotkey.update(
+                primary: primary,
+                secondary: secondary,
+                screenshot: screenshot,
+                autoTranslate: autoTranslate,
+                mainWindow: mainWindow
+            )
             self?.refreshPermissions()
         }
         modelInstaller.refresh()
         hotkey.start()
         asr.start()
         realtimeASR.start()
+        startObservingTargetApplicationChanges()
         refreshPermissions()
         PermissionDiagnosticsProvider.requestAccessibilityIfNeeded()
         Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
@@ -135,6 +163,7 @@ final class SpeechInputCoordinator {
         clearActiveRecording()
         pendingPasteResults.removeAll()
         inputState = .idle
+        stopObservingTargetApplicationChanges()
         asr.stop()
         realtimeASR.stop()
     }
@@ -156,6 +185,102 @@ final class SpeechInputCoordinator {
             controller.hotkeyStatus.stringValue = "● 未监听"
             controller.hotkeyStatus.textColor = .systemOrange
         }
+    }
+
+    private func startObservingTargetApplicationChanges() {
+        guard workspaceActivationObserver == nil else { return }
+        workspaceActivationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            Task { @MainActor in
+                self?.handleActivatedApplication(notification)
+            }
+        }
+    }
+
+    private func stopObservingTargetApplicationChanges() {
+        if let workspaceActivationObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(workspaceActivationObserver)
+        }
+        workspaceActivationObserver = nil
+    }
+
+    private func handleActivatedApplication(_ notification: Notification) {
+        guard trackedTargetTaskID != nil else { return }
+        let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+        updateTrackedTargetApp(app)
+    }
+
+    @discardableResult
+    private func refreshTrackedTargetFromFrontmost() -> NSRunningApplication? {
+        updateTrackedTargetApp(NSWorkspace.shared.frontmostApplication)
+        return trackedTargetApp
+    }
+
+    private func updateTrackedTargetApp(_ app: NSRunningApplication?) {
+        guard trackedTargetTaskID != nil else { return }
+        let target = pasteableTargetApp(app)
+        trackedTargetApp = target
+        if var session = activeSession, session.id == trackedTargetTaskID {
+            session.targetApp = target
+            activeSession = session
+        }
+        popup.updateTargetApp(
+            appIcon: app?.icon,
+            appName: displayNameForSelectedTarget(app)
+        )
+    }
+
+    private func currentTargetApp(for task: RecordingTask) -> NSRunningApplication? {
+        currentTargetApp(taskID: task.id, fallback: task.targetApp)
+    }
+
+    private func currentTargetApp(taskID: UUID, fallback: NSRunningApplication?) -> NSRunningApplication? {
+        guard trackedTargetTaskID == taskID else { return fallback }
+        if let trackedTargetApp, !trackedTargetApp.isTerminated {
+            return trackedTargetApp
+        }
+        return nil
+    }
+
+    private func pasteableTargetApp(_ app: NSRunningApplication?) -> NSRunningApplication? {
+        guard let app, !app.isTerminated else { return nil }
+        if app.processIdentifier == ProcessInfo.processInfo.processIdentifier {
+            return nil
+        }
+        if app.bundleIdentifier == Bundle.main.bundleIdentifier {
+            return nil
+        }
+        if app.activationPolicy != .regular {
+            return nil
+        }
+        guard app.localizedName?.isEmpty == false else {
+            return nil
+        }
+        return app
+    }
+
+    private func displayNameForSelectedTarget(_ app: NSRunningApplication?) -> String {
+        guard let app, !app.isTerminated else {
+            return "未选择目标"
+        }
+        if let name = app.localizedName, !name.isEmpty {
+            if pasteableTargetApp(app) == nil,
+               app.bundleIdentifier != Bundle.main.bundleIdentifier,
+               app.processIdentifier != ProcessInfo.processInfo.processIdentifier {
+                return "\(name)（不可粘贴）"
+            }
+            return name
+        }
+        return "不可粘贴目标"
+    }
+
+    private func endTargetTrackingIfNeeded(_ taskID: UUID) {
+        guard trackedTargetTaskID == taskID else { return }
+        trackedTargetTaskID = nil
+        trackedTargetApp = nil
     }
 
     private func handleHotkeyDown(channel: SpeechInputChannel, binding: HotkeyBinding) {
@@ -206,6 +331,15 @@ final class SpeechInputCoordinator {
 
     private func toggleAutoTranslateFromHotkey() {
         controller.toggleAutoTranslateFromShortcut()
+        popup.updateAutoTranslateEnabled(controller.autoTranslateEnabled)
+    }
+
+    private func showMainWindowFromHotkey() {
+        if controller.view.window?.isMiniaturized == true {
+            controller.view.window?.deminiaturize(nil)
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        controller.view.window?.makeKeyAndOrderFront(nil)
     }
 
     private func cycleSmartRewriteModeFromCapsule() {
@@ -234,15 +368,19 @@ final class SpeechInputCoordinator {
         let resolvedBackend = selectedBackend.resolvedBackend
         let realtimeEnabled = controller.realtimePreviewEnabled && resolvedBackend == .senseVoice
         let taskID = UUID()
+        let frontmostApp = NSWorkspace.shared.frontmostApplication
+        let initialTargetApp = pasteableTargetApp(frontmostApp)
         let session = SpeechSession(
             id: taskID,
-            targetApp: NSWorkspace.shared.frontmostApplication,
+            targetApp: initialTargetApp,
             configuration: ASRConfiguration(languageMode: .chinese, backend: selectedBackend),
             activation: activation,
             realtimeEnabled: realtimeEnabled,
             latestPreviewText: ""
         )
         activeSession = session
+        trackedTargetTaskID = taskID
+        trackedTargetApp = initialTargetApp
         inputState = .recording(taskID)
         controller.updateRealtimeDraft(realtimeEnabled
             ? "正在等待第一段实时文本…"
@@ -250,9 +388,10 @@ final class SpeechInputCoordinator {
         controller.setPrimaryStatus("录音中", detail: instructions, tone: .listening)
         popup.show(state: "录音中", draft: "")
         popup.setContext(
-            appIcon: session.targetApp?.icon,
-            appName: session.targetApp?.localizedName,
-            modeName: controller.smartRewritePreference.displayName
+            appIcon: frontmostApp?.icon,
+            appName: displayNameForSelectedTarget(frontmostApp),
+            modeName: controller.smartRewritePreference.displayName,
+            autoTranslateEnabled: controller.autoTranslateEnabled
         )
         outputAudioDucker.duckIfNeeded(enabled: controller.duckSystemAudioWhileRecordingEnabled)
         do {
@@ -277,7 +416,8 @@ final class SpeechInputCoordinator {
         guard let session = activeSession else { return }
         let taskID = session.id
         let configuration = session.configuration
-        let targetApp = session.targetApp
+        refreshTrackedTargetFromFrontmost()
+        let targetApp = currentTargetApp(taskID: taskID, fallback: session.targetApp)
         let result: (URL, TimeInterval)?
         do {
             result = try recorder.stop()
@@ -479,7 +619,7 @@ final class SpeechInputCoordinator {
                 if shouldUpdateInterface {
                     controller.updateRealtimeDraft(text)
                     let preference = controller.smartRewritePreference
-                    let context = SmartInputContext(targetApp: task.targetApp)
+                    let context = SmartInputContext(targetApp: currentTargetApp(for: task))
                     let progress = smartInputRouter.progressInfo(preference: preference, context: context)
                     if controller.autoTranslateEnabled {
                         if controller.translationDirection.usesRawSourceTextForTranslation {
@@ -549,7 +689,7 @@ final class SpeechInputCoordinator {
     private func rewriteTranslateAndSubmit(_ rawText: String, elapsed: Double, task: RecordingTask) {
         let preference = controller.smartRewritePreference
         let direction = controller.translationDirection
-        let context = SmartInputContext(targetApp: task.targetApp)
+        let context = SmartInputContext(targetApp: currentTargetApp(for: task))
         Task { [weak self] in
             guard let self else { return }
             let rewriteResult: SmartRewriteResult
@@ -633,7 +773,7 @@ final class SpeechInputCoordinator {
 
     private func rewriteAndSubmit(_ rawText: String, elapsed: Double, task: RecordingTask) {
         let preference = controller.smartRewritePreference
-        let context = SmartInputContext(targetApp: task.targetApp)
+        let context = SmartInputContext(targetApp: currentTargetApp(for: task))
         Task { [weak self] in
             guard let self else { return }
             let result = await self.smartInputRouter.rewrite(
@@ -762,16 +902,86 @@ final class SpeechInputCoordinator {
         }
 
         let result = pendingPasteResults.removeFirst()
+        refreshTrackedTargetFromFrontmost()
+        let pasteTarget = currentTargetApp(for: result.task)
+        guard let pasteTarget else {
+            skipAutomaticPaste(result)
+            return
+        }
+        guard canPasteIntoFocusedElement(of: pasteTarget) else {
+            skipAutomaticPaste(result, detail: "当前焦点不是明确的文本输入区，可在最近转录中复制")
+            return
+        }
         inputState = .pasting(result.task)
-        pasteCoordinator.enqueue(text: result.text, targetApp: result.task.targetApp) { [weak self] outcome in
+        pasteCoordinator.enqueue(text: result.text, targetApp: pasteTarget) { [weak self] outcome in
             self?.handlePasteOutcome(outcome, result: result)
         }
+    }
+
+    private func skipAutomaticPaste(
+        _ result: PendingPasteResult,
+        detail: String = "当前目标不可自动粘贴，可在最近转录中复制"
+    ) {
+        let task = result.task
+        let shouldUpdateInterface = shouldUpdateInterface(for: task.id)
+        if shouldUpdateInterface {
+            controller.setPrimaryStatus(
+                "已保存到主页历史",
+                detail: detail,
+                tone: .warning,
+                resetWaveform: true
+            )
+            popup.show(state: "已保存", draft: "")
+            hidePopup(after: 1.0, task: task)
+        }
+        inputState = .idle
+        endTargetTrackingIfNeeded(task.id)
+        drainPendingPasteResultsIfPossible()
+    }
+
+    private func canPasteIntoFocusedElement(of targetApp: NSRunningApplication) -> Bool {
+        guard AXIsProcessTrusted() else { return true }
+        let systemWide = AXUIElementCreateSystemWide()
+        var focusedValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            systemWide,
+            kAXFocusedUIElementAttribute as CFString,
+            &focusedValue
+        ) == .success else {
+            return false
+        }
+        guard let focusedElement = focusedValue else { return false }
+        let element = focusedElement as! AXUIElement
+        var focusedPID: pid_t = 0
+        guard AXUIElementGetPid(element, &focusedPID) == .success,
+              focusedPID == targetApp.processIdentifier else {
+            return false
+        }
+        var roleValue: CFTypeRef?
+        if AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleValue) == .success,
+           let role = roleValue as? String,
+           isEditableTextRole(role) {
+            return true
+        }
+        var isSettable = DarwinBoolean(false)
+        if AXUIElementIsAttributeSettable(element, kAXValueAttribute as CFString, &isSettable) == .success,
+           isSettable.boolValue {
+            return true
+        }
+        return false
+    }
+
+    private func isEditableTextRole(_ role: String) -> Bool {
+        role == kAXTextFieldRole as String ||
+            role == kAXTextAreaRole as String ||
+            role == kAXComboBoxRole as String
     }
 
     private func finishFinalTask(_ task: RecordingTask) {
         if case .finalizing(let current) = inputState, current.id == task.id {
             inputState = .idle
         }
+        endTargetTrackingIfNeeded(task.id)
         drainPendingPasteResultsIfPossible()
     }
 
@@ -818,6 +1028,7 @@ final class SpeechInputCoordinator {
         if activeSession == nil, !recorder.isRecording {
             inputState = .idle
         }
+        endTargetTrackingIfNeeded(task.id)
         drainPendingPasteResultsIfPossible()
     }
 

@@ -103,10 +103,20 @@ struct HotkeyBinding: Codable, Equatable {
     static let chineseStorageKey = "chineseHotkeyBinding"
     static let secondaryChineseStorageKey = "secondaryChineseHotkeyBinding"
     static let screenshotStorageKey = "screenshotHotkeyBinding"
+    static let autoTranslateStorageKey = "autoTranslateHotkeyBinding"
+    static let mainWindowStorageKey = "mainWindowHotkeyBinding"
     static let fnDefaultMigrationKey = "hotkeyDefaultMigration.fnDefault.v1"
     let kind: Kind
     let keyCode: Int?
     let modifierKeyCodes: [Int]
+    let tapCount: Int?
+
+    init(kind: Kind, keyCode: Int?, modifierKeyCodes: [Int], tapCount: Int? = nil) {
+        self.kind = kind
+        self.keyCode = keyCode
+        self.modifierKeyCodes = modifierKeyCodes
+        self.tapCount = tapCount
+    }
 
     static var defaultBinding: HotkeyBinding {
         HotkeyBinding(kind: .function, keyCode: HotkeyKeyCodes.function, modifierKeyCodes: [])
@@ -174,6 +184,17 @@ struct HotkeyBinding: Codable, Equatable {
         case .combo:
             return displayName
         }
+    }
+
+    var actionDisplayName: String {
+        guard let tapCount, tapCount > 1, kind != .combo else { return displayName }
+        let prefix: String
+        switch tapCount {
+        case 2: prefix = "双击"
+        case 3: prefix = "三击"
+        default: prefix = "\(tapCount)击"
+        }
+        return "\(prefix)\(displayName)"
     }
 
     var pressInstruction: String {

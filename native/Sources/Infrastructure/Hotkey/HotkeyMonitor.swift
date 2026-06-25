@@ -4,6 +4,7 @@ import Foundation
 final class HotkeyMonitor {
     private enum Timing {
         static let screenshotDoubleTapWindowSeconds: TimeInterval = 0.42
+        static let actionTapWindowSeconds: TimeInterval = 0.42
     }
 
     private var tap: CFMachPort?
@@ -15,16 +16,22 @@ final class HotkeyMonitor {
         storageKey: HotkeyBinding.screenshotStorageKey,
         fallback: .screenshotDefaultBinding
     )
+    private var autoTranslateBinding = HotkeyBinding.loadOptional(storageKey: HotkeyBinding.autoTranslateStorageKey)
+    private var mainWindowBinding = HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey)
     private var activeModifierKeyCodes: Set<Int> = []
     private var triggerDown = false
     private var screenshotTriggerDown = false
+    private var autoTranslateTriggerDown = false
+    private var mainWindowTriggerDown = false
     private var lastScreenshotTapAt: Date?
+    private var actionTapState: [String: (count: Int, lastAt: Date)] = [:]
     private var activeChannel: SpeechInputChannel?
     private var activeBinding: HotkeyBinding?
     var onDown: ((SpeechInputChannel, HotkeyBinding) -> Void)?
     var onUp: ((SpeechInputChannel, HotkeyBinding) -> Void)?
     var onAutoTranslateToggle: (() -> Void)?
     var onScreenshot: (() -> Void)?
+    var onMainWindow: (() -> Void)?
 
     func start() {
         guard tap == nil || !isTapEnabled else { return }
@@ -76,16 +83,33 @@ final class HotkeyMonitor {
     }
 
     func update(primary: HotkeyBinding, secondary: HotkeyBinding?) {
-        update(primary: primary, secondary: secondary, screenshot: screenshotBinding)
+        update(
+            primary: primary,
+            secondary: secondary,
+            screenshot: screenshotBinding,
+            autoTranslate: autoTranslateBinding,
+            mainWindow: mainWindowBinding
+        )
     }
 
-    func update(primary: HotkeyBinding, secondary: HotkeyBinding?, screenshot: HotkeyBinding) {
+    func update(
+        primary: HotkeyBinding,
+        secondary: HotkeyBinding?,
+        screenshot: HotkeyBinding,
+        autoTranslate: HotkeyBinding? = nil,
+        mainWindow: HotkeyBinding? = nil
+    ) {
         self.bindings = [primary] + (secondary.map { [$0] } ?? [])
         self.screenshotBinding = screenshot
+        self.autoTranslateBinding = autoTranslate
+        self.mainWindowBinding = mainWindow
         activeModifierKeyCodes.removeAll()
         triggerDown = false
         screenshotTriggerDown = false
+        autoTranslateTriggerDown = false
+        mainWindowTriggerDown = false
         lastScreenshotTapAt = nil
+        actionTapState.removeAll()
         activeChannel = nil
         activeBinding = nil
     }
@@ -117,6 +141,26 @@ final class HotkeyMonitor {
         if handleScreenshotFlagsChanged(keyCode: keyCode, eventFlags: eventFlags) {
             return true
         }
+        if handleActionFlagsChanged(
+            binding: autoTranslateBinding,
+            keyCode: keyCode,
+            eventFlags: eventFlags,
+            triggerDown: &autoTranslateTriggerDown,
+            actionKey: "autoTranslate",
+            action: { [weak self] in self?.onAutoTranslateToggle?() }
+        ) {
+            return true
+        }
+        if handleActionFlagsChanged(
+            binding: mainWindowBinding,
+            keyCode: keyCode,
+            eventFlags: eventFlags,
+            triggerDown: &mainWindowTriggerDown,
+            actionKey: "mainWindow",
+            action: { [weak self] in self?.onMainWindow?() }
+        ) {
+            return true
+        }
         if triggerDown, let activeChannel, let activeBinding {
             if !isBindingDown(activeBinding, keyCode: keyCode, eventFlags: eventFlags) {
                 return updateTrigger(isDown: false, channel: activeChannel, binding: activeBinding)
@@ -138,10 +182,26 @@ final class HotkeyMonitor {
 
     private func handleKey(event: CGEvent, isDown: Bool) -> Bool {
         let eventKeyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
-        if isAutoTranslateToggle(eventKeyCode: eventKeyCode, eventFlags: event.flags) {
-            if isDown, event.getIntegerValueField(.keyboardEventAutorepeat) == 0 {
-                onAutoTranslateToggle?()
-            }
+        if handleActionKey(
+            binding: autoTranslateBinding,
+            eventKeyCode: eventKeyCode,
+            eventFlags: event.flags,
+            isDown: isDown,
+            triggerDown: &autoTranslateTriggerDown,
+            actionKey: "autoTranslate",
+            action: { [weak self] in self?.onAutoTranslateToggle?() }
+        ) {
+            return true
+        }
+        if handleActionKey(
+            binding: mainWindowBinding,
+            eventKeyCode: eventKeyCode,
+            eventFlags: event.flags,
+            isDown: isDown,
+            triggerDown: &mainWindowTriggerDown,
+            actionKey: "mainWindow",
+            action: { [weak self] in self?.onMainWindow?() }
+        ) {
             return true
         }
 
@@ -198,17 +258,72 @@ final class HotkeyMonitor {
         return true
     }
 
-    private var screenshotConflictsWithSpeechBinding: Bool {
-        bindings.contains(screenshotBinding)
+    private func handleActionFlagsChanged(
+        binding: HotkeyBinding?,
+        keyCode: Int,
+        eventFlags: CGEventFlags,
+        triggerDown: inout Bool,
+        actionKey: String,
+        action: () -> Void
+    ) -> Bool {
+        guard let binding, binding.kind == .function || binding.kind == .modifier else { return false }
+        let isDown = isBindingDown(binding, keyCode: keyCode, eventFlags: eventFlags)
+        guard isDown != triggerDown else { return false }
+        triggerDown = isDown
+        if !isDown {
+            triggerAction(binding: binding, actionKey: actionKey, action: action)
+        }
+        return true
     }
 
-    private func isAutoTranslateToggle(eventKeyCode: Int, eventFlags: CGEventFlags) -> Bool {
-        guard eventKeyCode == HotkeyKeyCodes.backslash else { return false }
-        guard eventFlags.contains(.maskShift) else { return false }
-        return !eventFlags.contains(.maskCommand) &&
-            !eventFlags.contains(.maskAlternate) &&
-            !eventFlags.contains(.maskControl) &&
-            !eventFlags.contains(.maskSecondaryFn)
+    private func handleActionKey(
+        binding: HotkeyBinding?,
+        eventKeyCode: Int,
+        eventFlags: CGEventFlags,
+        isDown: Bool,
+        triggerDown: inout Bool,
+        actionKey: String,
+        action: () -> Void
+    ) -> Bool {
+        guard let binding,
+              binding.kind == .combo,
+              binding.keyCode == eventKeyCode,
+              requiredModifiersAreActive(for: binding, eventFlags: eventFlags) else {
+            return false
+        }
+        if isDown != triggerDown {
+            triggerDown = isDown
+            if isDown {
+                triggerAction(binding: binding, actionKey: actionKey, action: action)
+            }
+        }
+        return true
+    }
+
+    private func triggerAction(binding: HotkeyBinding, actionKey: String, action: () -> Void) {
+        let requiredTapCount = max(binding.tapCount ?? 1, 1)
+        guard requiredTapCount > 1 else {
+            action()
+            return
+        }
+        let now = Date()
+        let state = actionTapState[actionKey]
+        let nextCount: Int
+        if let state, now.timeIntervalSince(state.lastAt) <= Timing.actionTapWindowSeconds {
+            nextCount = state.count + 1
+        } else {
+            nextCount = 1
+        }
+        if nextCount >= requiredTapCount {
+            actionTapState[actionKey] = nil
+            action()
+        } else {
+            actionTapState[actionKey] = (nextCount, now)
+        }
+    }
+
+    private var screenshotConflictsWithSpeechBinding: Bool {
+        bindings.contains(screenshotBinding)
     }
 
     private func isBindingDown(_ binding: HotkeyBinding, keyCode: Int, eventFlags: CGEventFlags) -> Bool {

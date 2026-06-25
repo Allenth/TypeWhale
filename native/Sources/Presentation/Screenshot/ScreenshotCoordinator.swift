@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import CoreGraphics
 import UniformTypeIdentifiers
 import Vision
@@ -19,13 +20,23 @@ final class ScreenshotCoordinator {
     }
 
     func begin() {
+        begin(preselectedWindowFrame: nil)
+    }
+
+    private func begin(preselectedWindowFrame: CGRect?) {
         guard !isActive else { return }
         invalidatePendingOperations()
+        let windowCandidates = Self.visibleWindowCandidates()
         let screenOverlays = NSScreen.screens.compactMap { screen -> ScreenshotOverlayWindow? in
-            guard let image = captureFullScreen(screen) else { return nil }
+            guard let displayID = displayID(for: screen),
+                  let image = captureFullScreen(displayID) else { return nil }
             return ScreenshotOverlayWindow(
                 screen: screen,
+                displayID: displayID,
                 screenshot: image,
+                windowCandidates: windowCandidates,
+                preselectedWindowFrame: preselectedWindowFrame,
+                onSelectWindow: { [weak self] candidate in self?.focusWindowThenBeginScreenshot(candidate) },
                 onCopy: { [weak self] image in self?.copy(image) },
                 onOCR: { [weak self] image in self?.recognizeText(in: image) },
                 onSaved: { [weak self] url in self?.saved(url) },
@@ -38,11 +49,27 @@ final class ScreenshotCoordinator {
             return
         }
         overlays = screenOverlays
-        NSApp.activate(ignoringOtherApps: true)
         overlays.forEach { $0.orderFrontRegardless() }
-        // 必须让某个覆盖窗口成为 key window，否则 keyDown（含 Esc）不会传到视图，导致无法用 Esc 退出截图。
-        overlays.first?.makeKey()
-        onStatus("截图模式", "拖拽选择区域，复制后会写入剪贴板", .processing)
+        // 只让截图覆盖层接收键盘事件，不激活 TypeWhale App，避免把已在后方的主页窗口推到最前。
+        overlays.first?.makeKeyAndOrderFront(nil)
+        if preselectedWindowFrame == nil {
+            onStatus("截图模式", "拖拽选择区域，复制后会写入剪贴板", .processing)
+        } else {
+            onStatus("窗口已置顶", "边框已自动对齐窗口，可复制、OCR、标注或保存", .processing)
+        }
+    }
+
+    private func focusWindowThenBeginScreenshot(_ candidate: ScreenshotWindowCandidate) {
+        operationGeneration += 1
+        let generation = operationGeneration
+        closeAll()
+        onStatus("正在置顶窗口", "将选中的窗口移到最前后重新截图", .processing)
+        raiseWindow(candidate)
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 180_000_000)
+            guard let self, generation == operationGeneration else { return }
+            begin(preselectedWindowFrame: candidate.frame)
+        }
     }
 
     private func copy(_ image: NSImage) {
@@ -118,18 +145,101 @@ final class ScreenshotCoordinator {
         }
     }
 
-    private func captureFullScreen(_ screen: NSScreen) -> CGImage? {
+    private func displayID(for screen: NSScreen) -> CGDirectDisplayID? {
         guard let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else {
             return nil
         }
-        return CGDisplayCreateImage(CGDirectDisplayID(number.uint32Value))
+        return CGDirectDisplayID(number.uint32Value)
     }
+
+    private func captureFullScreen(_ displayID: CGDirectDisplayID) -> CGImage? {
+        CGDisplayCreateImage(displayID)
+    }
+
+    private static func visibleWindowCandidates() -> [ScreenshotWindowCandidate] {
+        guard let infos = CGWindowListCopyWindowInfo(
+            [.optionOnScreenOnly, .excludeDesktopElements],
+            kCGNullWindowID
+        ) as? [[String: Any]] else {
+            return []
+        }
+        return infos.compactMap { info -> ScreenshotWindowCandidate? in
+            let layer = (info[kCGWindowLayer as String] as? NSNumber)?.intValue
+            let alpha = (info[kCGWindowAlpha as String] as? NSNumber)?.doubleValue ?? 1
+            let ownerPID = (info[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value
+            let windowID = (info[kCGWindowNumber as String] as? NSNumber)?.uint32Value
+            guard layer == 0,
+                  alpha > 0.01,
+                  let ownerPID,
+                  let windowID,
+                  let rawBounds = info[kCGWindowBounds as String],
+                  let boundsDictionary = rawBounds as? NSDictionary,
+                  let frame = CGRect(dictionaryRepresentation: boundsDictionary),
+                  frame.width >= 48,
+                  frame.height >= 48 else {
+                return nil
+            }
+            return ScreenshotWindowCandidate(windowID: CGWindowID(windowID), ownerPID: ownerPID, frame: frame)
+        }
+    }
+
+    private func raiseWindow(_ candidate: ScreenshotWindowCandidate) {
+        let app = AXUIElementCreateApplication(candidate.ownerPID)
+        if let axWindow = matchingAXWindow(in: app, for: candidate) {
+            AXUIElementPerformAction(axWindow, kAXRaiseAction as CFString)
+            AXUIElementSetAttributeValue(app, kAXFocusedWindowAttribute as CFString, axWindow)
+        }
+        NSRunningApplication(processIdentifier: candidate.ownerPID)?.activate(options: [])
+    }
+
+    private func matchingAXWindow(in app: AXUIElement, for candidate: ScreenshotWindowCandidate) -> AXUIElement? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &value) == .success,
+              let windows = value as? [AXUIElement] else {
+            return nil
+        }
+        return windows.first { axWindow in
+            guard let frame = frame(of: axWindow) else { return false }
+            return abs(frame.minX - candidate.frame.minX) <= 3
+                && abs(frame.minY - candidate.frame.minY) <= 3
+                && abs(frame.width - candidate.frame.width) <= 6
+                && abs(frame.height - candidate.frame.height) <= 6
+        }
+    }
+
+    private func frame(of axWindow: AXUIElement) -> CGRect? {
+        var positionValue: CFTypeRef?
+        var sizeValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(axWindow, kAXPositionAttribute as CFString, &positionValue) == .success,
+              AXUIElementCopyAttributeValue(axWindow, kAXSizeAttribute as CFString, &sizeValue) == .success,
+              let positionAXValue = positionValue,
+              let sizeAXValue = sizeValue else {
+            return nil
+        }
+        var position = CGPoint.zero
+        var size = CGSize.zero
+        guard AXValueGetValue(positionAXValue as! AXValue, .cgPoint, &position),
+              AXValueGetValue(sizeAXValue as! AXValue, .cgSize, &size) else {
+            return nil
+        }
+        return CGRect(origin: position, size: size)
+    }
+}
+
+private struct ScreenshotWindowCandidate: Equatable {
+    let windowID: CGWindowID
+    let ownerPID: pid_t
+    let frame: CGRect
 }
 
 private final class ScreenshotOverlayWindow: NSWindow {
     init(
         screen: NSScreen,
+        displayID: CGDirectDisplayID,
         screenshot: CGImage,
+        windowCandidates: [ScreenshotWindowCandidate],
+        preselectedWindowFrame: CGRect?,
+        onSelectWindow: @escaping (ScreenshotWindowCandidate) -> Void,
         onCopy: @escaping (NSImage) -> Void,
         onOCR: @escaping (NSImage) -> Void,
         onSaved: @escaping (URL) -> Void,
@@ -138,7 +248,11 @@ private final class ScreenshotOverlayWindow: NSWindow {
     ) {
         let content = ScreenshotOverlayView(
             screen: screen,
+            displayID: displayID,
             screenshot: screenshot,
+            windowCandidates: windowCandidates,
+            preselectedWindowFrame: preselectedWindowFrame,
+            onSelectWindow: onSelectWindow,
             onCopy: onCopy,
             onOCR: onOCR,
             onSaved: onSaved,
@@ -267,7 +381,11 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     }
 
     private let screen: NSScreen
+    private let displayID: CGDirectDisplayID
+    private let displayBounds: CGRect
     private let screenshot: CGImage
+    private let windowCandidates: [ScreenshotWindowCandidate]
+    private let onSelectWindow: (ScreenshotWindowCandidate) -> Void
     private let onCopy: (NSImage) -> Void
     private let onOCR: (NSImage) -> Void
     private let onSaved: (URL) -> Void
@@ -278,6 +396,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     private var selection: NSRect = .zero
     private var hoveredAction: ToolAction?
     private var hoveredHandle: SelectionHandle?
+    private var hoveredWindowCandidate: ScreenshotWindowCandidate?
     private var lastToolbarRects: [ToolAction: NSRect] = [:]
     private var lastHandleRects: [SelectionHandle: NSRect] = [:]
     private var isAnnotating = false
@@ -292,7 +411,11 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
 
     init(
         screen: NSScreen,
+        displayID: CGDirectDisplayID,
         screenshot: CGImage,
+        windowCandidates: [ScreenshotWindowCandidate],
+        preselectedWindowFrame: CGRect?,
+        onSelectWindow: @escaping (ScreenshotWindowCandidate) -> Void,
         onCopy: @escaping (NSImage) -> Void,
         onOCR: @escaping (NSImage) -> Void,
         onSaved: @escaping (URL) -> Void,
@@ -300,13 +423,20 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         onStatus: @escaping (String, String, MainViewController.PrimaryStatusTone) -> Void
     ) {
         self.screen = screen
+        self.displayID = displayID
+        self.displayBounds = CGDisplayBounds(displayID)
         self.screenshot = screenshot
+        self.windowCandidates = windowCandidates
+        self.onSelectWindow = onSelectWindow
         self.onCopy = onCopy
         self.onOCR = onOCR
         self.onSaved = onSaved
         self.onCancel = onCancel
         self.onStatus = onStatus
         super.init(frame: NSRect(origin: .zero, size: screen.frame.size))
+        if let preselectedWindowFrame {
+            selection = localWindowRect(for: preselectedWindowFrame) ?? .zero
+        }
         wantsLayer = true
     }
 
@@ -327,6 +457,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         bounds.fill()
 
         guard hasUsableSelection else {
+            drawHoveredWindowSelection()
             drawInstruction()
             return
         }
@@ -370,6 +501,14 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
                 return
             }
             beginMarkup(at: point)
+            return
+        }
+        let currentWindowCandidate = hoveredWindowCandidate ?? (!hasUsableSelection ? windowCandidate(at: point) : nil)
+        if !hasUsableSelection,
+           let windowCandidate = currentWindowCandidate,
+           let windowSelection = localWindowRect(for: windowCandidate),
+           windowSelection.contains(point) {
+            onSelectWindow(windowCandidate)
             return
         }
         if let handle = handle(at: point), hasUsableSelection {
@@ -420,9 +559,11 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         let point = convert(event.locationInWindow, from: nil)
         let action = action(at: point)
         let handle = handle(at: point)
-        if action != hoveredAction || handle != hoveredHandle {
+        let windowCandidate = hasUsableSelection ? nil : windowCandidate(at: point)
+        if action != hoveredAction || handle != hoveredHandle || windowCandidate != hoveredWindowCandidate {
             hoveredAction = action
             hoveredHandle = handle
+            hoveredWindowCandidate = windowCandidate
             needsDisplay = true
         }
     }
@@ -472,7 +613,9 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     }
 
     private func drawInstruction() {
-        let text = "拖拽选择截图区域 · 右键/Esc 取消"
+        let text = hoveredWindowCandidate == nil
+            ? "拖拽选择截图区域 · 悬停窗口后单击可选中窗口 · 右键/Esc 取消"
+            : "单击选中窗口 · 拖拽可手动选择区域 · 右键/Esc 取消"
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 18, weight: .medium),
             .foregroundColor: NSColor.white,
@@ -482,6 +625,34 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             at: NSPoint(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2),
             withAttributes: attributes
         )
+    }
+
+    private func drawHoveredWindowSelection() {
+        guard let candidate = hoveredWindowCandidate,
+              let rect = localWindowRect(for: candidate) else { return }
+        if let cropped = crop(rect) {
+            NSImage(cgImage: cropped, size: rect.size).draw(in: rect)
+        }
+        let path = NSBezierPath(roundedRect: rect, xRadius: 5, yRadius: 5)
+        NSColor.systemYellow.setStroke()
+        path.lineWidth = 3
+        path.stroke()
+
+        let label = "点击选择窗口"
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 12, weight: .semibold),
+            .foregroundColor: NSColor.black,
+        ]
+        let size = label.size(withAttributes: attributes)
+        let labelRect = NSRect(
+            x: rect.minX,
+            y: max(8, rect.minY - size.height - 14),
+            width: size.width + 16,
+            height: size.height + 8
+        )
+        NSColor.systemYellow.setFill()
+        NSBezierPath(roundedRect: labelRect, xRadius: 5, yRadius: 5).fill()
+        label.draw(at: NSPoint(x: labelRect.minX + 8, y: labelRect.minY + 4), withAttributes: attributes)
     }
 
     private func drawSizeLabel() {
@@ -755,14 +926,48 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     }
 
     private func cropSelection() -> CGImage? {
+        crop(selection)
+    }
+
+    private func crop(_ rect: NSRect) -> CGImage? {
         let scale = pixelScale
         let crop = CGRect(
-            x: selection.minX * scale,
-            y: selection.minY * scale,
-            width: selection.width * scale,
-            height: selection.height * scale
+            x: rect.minX * scale,
+            y: rect.minY * scale,
+            width: rect.width * scale,
+            height: rect.height * scale
         ).integral
         return screenshot.cropping(to: crop)
+    }
+
+    private func windowCandidate(at point: NSPoint) -> ScreenshotWindowCandidate? {
+        windowCandidates.first { candidate in
+            guard let rect = localWindowRect(for: candidate) else { return false }
+            return rect.contains(point)
+        }
+    }
+
+    private func localWindowRect(for candidate: ScreenshotWindowCandidate) -> NSRect? {
+        localWindowRect(for: candidate.frame)
+    }
+
+    private func localWindowRect(for frame: CGRect) -> NSRect? {
+        let visibleFrame = frame.intersection(displayBounds)
+        guard !visibleFrame.isNull,
+              visibleFrame.width >= 24,
+              visibleFrame.height >= 24 else {
+            return nil
+        }
+        let localRect = NSRect(
+            x: visibleFrame.minX - displayBounds.minX,
+            y: visibleFrame.minY - displayBounds.minY,
+            width: visibleFrame.width,
+            height: visibleFrame.height
+        ).intersection(bounds)
+        guard localRect.width >= 24, localRect.height >= 24 else {
+            return nil
+        }
+        return localRect
     }
 
     private func pngData(from image: CGImage) -> Data? {

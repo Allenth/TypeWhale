@@ -173,7 +173,7 @@ final class AppLifecycleCoordinator: NSObject {
 
     func shouldKeepMainWindowVisibleForScreenshot() -> Bool {
         guard let window, window.isVisible else { return false }
-        return NSApp.isActive || window.isKeyWindow || window.isMainWindow
+        return !window.isMiniaturized
     }
 
     @objc private func openMainWindowFromStatusItem() {
