@@ -9,6 +9,31 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.3.15 (Build 223)",
+            date: "2026-06-25",
+            changes: [
+                "「当前会话」卡片自动吸收多余高度，底边靠近「最近转录」，实时文本区显示更多内容。",
+                "实时文本改为底部跟随：始终显示最新内容，最旧的随之滚出可视区。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.3.14 (Build 222)",
+            date: "2026-06-25",
+            changes: [
+                "修复「当前会话」卡片底部空白每次提交忽大忽小的问题，卡片恒定填满、列表位置稳定。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.3.13 (Build 221)",
+            date: "2026-06-25",
+            changes: [
+                "成本护栏从“日常节流”改为“异常熔断”：放宽单次输入/输出 token、每日次数，每日成本上限调整为 ¥6。",
+                "触顶不再静默：达到预算或文本过长时，状态栏明确提示并回退原文。",
+                "胶囊顶部新增「App 图标 · 整理模式」标签，模式可点击循环切换，录音中切换即对本次整理生效。",
+                "修复超时请求被计费却不计数的漏洞，并加固费用计算避免漏算输入费用。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.3.12 (Build 220)",
             date: "2026-06-24",
             changes: [

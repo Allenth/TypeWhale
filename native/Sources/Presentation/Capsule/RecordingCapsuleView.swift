@@ -28,6 +28,11 @@ final class RecordingCapsuleView: NSView {
     private let fadeDuration: TimeInterval = 0.25
     private let draftStepInterval: TimeInterval = 0.075
 
+    /// 顶部信息条（App·模式）占用的高度；内容据此整体下移，居中于信息条以下的区域。
+    var contextTopInset: CGFloat = 0 {
+        didSet { needsDisplay = true }
+    }
+
     override var isOpaque: Bool { false }
 
     deinit {
@@ -36,9 +41,10 @@ final class RecordingCapsuleView: NSView {
     }
 
     var preferredSize: NSSize {
-        guard !textBuffer.isEmpty else { return Metrics.compactSize }
+        let height = Metrics.compactSize.height + contextTopInset
+        guard !textBuffer.isEmpty else { return NSSize(width: Metrics.compactSize.width, height: height) }
         let width = max(retainedPreviewWidth, measuredPreviewWidth(for: predictedLayoutDraft))
-        return NSSize(width: width, height: Metrics.compactSize.height)
+        return NSSize(width: width, height: height)
     }
 
     private func measuredPreviewWidth(for text: String) -> CGFloat {
@@ -110,9 +116,10 @@ final class RecordingCapsuleView: NSView {
         }
 
         let draftAttributes = draftTextAttributes
+        let contentHeight = bounds.height - contextTopInset
         let draftRect = NSRect(
             x: Metrics.horizontalPadding,
-            y: (bounds.height - Metrics.textViewportHeight) / 2 + Metrics.textVerticalOffset,
+            y: (contentHeight - Metrics.textViewportHeight) / 2 + Metrics.textVerticalOffset,
             width: bounds.width - Metrics.horizontalPadding * 2,
             height: Metrics.textViewportHeight
         )
@@ -141,7 +148,7 @@ final class RecordingCapsuleView: NSView {
             .font: NSFont.systemFont(ofSize: 14.5, weight: .bold),
             .foregroundColor: textColor,
         ]
-        let headerY = (bounds.height - 19) / 2
+        let headerY = (bounds.height - contextTopInset - 19) / 2
         let groupWidth: CGFloat = 124
         let groupX = (bounds.width - groupWidth) / 2
         let stateRect = NSRect(x: groupX, y: headerY, width: 58, height: 19)

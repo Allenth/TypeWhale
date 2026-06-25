@@ -39,6 +39,8 @@ struct SmartRewriteResult {
     let usage: SmartUsage?
     let normalizedText: String?
     let termReplacements: [DeveloperTermReplacement]
+    /// 触发熔断/限额而回退时的用户可读说明；普通回退（超时等）为 nil。
+    let fallbackReason: String?
 
     init(
         text: String,
@@ -48,7 +50,8 @@ struct SmartRewriteResult {
         modelName: String? = nil,
         usage: SmartUsage? = nil,
         normalizedText: String? = nil,
-        termReplacements: [DeveloperTermReplacement] = []
+        termReplacements: [DeveloperTermReplacement] = [],
+        fallbackReason: String? = nil
     ) {
         self.text = text
         self.rawText = rawText
@@ -58,6 +61,7 @@ struct SmartRewriteResult {
         self.usage = usage
         self.normalizedText = normalizedText
         self.termReplacements = termReplacements
+        self.fallbackReason = fallbackReason
     }
 }
 

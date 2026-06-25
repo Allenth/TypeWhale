@@ -89,6 +89,7 @@ final class SpeechInputCoordinator {
         hotkey.onUp = { [weak self] channel, binding in self?.handleHotkeyUp(channel: channel, binding: binding) }
         hotkey.onAutoTranslateToggle = { [weak self] in self?.toggleAutoTranslateFromHotkey() }
         hotkey.onScreenshot = { [weak self] in self?.beginScreenshotFromHotkey() }
+        popup.onCycleMode = { [weak self] in self?.cycleSmartRewriteModeFromCapsule() }
         modelInstaller.onStateChange = { [weak self] state in
             self?.controller.updateModelState(state)
             if case .ready = state {
@@ -207,6 +208,11 @@ final class SpeechInputCoordinator {
         controller.toggleAutoTranslateFromShortcut()
     }
 
+    private func cycleSmartRewriteModeFromCapsule() {
+        let next = controller.cycleSmartRewritePreference()
+        popup.updateModeName(next.displayName)
+    }
+
     private func beginScreenshotFromHotkey() {
         guard activeSession == nil, !recorder.isRecording else { return }
         longPressWorkItem?.cancel()
@@ -238,11 +244,16 @@ final class SpeechInputCoordinator {
         )
         activeSession = session
         inputState = .recording(taskID)
-        controller.realtimeDraft.stringValue = realtimeEnabled
+        controller.updateRealtimeDraft(realtimeEnabled
             ? "正在等待第一段实时文本…"
-            : (resolvedBackend == .qwen3ASR ? "Qwen3-ASR 模式下实时预览暂不启用" : "胶囊实时预览已关闭")
+            : (resolvedBackend == .qwen3ASR ? "Qwen3-ASR 模式下实时预览暂不启用" : "胶囊实时预览已关闭"))
         controller.setPrimaryStatus("录音中", detail: instructions, tone: .listening)
         popup.show(state: "录音中", draft: "")
+        popup.setContext(
+            appIcon: session.targetApp?.icon,
+            appName: session.targetApp?.localizedName,
+            modeName: controller.smartRewritePreference.displayName
+        )
         outputAudioDucker.duckIfNeeded(enabled: controller.duckSystemAudioWhileRecordingEnabled)
         do {
             try recorder.start(
@@ -412,7 +423,7 @@ final class SpeechInputCoordinator {
                                 if isMeaningfulRecognitionText(text, hasPriorPreview: hasPriorPreview) {
                                     // 仅用于展示实时预览文本；静音/停顿的结束判定改由能量 VAD 负责。
                                     self.activeSession?.latestPreviewText = text
-                                    self.controller.realtimeDraft.stringValue = text
+                                    self.controller.updateRealtimeDraft(text)
                                     self.popup.updateDraft(text)
                                 }
                             }
@@ -466,7 +477,7 @@ final class SpeechInputCoordinator {
                     return
                 }
                 if shouldUpdateInterface {
-                    controller.realtimeDraft.stringValue = text
+                    controller.updateRealtimeDraft(text)
                     let preference = controller.smartRewritePreference
                     let context = SmartInputContext(targetApp: task.targetApp)
                     let progress = smartInputRouter.progressInfo(preference: preference, context: context)
@@ -590,7 +601,7 @@ final class SpeechInputCoordinator {
                     : sourceForTranslation
                 if self.shouldUpdateInterface(for: task.id) {
                     if let translation {
-                        self.controller.realtimeDraft.stringValue = "\(sourceForTranslation)\n\(translation.translatedText)"
+                        self.controller.updateRealtimeDraft("\(sourceForTranslation)\n\(translation.translatedText)")
                         self.controller.setPrimaryStatus(
                             "翻译完成",
                             detail: "已整理并按\(translation.direction.displayName)转换 · \(translation.modelName)",
@@ -598,7 +609,7 @@ final class SpeechInputCoordinator {
                             resetWaveform: true
                         )
                     } else {
-                        self.controller.realtimeDraft.stringValue = finalText
+                        self.controller.updateRealtimeDraft(finalText)
                         self.controller.setPrimaryStatus(
                             "翻译未完成",
                             detail: String(format: "已使用%@文本 · %.2f 秒", rewriteResult.mode == .raw ? "原始识别" : "整理后", elapsed),
@@ -633,7 +644,7 @@ final class SpeechInputCoordinator {
             await MainActor.run {
                 let finalText = result.text.isEmpty ? rawText : result.text
                 if self.shouldUpdateInterface(for: task.id) {
-                    self.controller.realtimeDraft.stringValue = finalText
+                    self.controller.updateRealtimeDraft(finalText)
                     self.controller.setPrimaryStatus(
                         "识别完成",
                         detail: self.smartRewriteDetail(result: result, elapsed: elapsed),
@@ -655,6 +666,9 @@ final class SpeechInputCoordinator {
     }
 
     private func smartRewriteDetail(result: SmartRewriteResult, elapsed: Double) -> String {
+        if let reason = result.fallbackReason {
+            return reason
+        }
         if result.didFallback {
             return String(format: "智能整理未完成，已使用原始识别文本 · %.2f 秒", elapsed)
         }
@@ -687,15 +701,17 @@ final class SpeechInputCoordinator {
         context: SmartInputContext,
         timeoutSeconds: TimeInterval
     ) async -> SmartTranslationOutput? {
+        // 超时只放弃等待、不取消请求，让翻译后台跑完并把已计费的 usage 补记进账本，避免漏记与绕过成本上限。
+        let work = Task {
+            try await self.smartEngine.translate(
+                rawText: rawText,
+                direction: direction,
+                context: context
+            )
+        }
         do {
             return try await withThrowingTaskGroup(of: SmartTranslationOutput.self) { group in
-                group.addTask {
-                    try await self.smartEngine.translate(
-                        rawText: rawText,
-                        direction: direction,
-                        context: context
-                    )
-                }
+                group.addTask { try await work.value }
                 group.addTask {
                     try await Task.sleep(nanoseconds: UInt64(timeoutSeconds * 1_000_000_000))
                     throw SmartRewriteError.timeout
@@ -710,6 +726,11 @@ final class SpeechInputCoordinator {
                 }
             }
         } catch {
+            Task {
+                if let late = try? await work.value {
+                    SmartUsageLedgerStore.record(late.usage)
+                }
+            }
             return nil
         }
     }

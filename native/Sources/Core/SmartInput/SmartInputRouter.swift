@@ -96,7 +96,8 @@ final class SmartInputRouter {
         let normalizedText = normalization.text.trimmingCharacters(in: .whitespacesAndNewlines)
         let rewriteText = normalizedText.isEmpty ? trimmed : normalizedText
         let scopedGlossary = DeveloperLexiconStore.promptGlossary(
-            matching: [trimmed, rewriteText].joined(separator: "\n")
+            matching: [trimmed, rewriteText].joined(separator: "\n"),
+            maxTerms: 12
         )
         let rewriteContext = context.withDeveloperGlossary(scopedGlossary)
         let prompt = SmartRewritePromptBuilder.prompt(
@@ -122,7 +123,8 @@ final class SmartInputRouter {
                 mode: profile.mode,
                 didFallback: true,
                 normalizedText: normalizedText,
-                termReplacements: normalization.replacements
+                termReplacements: normalization.replacements,
+                fallbackReason: Self.userFacingFallback(for: reason)
             )
         }
 
@@ -160,6 +162,19 @@ final class SmartInputRouter {
         }
     }
 
+    private static func userFacingFallback(for reason: String) -> String {
+        if reason.hasPrefix("daily_cost_limit") {
+            return String(format: "已达每日成本上限 ¥%.0f，已暂停整理，明天自动恢复", SmartRewriteCostGuard.dailyMaxCostCNY)
+        }
+        if reason.hasPrefix("daily_call_limit") {
+            return "已达每日调用上限 \(SmartRewriteCostGuard.dailyMaxCalls) 次，已暂停整理，明天自动恢复"
+        }
+        if reason.hasPrefix("input_too_large") {
+            return "这段文本过长，已直接粘贴原文（未整理）"
+        }
+        return "已暂停整理，已使用原文"
+    }
+
     private func chooseMode(
         preference: SmartRewritePreference,
         context: SmartInputContext
@@ -180,20 +195,32 @@ final class SmartInputRouter {
         context: SmartInputContext,
         timeoutSeconds: TimeInterval
     ) async throws -> SmartRewriteEngineOutput {
-        try await withThrowingTaskGroup(of: SmartRewriteEngineOutput.self) { group in
-            group.addTask { try await self.engine.rewrite(rawText: rawText, mode: mode, context: context) }
-            group.addTask {
-                try await Task.sleep(nanoseconds: UInt64(timeoutSeconds * 1_000_000_000))
-                throw SmartRewriteError.timeout
+        // 用独立 Task 发请求：超时只放弃等待、不取消请求，让它后台跑完并把已计费的 usage 补记进账本。
+        // 否则超时的请求会被 DeepSeek 计费却不计入每日次数/成本，从而绕过成本上限。
+        let work = Task { try await self.engine.rewrite(rawText: rawText, mode: mode, context: context) }
+        do {
+            return try await withThrowingTaskGroup(of: SmartRewriteEngineOutput.self) { group in
+                group.addTask { try await work.value }
+                group.addTask {
+                    try await Task.sleep(nanoseconds: UInt64(timeoutSeconds * 1_000_000_000))
+                    throw SmartRewriteError.timeout
+                }
+                do {
+                    let value = try await group.next() ?? SmartRewriteEngineOutput(text: rawText, usage: nil)
+                    group.cancelAll()
+                    return value
+                } catch {
+                    group.cancelAll()
+                    throw error
+                }
             }
-            do {
-                let value = try await group.next() ?? SmartRewriteEngineOutput(text: rawText, usage: nil)
-                group.cancelAll()
-                return value
-            } catch {
-                group.cancelAll()
-                throw error
+        } catch {
+            Task {
+                if let late = try? await work.value {
+                    SmartUsageLedgerStore.record(late.usage)
+                }
             }
+            throw error
         }
     }
 }

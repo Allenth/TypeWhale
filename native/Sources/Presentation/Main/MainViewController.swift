@@ -66,6 +66,8 @@ final class MainViewController: NSViewController {
     let translationPromptButton = NSButton(title: "提示词", target: nil, action: nil)
     let screenshotSaveLocationButton = NSButton(title: "下载", target: nil, action: nil)
     let realtimeDraft = label("等待实时文本", size: 12)
+    let realtimeTextView = NSTextView()
+    private let realtimeScroll = NSScrollView()
     var onInstallModel: (() -> Void)?
     var onHotkeysChange: ((HotkeyBinding, HotkeyBinding?, HotkeyBinding) -> Void)?
 
@@ -313,21 +315,27 @@ final class MainViewController: NSViewController {
         recentScroll.heightAnchor.constraint(equalToConstant: recentViewportHeight).isActive = true
         let recentCard = roundedBox(recentScroll, hPad: 8, vPad: 6)
 
-        let sections = [
-            section("当前会话", sessionPanel),
-            section("最近转录", recentCard),
-        ]
+        let sessionSection = section("当前会话", sessionPanel)
+        let recentSection = section("最近转录", recentCard)
+        let sections = [sessionSection, recentSection]
         let stack = NSStackView(views: sections)
         stack.orientation = .vertical
         stack.alignment = .leading
+        stack.distribution = .fill
         stack.spacing = 12
         stack.translatesAutoresizingMaskIntoConstraints = false
         for sectionView in sections {
             sectionView.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         }
+        // 「当前会话」吸收中间栏的多余高度，让卡片底边靠近「最近转录」、实时文本区做大；
+        // 「最近转录」保持固定高度不被压缩。窗口固定尺寸，整体仍稳定。
+        sessionSection.setContentHuggingPriority(.defaultLow, for: .vertical)
+        recentSection.setContentHuggingPriority(.required, for: .vertical)
+        recentSection.setContentCompressionResistancePriority(.required, for: .vertical)
+        let sessionMinHeight = sessionPanel.heightAnchor.constraint(greaterThanOrEqualToConstant: 200)
         NSLayoutConstraint.activate([
             recentStack.widthAnchor.constraint(equalTo: recentScroll.contentView.widthAnchor),
-            sessionPanel.heightAnchor.constraint(equalToConstant: 170),
+            sessionMinHeight,
         ])
         return stack
     }
@@ -387,23 +395,19 @@ final class MainViewController: NSViewController {
         waveRow.spacing = 12
         waveRow.translatesAutoresizingMaskIntoConstraints = false
 
-        realtimeDraft.textColor = NSColor(calibratedWhite: 1, alpha: 0.82)
-        realtimeDraft.maximumNumberOfLines = 4
-        realtimeDraft.lineBreakMode = .byWordWrapping
-        (realtimeDraft.cell as? NSTextFieldCell)?.truncatesLastVisibleLine = true
-        realtimeDraft.translatesAutoresizingMaskIntoConstraints = false
-
-        let draftContent = NSView()
-        draftContent.translatesAutoresizingMaskIntoConstraints = false
-        draftContent.addSubview(realtimeDraft)
+        configureRealtimeTextView()
 
         let draftCaption = label("实时文本", size: 10, weight: .medium)
         draftCaption.textColor = UITheme.sectionTitle
 
-        let draftStack = NSStackView(views: [draftCaption, draftContent])
+        let draftStack = NSStackView(views: [draftCaption, realtimeScroll])
         draftStack.orientation = .vertical
         draftStack.alignment = .leading
         draftStack.spacing = 7
+        // 实时文本区作为可伸缩区域，吸收卡片多余高度；窗口固定高度下保持稳定。
+        draftStack.setContentHuggingPriority(.defaultLow, for: .vertical)
+        realtimeScroll.setContentHuggingPriority(.defaultLow, for: .vertical)
+        draftCaption.setContentHuggingPriority(.required, for: .vertical)
 
         let divider = hairlineView()
         let pillRow = NSStackView(views: [pill, flexSpacer()])
@@ -413,6 +417,7 @@ final class MainViewController: NSViewController {
         let inner = NSStackView(views: [pillRow, waveRow, processingProgress, divider, draftStack])
         inner.orientation = .vertical
         inner.alignment = .centerX
+        inner.distribution = .fill
         inner.spacing = 8
         inner.setCustomSpacing(10, after: waveRow)
         inner.detachesHiddenViews = true
@@ -426,6 +431,10 @@ final class MainViewController: NSViewController {
         box.layer?.borderWidth = 0.5
         box.layer?.borderColor = UITheme.cardBorder.cgColor
         box.addSubview(inner)
+
+        // 实时文本区最小高度设为非必需优先级：极端内容时让位给“填满卡片”，避免约束冲突。
+        let draftMinHeight = realtimeScroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 90)
+        draftMinHeight.priority = NSLayoutConstraint.Priority(740)
 
         NSLayoutConstraint.activate([
             pillStack.leadingAnchor.constraint(equalTo: pill.leadingAnchor, constant: 13),
@@ -446,18 +455,51 @@ final class MainViewController: NSViewController {
             processingProgress.heightAnchor.constraint(equalToConstant: 4),
             divider.widthAnchor.constraint(equalTo: inner.widthAnchor),
             draftStack.widthAnchor.constraint(equalTo: inner.widthAnchor),
-            draftContent.widthAnchor.constraint(equalTo: draftStack.widthAnchor),
-            draftContent.heightAnchor.constraint(greaterThanOrEqualToConstant: 58),
-            realtimeDraft.leadingAnchor.constraint(equalTo: draftContent.leadingAnchor),
-            realtimeDraft.trailingAnchor.constraint(equalTo: draftContent.trailingAnchor),
-            realtimeDraft.topAnchor.constraint(equalTo: draftContent.topAnchor),
-            realtimeDraft.bottomAnchor.constraint(lessThanOrEqualTo: draftContent.bottomAnchor),
+            realtimeScroll.widthAnchor.constraint(equalTo: draftStack.widthAnchor),
+            draftMinHeight,
             inner.leadingAnchor.constraint(equalTo: box.leadingAnchor, constant: 14),
             inner.trailingAnchor.constraint(equalTo: box.trailingAnchor, constant: -14),
             inner.topAnchor.constraint(equalTo: box.topAnchor, constant: 14),
-            inner.bottomAnchor.constraint(lessThanOrEqualTo: box.bottomAnchor, constant: -14),
+            inner.bottomAnchor.constraint(equalTo: box.bottomAnchor, constant: -14),
         ])
         return box
+    }
+
+    private func configureRealtimeTextView() {
+        realtimeTextView.isEditable = false
+        realtimeTextView.isSelectable = true
+        realtimeTextView.drawsBackground = false
+        realtimeTextView.textColor = NSColor(calibratedWhite: 1, alpha: 0.82)
+        realtimeTextView.font = .systemFont(ofSize: 13)
+        realtimeTextView.textContainerInset = NSSize(width: 0, height: 2)
+        realtimeTextView.textContainer?.lineFragmentPadding = 0
+        realtimeTextView.isVerticallyResizable = true
+        realtimeTextView.isHorizontallyResizable = false
+        realtimeTextView.autoresizingMask = [.width]
+        realtimeTextView.textContainer?.widthTracksTextView = true
+        realtimeTextView.minSize = NSSize(width: 0, height: 0)
+        realtimeTextView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        realtimeTextView.string = "等待实时文本"
+
+        realtimeScroll.documentView = realtimeTextView
+        realtimeScroll.hasVerticalScroller = false
+        realtimeScroll.hasHorizontalScroller = false
+        realtimeScroll.drawsBackground = false
+        realtimeScroll.borderType = .noBorder
+        realtimeScroll.automaticallyAdjustsContentInsets = false
+        realtimeScroll.translatesAutoresizingMaskIntoConstraints = false
+    }
+
+    /// 更新实时文本区，并滚动到末尾：始终显示最新内容，最旧的被挤到上方滚出可视区。
+    func updateRealtimeDraft(_ text: String) {
+        let value = text.isEmpty ? " " : text
+        if realtimeTextView.string != value {
+            realtimeTextView.string = value
+        }
+        if let container = realtimeTextView.textContainer {
+            realtimeTextView.layoutManager?.ensureLayout(for: container)
+        }
+        realtimeTextView.scrollToEndOfDocument(nil)
     }
 
     private func buildStatusPanel() -> NSView {
@@ -1822,6 +1864,17 @@ final class MainViewController: NSViewController {
 
     var smartRewritePreference: SmartRewritePreference {
         SmartRewritePreference.fromMenuTag(smartRewriteMode.selectedItem?.tag ?? 0)
+    }
+
+    /// 循环切换到下一个整理模式，持久化并返回新模式（供胶囊手动切换调用）。
+    @discardableResult
+    func cycleSmartRewritePreference() -> SmartRewritePreference {
+        let all = SmartRewritePreference.allCases
+        let index = all.firstIndex(of: smartRewritePreference) ?? 0
+        let next = all[(index + 1) % all.count]
+        smartRewriteMode.selectItem(withTag: next.menuTag)
+        saveSettings()
+        return next
     }
 
     var autoTranslateEnabled: Bool {

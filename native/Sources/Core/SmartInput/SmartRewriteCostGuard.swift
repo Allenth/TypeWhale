@@ -1,10 +1,12 @@
 import Foundation
 
 enum SmartRewriteCostGuard {
-    static let maxInputTokens = 3_000
-    static let maxOutputTokens = 400
-    static let dailyMaxCalls = 120
-    static let dailyMaxCostCNY = 1.00
+    // 这些是"异常熔断"阈值，不是日常节流：正常重度使用永远碰不到，只在程序失控时兜底。
+    static let maxInputTokens = 8_000
+    // 仅为上限，按实际生成的 token 计费；放高只是避免长口述被截断，不会凭空增加成本。
+    static let maxOutputTokens = 4_000
+    static let dailyMaxCalls = 1_000
+    static let dailyMaxCostCNY = 6.00
 
     static func estimatedTokens(for text: String) -> Int {
         max(1, Int(ceil(Double(text.count) / 3.2)))
