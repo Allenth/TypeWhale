@@ -141,10 +141,46 @@ extension MainViewController {
             panel("状态", width: 200, buildStatusPanelContent()),
             panel("智能整理", width: 236, buildSmartRewritePanelContent()),
             panel("快捷键", width: 300, buildHotkeysPanelContent()),
-            panel("翻译", width: 196, buildTranslationPanelContent()),
-            panel("截图", width: 204, buildScreenshotPanelContent()),
-            panel("系统", width: 220, buildSystemPanelContent()),
+            panel("更多设置", width: 236, buildMiscSettingsContent()),
         ]
+    }
+
+    // 子分区：在一列里用小标题 + 分隔线划清边界，容纳内容很少的几类设置。
+    private func subSection(_ title: String, _ rows: [NSView]) -> NSView {
+        let header = label(title, size: 11, weight: .semibold)
+        header.textColor = .secondaryLabelColor
+        let body = rowStack(rows)
+        let stack = NSStackView(views: [header, body])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 6
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        body.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        return stack
+    }
+
+    // 翻译 / 截图 / 系统 合并为一列（各自内容很少）
+    private func buildMiscSettingsContent() -> NSView {
+        translationPromptButton.widthAnchor.constraint(equalToConstant: 92).isActive = true
+        screenshotSaveLocationButton.widthAnchor.constraint(equalToConstant: 120).isActive = true
+        let translation = subSection("翻译", [optionRow("翻译提示词", translationPromptButton)])
+        let screenshot = subSection("截图", [optionRow("保存位置", screenshotSaveLocationButton)])
+        let system = subSection("系统", [
+            optionRow("胶囊实时预览", realtime),
+            optionRow("停顿自动完成", autoFinish),
+            optionRow("录音时降噪", duckSystemAudio),
+            optionRow("开机自动启动", launchAtLogin),
+        ])
+        let d1 = hairlineView(); let d2 = hairlineView()
+        let stack = NSStackView(views: [translation, d1, screenshot, d2, system])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 10
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        [translation, d1, screenshot, d2, system].forEach {
+            $0.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        }
+        return stack
     }
 
     private func buildSessionAndRecentContent() -> NSView {
@@ -239,36 +275,6 @@ extension MainViewController {
             shortcutRow(title: "翻译截图", captureButton: screenshotTranslationHotkeyCaptureButton, fallbackButton: screenshotTranslationHotkeyResetButton),
             shortcutRow(title: "自动翻译", captureButton: autoTranslateHotkeyCaptureButton, fallbackButton: autoTranslateHotkeyClearButton),
             shortcutRow(title: "唤起主页", captureButton: mainWindowHotkeyCaptureButton, fallbackButton: mainWindowHotkeyResetButton),
-        ])
-    }
-
-    private func buildTranslationPanelContent() -> NSView {
-        translationPromptButton.widthAnchor.constraint(equalToConstant: 92).isActive = true
-        let hint = label("方向与开关在「快捷设置」里切换", size: 10)
-        hint.textColor = .secondaryLabelColor
-        hint.maximumNumberOfLines = 0
-        let stack = rowStack([optionRow("翻译提示词", translationPromptButton)])
-        let outer = NSStackView(views: [stack, hint])
-        outer.orientation = .vertical
-        outer.alignment = .leading
-        outer.spacing = 8
-        outer.translatesAutoresizingMaskIntoConstraints = false
-        stack.widthAnchor.constraint(equalTo: outer.widthAnchor).isActive = true
-        hint.widthAnchor.constraint(equalTo: outer.widthAnchor).isActive = true
-        return outer
-    }
-
-    private func buildScreenshotPanelContent() -> NSView {
-        screenshotSaveLocationButton.widthAnchor.constraint(equalToConstant: 120).isActive = true
-        return rowStack([optionRow("保存位置", screenshotSaveLocationButton)])
-    }
-
-    private func buildSystemPanelContent() -> NSView {
-        return rowStack([
-            optionRow("胶囊实时预览", realtime),
-            optionRow("停顿自动完成", autoFinish),
-            optionRow("录音时降噪", duckSystemAudio),
-            optionRow("开机自动启动", launchAtLogin),
         ])
     }
 
