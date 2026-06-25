@@ -78,8 +78,16 @@ final class ScreenshotCoordinator {
         raiseWindow(candidate)
         Task { [weak self] in
             try? await Task.sleep(nanoseconds: 180_000_000)
-            guard let self, generation == operationGeneration else { return }
-            begin(preselectedWindowFrame: candidate.frame, autoTranslateAfterSelection: autoTranslateAfterSelection)
+            guard let self else { return }
+            guard generation == self.operationGeneration else {
+                // 置顶操作被打断/作废：若已无截图浮层在显示，复位主状态，
+                // 避免“正在置顶窗口”+进度条永久残留在主会话区。若有新浮层接管则保留其状态。
+                if self.overlays.isEmpty {
+                    self.onStatus("等待录音", "Fn 录音", .idle)
+                }
+                return
+            }
+            self.begin(preselectedWindowFrame: candidate.frame, autoTranslateAfterSelection: autoTranslateAfterSelection)
         }
     }
 

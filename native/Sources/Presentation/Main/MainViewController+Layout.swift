@@ -516,13 +516,44 @@ extension MainViewController {
         let accessButton = sidebarPermissionButton(accessibilityLabel: "打开辅助功能权限设置", action: #selector(openAccessibility))
         let screenButton = sidebarPermissionButton(accessibilityLabel: "打开屏幕录制权限设置", action: #selector(openScreenRecording))
         let keyboardButton = sidebarPermissionButton(accessibilityLabel: "打开全局快捷键设置", action: #selector(openKeyboard))
-        let card = listCard([
+        let detailCard = listCard([
             sidebarPermissionRow(icon: "mic", name: "麦克风", status: micStatus, button: micButton),
             sidebarPermissionRow(icon: "accessibility", name: "辅助功能", status: accessibilityStatus, button: accessButton),
             sidebarPermissionRow(icon: "rectangle.on.rectangle", name: "截图权限", status: screenRecordingStatus, button: screenButton),
             sidebarPermissionRow(icon: "keyboard", name: "快捷键", status: hotkeyStatus, button: keyboardButton),
         ], hPad: 9, vPad: 3)
-        return section("权限", card)
+        let detail = section("权限", detailCard)
+
+        // 全部授权时显示的一行汇总
+        let check = symbolIcon("checkmark.circle.fill", size: 13, color: .systemGreen)
+        let summaryText = label("已全部授权", size: 12, weight: .medium)
+        summaryText.textColor = .systemGreen
+        let summaryRow = NSStackView(views: [check, summaryText, flexSpacer()])
+        summaryRow.orientation = .horizontal
+        summaryRow.alignment = .centerY
+        summaryRow.spacing = 6
+        summaryRow.heightAnchor.constraint(equalToConstant: UILayout.rowHeight).isActive = true
+        let summary = section("权限", listCard([summaryRow], hPad: 9, vPad: 3))
+
+        let container = NSStackView(views: [detail, summary])
+        container.orientation = .vertical
+        container.alignment = .leading
+        container.spacing = 0
+        container.translatesAutoresizingMaskIntoConstraints = false
+        detail.widthAnchor.constraint(equalTo: container.widthAnchor).isActive = true
+        summary.widthAnchor.constraint(equalTo: container.widthAnchor).isActive = true
+        // 默认先展开明细，第一次刷新权限后再决定是否折叠。
+        summary.isHidden = true
+        permissionDetailEntry = detail
+        permissionSummaryEntry = summary
+        return container
+    }
+
+    /// 全部授权 → 折叠成一行汇总；任一缺失 → 展开 4 行明细。由 refreshPermissions 调用。
+    func updatePermissionDisplay(allGranted: Bool) {
+        guard permissionDetailEntry?.isHidden != allGranted else { return }
+        permissionDetailEntry?.isHidden = allGranted
+        permissionSummaryEntry?.isHidden = !allGranted
     }
 
     func sidebarPermissionButton(accessibilityLabel: String, action: Selector) -> NSButton {

@@ -29,6 +29,9 @@ final class MainViewController: NSViewController {
     let accessibilityStatus = label("检测中", size: 12, weight: .medium)
     let screenRecordingStatus = label("检测中", size: 12, weight: .medium)
     let hotkeyStatus = label("检测中", size: 12, weight: .medium)
+    // 权限折叠：全部授权时显示一行汇总，缺权限时展开 4 行明细。
+    var permissionDetailEntry: NSView?
+    var permissionSummaryEntry: NSView?
     let hotkeyValue = label(
         HotkeyBinding.load(storageKey: HotkeyBinding.chineseStorageKey, fallback: .defaultBinding).displayName,
         size: 13,
