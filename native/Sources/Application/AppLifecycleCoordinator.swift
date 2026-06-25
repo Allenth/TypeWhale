@@ -7,18 +7,16 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
     private let memoryStatusItem = NSMenuItem(title: "内存 -- MB", action: nil, keyEquivalent: "")
     private let versionStatusItem = NSMenuItem(title: "版本 --", action: nil, keyEquivalent: "")
     private var window: NSWindow?
-    private var preferencesWindow: NSWindow?
     private var thirdPartyNoticesWindow: NSWindow?
     private var allowsTermination = false
     private var workspaceObserver: NSObjectProtocol?
-    private let windowSize = NSSize(width: 1080, height: 560)
+    private let windowSize = NSSize(width: 920, height: 520)
 
     init(controller: MainViewController) {
         self.controller = controller
     }
 
     func setup() {
-        controller.onOpenPreferences = { [weak self] in self?.showPreferences() }
         LaunchDiagnostics.mark("observeSystemPowerOff begin")
         observeSystemPowerOff()
         LaunchDiagnostics.mark("setupMainMenu begin")
@@ -241,29 +239,8 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
     }
 
     @objc private func showPreferences() {
-        if preferencesWindow == nil {
-            let size = NSSize(width: 540, height: 400)
-            let prefsWindow = NSWindow(
-                contentRect: NSRect(origin: .zero, size: size),
-                styleMask: [.titled, .closable, .miniaturizable],
-                backing: .buffered,
-                defer: false
-            )
-            prefsWindow.title = "偏好设置"
-            prefsWindow.appearance = NSAppearance(named: .darkAqua)
-            prefsWindow.contentViewController = controller.makePreferencesViewController()
-            prefsWindow.contentView?.appearance = NSAppearance(named: .darkAqua)
-            prefsWindow.setContentSize(size)
-            prefsWindow.contentMinSize = size
-            prefsWindow.isReleasedWhenClosed = false
-            prefsWindow.center()
-            preferencesWindow = prefsWindow
-        }
-        guard let prefsWindow = preferencesWindow else { return }
-        if prefsWindow.isMiniaturized {
-            prefsWindow.deminiaturize(nil)
-        }
-        prefsWindow.makeKeyAndOrderFront(nil)
+        showMainWindow()
+        controller.showPreferencesPopoverFromMenu()
         NSApp.activate(ignoringOtherApps: true)
     }
 

@@ -23,7 +23,12 @@ fi
 
 next_patch=$((patch + 1))
 next_build=$((current_build + 1))
-next_version="${major}.${minor}.${next_patch}"
+next_version="${TYPEWHALE_NEXT_VERSION:-${major}.${minor}.${next_patch}}"
+
+if [[ -n "${TYPEWHALE_NEXT_VERSION:-}" && ! "$TYPEWHALE_NEXT_VERSION" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then
+  echo "Unexpected TYPEWHALE_NEXT_VERSION format: $TYPEWHALE_NEXT_VERSION" >&2
+  exit 1
+fi
 
 perl -0pi -e "s{(<key>CFBundleShortVersionString</key><string>)\\Q$current_version\\E}{\${1}$next_version}" "$BUILD_SCRIPT"
 perl -0pi -e "s{(<key>CFBundleVersion</key><string>)\\Q$current_build\\E}{\${1}$next_build}" "$BUILD_SCRIPT"

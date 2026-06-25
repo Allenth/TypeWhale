@@ -731,6 +731,8 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             NSImage(cgImage: cropped, size: rect.size).draw(in: rect)
         }
         let path = NSBezierPath(roundedRect: rect, xRadius: 5, yRadius: 5)
+        NSColor.black.withAlphaComponent(0.16).setFill()
+        path.fill()
         NSColor.systemYellow.setStroke()
         path.lineWidth = 3
         path.stroke()

@@ -10,7 +10,7 @@ This is a public test build. It is not notarized with Developer ID yet, so macOS
 
 中文用户可以直接点击上面的链接下载安装包。如果浏览器没有开始下载，请右键链接选择“链接另存为”，或打开 [TypeWhale 1.3.0 (208) Test Release](https://github.com/Allenth/TypeWhale/releases/tag/v1.3.0-build208) 页面，在 **Assets** 区域下载 `TypeWhale-1.3.0-208.dmg`。
 
-Current local release build in this repository is `1.3.75 (283)`. It has been built, installed locally from source, and packaged as `dist/TypeWhale-1.3.75-283.dmg`. The public GitHub DMG link above still points to the last uploaded public test artifact.
+Current local release build in this repository is `1.4.0 (288)`. It has been built, installed locally from source, and packaged as `dist/TypeWhale-1.4.0-288.dmg`. The public GitHub DMG link above still points to the last uploaded public test artifact.
 
 The current macOS baseline is:
 
@@ -26,10 +26,10 @@ Realtime preview is only used as feedback. The final inserted text comes from th
 - Global hotkey recording: press to start/stop, or hold to talk and release to finish.
 - Non-activating recording capsule with animated microphone waveform.
 - Local SenseVoice / sherpa-onnx ASR integration.
-- Screenshot capture via a dedicated hotkey: region selection with resize handles, hover-to-select window capture, inline annotation tools (rectangle, arrow, pen, text, undo), OCR text recognition, English-to-Chinese screenshot translation with source-text covering, copy to clipboard, and direct save to the configured folder.
+- Screenshot capture via a dedicated hotkey: region selection with resize handles, translucent hover-to-select window capture, inline annotation tools (rectangle, arrow, pen, text, undo), OCR text recognition, English-to-Chinese screenshot translation with source-text covering, copy to clipboard, and direct save to the configured folder.
 - Configurable hotkeys for recording, screenshot, auto-translation toggle, and opening the main panel. Auto-translation and main-panel hotkeys are unset by default.
 - Clipboard-based final insertion with clipboard restoration.
-- Recent transcription history.
+- Recent transcription history keeps the latest 20 items and supports double-click copy.
 - Microphone, Accessibility, hotkey, model, and login-item status in the main window.
 - Optional launch at login.
 - Early Windows WPF MVP scaffold in `windows/`.

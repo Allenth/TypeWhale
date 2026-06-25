@@ -11,14 +11,14 @@ final class MainViewController: NSViewController {
         case error
     }
 
-    private let contentWidth: CGFloat = 1080
-    private let contentHeight: CGFloat = 640
+    private let contentWidth: CGFloat = 920
+    private let contentHeight: CGFloat = 520
     private let leftColumnWidth: CGFloat = 200
-    private let rightColumnWidth: CGFloat = 248
     private let leftTopInset: CGFloat = 28
     private let rightTopInset: CGFloat = 18
-    private let recentViewportHeight: CGFloat = 232
+    private let recentViewportHeight: CGFloat = 190
     private let brandIconVisibleSize: CGFloat = 48
+    private let maxRecentTranscriptions = 20
 
     let status = label("等待录音", size: 15, weight: .semibold)
     let detail = label("Fn 录音", size: 12)
@@ -103,7 +103,6 @@ final class MainViewController: NSViewController {
     private var lastMemoryLevel: MemoryMonitor.Level = .normal
     var onInstallModel: (() -> Void)?
     var onHotkeysChange: ((HotkeyBinding, HotkeyBinding?, HotkeyBinding, HotkeyBinding?, HotkeyBinding, HotkeyBinding?, HotkeyBinding?) -> Void)?
-    var onOpenPreferences: (() -> Void)?
     private var preferencesViewController: NSViewController?
 
     private let modelEntryName = label("SenseVoice int8", size: 13, weight: .semibold)
@@ -128,6 +127,7 @@ final class MainViewController: NSViewController {
     private var usageGuidePopover: NSPopover?
     private var versionHistoryPopover: NSPopover?
     private var testLogsPopover: NSPopover?
+    private var preferencesPopover: NSPopover?
     private var modelDetailPopover: NSPopover?
     private var deepSeekBalancePopover: NSPopover?
     private let deepSeekBalanceClient = DeepSeekBalanceClient()
@@ -202,23 +202,17 @@ final class MainViewController: NSViewController {
 
         let left = buildLeftColumn()
         let center = buildCenterColumn()
-        let right = buildRightColumn()
         view.addSubview(left)
         view.addSubview(center)
-        view.addSubview(right)
         NSLayoutConstraint.activate([
             left.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             left.topAnchor.constraint(equalTo: view.topAnchor),
             left.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             left.widthAnchor.constraint(equalToConstant: leftColumnWidth),
             center.leadingAnchor.constraint(equalTo: left.trailingAnchor, constant: 16),
+            center.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -18),
             center.topAnchor.constraint(equalTo: view.topAnchor, constant: rightTopInset),
             center.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -20),
-            right.leadingAnchor.constraint(equalTo: center.trailingAnchor, constant: 16),
-            right.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -18),
-            right.widthAnchor.constraint(equalToConstant: rightColumnWidth),
-            right.topAnchor.constraint(equalTo: view.topAnchor, constant: rightTopInset),
-            right.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -20),
         ])
 
         updateHotkeys(
@@ -289,26 +283,33 @@ final class MainViewController: NSViewController {
             symbolName: "doc.text.magnifyingglass",
             action: #selector(showTestLogs(_:))
         )
+        let preferencesButton = footerIconButton(
+            title: "偏好设置",
+            symbolName: "gearshape",
+            action: #selector(showPreferencesPopover(_:))
+        )
 
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .vertical)
         spacer.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
 
-        let footerButtons = NSStackView(views: [flexSpacer(), usageGuideButton, historyButton, testLogsButton, flexSpacer()])
+        let footerButtons = NSStackView(views: [flexSpacer(), usageGuideButton, historyButton, testLogsButton, preferencesButton, flexSpacer()])
         footerButtons.orientation = .horizontal
         footerButtons.alignment = .centerY
         footerButtons.distribution = .fill
-        footerButtons.spacing = 10
+        footerButtons.spacing = 8
         footerButtons.translatesAutoresizingMaskIntoConstraints = false
 
         memoryLabel.textColor = .secondaryLabelColor
         memoryLabel.toolTip = "TypeWhale 当前物理内存占用（与活动监视器“内存”一致）"
         updateMemoryReadout()
 
-        let stack = NSStackView(views: [brandStack, modelEntry, permissionEntry, spacer, memoryLabel, footerButtons])
+        let quickSettings = buildSidebarQuickSettings()
+
+        let stack = NSStackView(views: [brandStack, modelEntry, permissionEntry, spacer, quickSettings, memoryLabel, footerButtons])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 12
+        stack.spacing = 10
         stack.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(stack)
 
@@ -324,6 +325,7 @@ final class MainViewController: NSViewController {
             brandStack.widthAnchor.constraint(equalTo: stack.widthAnchor),
             modelEntry.widthAnchor.constraint(equalTo: stack.widthAnchor),
             permissionEntry.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            quickSettings.widthAnchor.constraint(equalTo: stack.widthAnchor),
             footerButtons.widthAnchor.constraint(equalTo: stack.widthAnchor),
             brandIcon.widthAnchor.constraint(equalToConstant: brandIconVisibleSize),
             brandIcon.heightAnchor.constraint(equalToConstant: brandIconVisibleSize),
@@ -349,6 +351,27 @@ final class MainViewController: NSViewController {
             button.heightAnchor.constraint(equalToConstant: 30),
         ])
         return button
+    }
+
+    private func buildSidebarQuickSettings() -> NSView {
+        smartRewriteMode.widthAnchor.constraint(equalToConstant: 88).isActive = true
+        translationDirectionMode.widthAnchor.constraint(equalToConstant: 78).isActive = true
+        smartRewriteMode.controlSize = .small
+        translationDirectionMode.controlSize = .small
+        smartRewriteMode.font = .systemFont(ofSize: 11, weight: .medium)
+        translationDirectionMode.font = .systemFont(ofSize: 11, weight: .medium)
+        smartRewriteMode.alignment = .right
+        translationDirectionMode.alignment = .right
+        smartRewriteMode.cell?.alignment = .right
+        translationDirectionMode.cell?.alignment = .right
+
+        let rows = [
+            compactOptionRow("整理模式", smartRewriteMode),
+            compactOptionRow("自动翻译", autoTranslate),
+            compactOptionRow("翻译方向", translationDirectionMode),
+        ]
+        let card = listCard(rows, hPad: 10, vPad: 5)
+        return section("快捷设置", card)
     }
 
     private func buildCenterColumn() -> NSView {
@@ -389,7 +412,7 @@ final class MainViewController: NSViewController {
         sessionSection.setContentHuggingPriority(.defaultLow, for: .vertical)
         recentSection.setContentHuggingPriority(.required, for: .vertical)
         recentSection.setContentCompressionResistancePriority(.required, for: .vertical)
-        let sessionMinHeight = sessionPanel.heightAnchor.constraint(greaterThanOrEqualToConstant: 168)
+        let sessionMinHeight = sessionPanel.heightAnchor.constraint(greaterThanOrEqualToConstant: 150)
         NSLayoutConstraint.activate([
             recentStack.widthAnchor.constraint(equalTo: recentScroll.contentView.widthAnchor),
             sessionMinHeight,
@@ -490,7 +513,7 @@ final class MainViewController: NSViewController {
         box.addSubview(inner)
 
         // 实时文本区最小高度设为非必需优先级：极端内容时让位给“填满卡片”，避免约束冲突。
-        let draftMinHeight = realtimeScroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 90)
+        let draftMinHeight = realtimeScroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 72)
         draftMinHeight.priority = NSLayoutConstraint.Priority(740)
 
         NSLayoutConstraint.activate([
@@ -774,51 +797,6 @@ final class MainViewController: NSViewController {
         return row
     }
 
-    // MARK: - Right column
-
-    // 右栏只保留按会话高频切换的「快捷设置」；其余配置项移入「偏好设置」窗口（⌘,）。
-    private func buildRightColumn() -> NSView {
-        smartRewriteMode.widthAnchor.constraint(equalToConstant: 132).isActive = true
-        translationDirectionMode.widthAnchor.constraint(equalToConstant: 110).isActive = true
-
-        let quickCard = listCard([
-            optionRow("整理模式", smartRewriteMode),
-            optionRow("自动翻译", autoTranslate),
-            optionRow("翻译方向", translationDirectionMode),
-        ], hPad: UILayout.cardPadH, vPad: UILayout.cardPadV)
-
-        let prefsButton = NSButton(title: " 偏好设置…", target: self, action: #selector(openPreferences))
-        prefsButton.bezelStyle = .rounded
-        prefsButton.controlSize = .large
-        prefsButton.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: "偏好设置")
-        prefsButton.imagePosition = .imageLeading
-        prefsButton.font = .systemFont(ofSize: 12, weight: .medium)
-        prefsButton.toolTip = "打开偏好设置（⌘,）：快捷键、智能整理、翻译、截图、系统"
-        prefsButton.setAccessibilityLabel("偏好设置")
-        prefsButton.translatesAutoresizingMaskIntoConstraints = false
-
-        let quickStack = NSStackView(views: [quickCard, prefsButton])
-        quickStack.orientation = .vertical
-        quickStack.alignment = .leading
-        quickStack.spacing = 12
-        quickStack.translatesAutoresizingMaskIntoConstraints = false
-        quickCard.widthAnchor.constraint(equalTo: quickStack.widthAnchor).isActive = true
-        prefsButton.widthAnchor.constraint(equalTo: quickStack.widthAnchor).isActive = true
-
-        let sections = [
-            section("快捷设置", quickStack),
-        ]
-        let stack = NSStackView(views: sections)
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = UILayout.sectionSpacing
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        for sectionView in sections {
-            sectionView.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-        }
-        return stack
-    }
-
     // MARK: - Preferences window (⌘,)
 
     /// 偏好窗口内容懒构建一次：把快捷键 / 智能整理 / 翻译 / 截图 / 系统的配置控件装进标签页。
@@ -980,7 +958,7 @@ final class MainViewController: NSViewController {
     }
 
     @objc private func openPreferences() {
-        onOpenPreferences?()
+        showPreferencesPopoverFromMenu()
     }
 
     private func section(_ title: String, _ card: NSView) -> NSView {
@@ -1019,6 +997,21 @@ final class MainViewController: NSViewController {
         row.alignment = .centerY
         row.spacing = 8
         row.heightAnchor.constraint(equalToConstant: UILayout.rowHeight).isActive = true
+        return row
+    }
+
+    private func compactOptionRow(_ title: String, _ control: NSView) -> NSView {
+        let titleLabel = label(title, size: 10, weight: .medium)
+        titleLabel.textColor = NSColor(calibratedWhite: 1, alpha: 0.72)
+        titleLabel.maximumNumberOfLines = 1
+        titleLabel.lineBreakMode = .byTruncatingTail
+        control.translatesAutoresizingMaskIntoConstraints = false
+        control.setAccessibilityLabel(title)
+        let row = NSStackView(views: [titleLabel, flexSpacer(), control])
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 5
+        row.heightAnchor.constraint(equalToConstant: 24).isActive = true
         return row
     }
 
@@ -1294,6 +1287,29 @@ final class MainViewController: NSViewController {
         popover.contentViewController = testLogsViewController
         testLogsPopover = popover
         popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxX)
+    }
+
+    @objc private func showPreferencesPopover(_ sender: NSButton) {
+        showPreferencesPopover(relativeTo: sender.bounds, of: sender)
+    }
+
+    func showPreferencesPopoverFromMenu() {
+        let anchor = NSRect(x: 0, y: max(0, view.bounds.height - 44), width: leftColumnWidth, height: 36)
+        showPreferencesPopover(relativeTo: anchor, of: view)
+    }
+
+    private func showPreferencesPopover(relativeTo rect: NSRect, of anchorView: NSView) {
+        if let popover = preferencesPopover, popover.isShown {
+            popover.performClose(nil)
+            return
+        }
+        let popover = preferencesPopover ?? NSPopover()
+        popover.behavior = .transient
+        popover.animates = true
+        popover.contentSize = NSSize(width: 540, height: 400)
+        popover.contentViewController = makePreferencesViewController()
+        preferencesPopover = popover
+        popover.show(relativeTo: rect, of: anchorView, preferredEdge: .maxX)
     }
 
     @objc private func showModelDetail(_ sender: NSGestureRecognizer) {
@@ -2216,7 +2232,7 @@ final class MainViewController: NSViewController {
             usage: usage
         )
         recentRecords.insert(record, at: 0)
-        recentRecords = Array(recentRecords.prefix(5))
+        recentRecords = Array(recentRecords.prefix(maxRecentTranscriptions))
         saveRecentTranscriptions()
         rebuildRecentRows()
     }
@@ -2224,13 +2240,14 @@ final class MainViewController: NSViewController {
     private func loadRecentTranscriptions() -> [RecentTranscription] {
         if let data = UserDefaults.standard.data(forKey: "recentTranscriptionRecords"),
            let records = try? JSONDecoder().decode([RecentTranscription].self, from: data) {
-            return Array(records.prefix(5))
+            return Array(records.prefix(maxRecentTranscriptions))
         }
         let legacy = UserDefaults.standard.stringArray(forKey: "recentTranscriptions") ?? []
-        return Array(legacy.prefix(5)).map { RecentTranscription(text: $0, recognitionSeconds: nil) }
+        return Array(legacy.prefix(maxRecentTranscriptions)).map { RecentTranscription(text: $0, recognitionSeconds: nil) }
     }
 
     private func saveRecentTranscriptions() {
+        recentRecords = Array(recentRecords.prefix(maxRecentTranscriptions))
         if let data = try? JSONEncoder().encode(recentRecords) {
             UserDefaults.standard.set(data, forKey: "recentTranscriptionRecords")
         }
@@ -2291,7 +2308,9 @@ final class MainViewController: NSViewController {
             copyButton.action = #selector(copyRecent(_:))
             copyButton.translatesAutoresizingMaskIntoConstraints = false
 
-            let row = NSView()
+            let row = RecentTranscriptionRowView(index: index) { [weak self] index in
+                self?.copyRecent(at: index)
+            }
             row.translatesAutoresizingMaskIntoConstraints = false
             row.addSubview(metaLabel)
             row.addSubview(usageLabel)
@@ -2331,10 +2350,15 @@ final class MainViewController: NSViewController {
     }
 
     @objc private func copyRecent(_ sender: NSButton) {
-        guard recentRecords.indices.contains(sender.tag) else { return }
+        copyRecent(at: sender.tag)
+    }
+
+    private func copyRecent(at index: Int) {
+        guard recentRecords.indices.contains(index) else { return }
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.setString(displayText(for: recentRecords[sender.tag]), forType: .string)
+        pasteboard.setString(displayText(for: recentRecords[index]), forType: .string)
+        setPrimaryStatus("已复制最近转录", detail: "最近转录内容已复制到剪贴板。", tone: .success)
     }
 
     private func displayText(for record: RecentTranscription) -> String {
@@ -2345,6 +2369,37 @@ final class MainViewController: NSViewController {
             return record.text
         }
         return "\(direction.sourceLabel)：\(sourceText)\n\(direction.targetLabel)：\(translatedText)"
+    }
+}
+
+private final class RecentTranscriptionRowView: NSView {
+    private let index: Int
+    private let onDoubleClick: (Int) -> Void
+
+    init(index: Int, onDoubleClick: @escaping (Int) -> Void) {
+        self.index = index
+        self.onDoubleClick = onDoubleClick
+        super.init(frame: .zero)
+    }
+
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard let hit = super.hitTest(point) else { return nil }
+        if hit is NSButton || hit.superview is NSButton {
+            return hit
+        }
+        return self
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        if event.type == .leftMouseDown, event.clickCount >= 2 {
+            onDoubleClick(index)
+            return
+        }
+        super.mouseDown(with: event)
     }
 }
 

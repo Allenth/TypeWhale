@@ -9,6 +9,17 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.4.0 (Build 288)",
+            date: "2026-06-25",
+            changes: [
+                "发布 1.4：聚焦截图、截图翻译、主窗口紧凑化和最近转录体验。",
+                "截图悬停选中窗口时保留半透明蒙层，候选窗口与整体蒙层有明显层次，但不会完全透明。",
+                "主窗口缩小为更紧凑的单栏工作区，快捷设置移入左下侧栏，偏好设置改为右侧弹窗。",
+                "最近转录保存 20 条，支持双击左键直接复制整条转录内容。",
+                "补齐翻译截图快捷键、截图英译中覆盖贴入、截图 OCR 与内联标注这几轮核心改版记录。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.3.71 (Build 279)",
             date: "2026-06-25",
             changes: [
