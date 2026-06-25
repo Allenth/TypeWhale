@@ -16,7 +16,7 @@ Stable branches and release tags should not be rewritten. If the refactor succee
 
 ## Current Progress
 
-Last updated: 2026-06-13
+Last updated: 2026-06-25
 
 - Phase 0 completed: safety branch and architecture documents are in place.
 - Phase 1 completed: core domain models were moved into `native/Sources/Domain`.
@@ -25,7 +25,7 @@ Last updated: 2026-06-13
 - Phase 4 completed: lifecycle coordination and speech input coordination were extracted from `AppDelegate`.
 - Phase 5 experiment result: `PreviewComposer` / committed-volatile preview did not improve the real capsule experience and was removed.
 - Current preview baseline: restored the v1.1.1-style capsule visual cache while keeping the refactored folder structure.
-- Current next step: if preview is iterated again, introduce reducer and typing-buffer components behind tests, without moving final paste away from full-audio transcription.
+- Current next step: keep extracting stable behavior from large presentation/coordinator files. Prefer Strategy for replaceable engines and policies, Coordinator/Use Case for workflows, and Command for shortcut/annotation actions.
 
 ## Target Architecture
 
@@ -37,6 +37,7 @@ Presentation
 Application
 - Coordinators
 - Use cases
+- Workflow commands
 
 Domain
 - Pure product models
@@ -46,6 +47,7 @@ Domain
 Infrastructure
 - Audio recording
 - ASR engines
+- OCR / translation providers
 - Hotkeys
 - Pasteboard and target app handling
 - Permissions

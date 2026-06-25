@@ -9,6 +9,15 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.4.18 (Build 306)",
+            date: "2026-06-25",
+            changes: [
+                "整理最近转录持久化代码，集中 UserDefaults key 和数量裁剪逻辑。",
+                "统一内存治理命名：保持模型热加载，只在高内存且空闲时 flush 并立即热加载回来。",
+                "新增架构决策：后续扩展优先采用 Strategy、Coordinator / Use Case、Command 三类模式。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.4.0 (Build 288)",
             date: "2026-06-25",
             changes: [

@@ -150,7 +150,7 @@ final class SpeechInputCoordinator {
                     tone: .idle,
                     resetWaveform: true
                 )
-                self?.scheduleIdleASRUnloadIfPossible()
+                self?.releaseASRResourcesIfMemoryElevated()
             }
         }
         controller.onInstallModel = { [weak self] in
@@ -179,7 +179,7 @@ final class SpeechInputCoordinator {
         hotkey.start()
         asr.start()
         realtimeASR.start()
-        scheduleIdleASRUnloadIfPossible()
+        releaseASRResourcesIfMemoryElevated()
         startObservingTargetApplicationChanges()
         refreshPermissions()
         PermissionDiagnosticsProvider.requestAccessibilityIfNeeded()
@@ -530,7 +530,7 @@ final class SpeechInputCoordinator {
             inputState = .idle
             drainPendingPasteResultsIfPossible()
             showEmptyRecording()
-            scheduleIdleASRUnloadIfPossible()
+            releaseASRResourcesIfMemoryElevated()
             return
         }
         discardPendingRealtimeSnapshot()
@@ -618,7 +618,7 @@ final class SpeechInputCoordinator {
         trackedTargetApp = nil
         inputState = .idle
         drainPendingPasteResultsIfPossible()
-        scheduleIdleASRUnloadIfPossible()
+        releaseASRResourcesIfMemoryElevated()
         controller.setPrimaryStatus(
             "麦克风已切换",
             detail: "\(message)已停止本次录音，请重新按快捷键开始。",
@@ -1032,7 +1032,7 @@ final class SpeechInputCoordinator {
                 return
             }
             inputState = .idle
-            scheduleIdleASRUnloadIfPossible()
+            releaseASRResourcesIfMemoryElevated()
             return
         }
         if case .pasting = inputState {
@@ -1070,7 +1070,7 @@ final class SpeechInputCoordinator {
         inputState = .idle
         endTargetTrackingIfNeeded(task.id)
         drainPendingPasteResultsIfPossible()
-        scheduleIdleASRUnloadIfPossible()
+        releaseASRResourcesIfMemoryElevated()
     }
 
     private func finishFinalTask(_ task: RecordingTask) {
@@ -1079,7 +1079,7 @@ final class SpeechInputCoordinator {
         }
         endTargetTrackingIfNeeded(task.id)
         drainPendingPasteResultsIfPossible()
-        scheduleIdleASRUnloadIfPossible()
+        releaseASRResourcesIfMemoryElevated()
     }
 
     private func showEmptyRecording() {
@@ -1131,27 +1131,22 @@ final class SpeechInputCoordinator {
         }
         endTargetTrackingIfNeeded(task.id)
         drainPendingPasteResultsIfPossible()
-        scheduleIdleASRUnloadIfPossible()
+        releaseASRResourcesIfMemoryElevated()
     }
 
-    private func scheduleIdleASRUnloadIfPossible() {
+    private func releaseASRResourcesIfMemoryElevated() {
         // 已取消“空闲定时卸载”：模型平时保持热加载，避免久未说话后开口第一句因重载卡顿。
-        // 内存治理只保留“高内存时释放”这条安全网（见 releaseASRResourcesIfMemoryElevated）。
+        // 内存治理只保留“高内存时释放”这条安全网。
         idleASRUnloadWorkItem?.cancel()
         idleASRUnloadWorkItem = nil
         guard isIdleForASRResourceRelease,
               MemoryMonitor.currentFootprintMB >= MemoryMonitor.warnThresholdMB else { return }
-        releaseASRResourcesIfIdle(reason: "memory_warn")
-    }
-
-    private func releaseASRResourcesIfMemoryElevated() {
-        guard MemoryMonitor.currentFootprintMB >= MemoryMonitor.warnThresholdMB else { return }
         // 冷却期内不重复释放，避免 flush→reload→flush 抖动。
         if let lastFlush = lastASRArenaFlushAt,
            Date().timeIntervalSince(lastFlush) < asrArenaFlushCooldownSeconds {
             return
         }
-        releaseASRResourcesIfIdle(reason: "memory_timer")
+        releaseASRResourcesIfIdle(reason: "memory_warn")
     }
 
     private func releaseASRResourcesIfIdle(reason: String) {
@@ -1304,7 +1299,7 @@ final class SpeechInputCoordinator {
         trackedTargetApp = nil
         inputState = .idle
         drainPendingPasteResultsIfPossible()
-        scheduleIdleASRUnloadIfPossible()
+        releaseASRResourcesIfMemoryElevated()
         controller.setPrimaryStatus(
             "无输入已自动停止",
             detail: "连续约 \(minutes) 分钟无语音输入，已自动结束录音，未做识别。",

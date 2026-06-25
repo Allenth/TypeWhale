@@ -2,6 +2,32 @@
 
 This document records architecture decisions made during the refactor. New decisions should be appended in reverse chronological order.
 
+## ADR-006: Prefer Strategy, Coordinator/Use Case, And Command For Extension Points
+
+Date: 2026-06-25
+
+Status: Accepted
+
+Decision:
+
+- Use Strategy for replaceable product capabilities: ASR providers, smart rewrite modes, translation direction, paste behavior, screenshot OCR/translation providers, and future model choices.
+- Use Coordinator / Use Case objects for user workflows: speech input, screenshot capture, app lifecycle, permission checks, and paste submission.
+- Use Command for discrete user actions that need consistent dispatch or undo semantics: screenshot annotations, toolbar actions, global hotkey actions, and recent-transcription copy/save operations.
+
+Reasoning:
+
+- TypeWhale is becoming a commercial desktop product rather than a small MVP; the cost of adding each new feature directly into a view controller or one coordinator is rising.
+- Strategy keeps future model/provider choices isolated without changing stable flows.
+- Coordinators already match the product shape, but their responsibilities need sharper boundaries so `SpeechInputCoordinator` and `ScreenshotCoordinator` do not keep absorbing unrelated policy.
+- Command is a natural fit for annotation tools, shortcut actions, and undo/redo because those actions are small, repeatable, and user-visible.
+
+Consequences:
+
+- New ASR/OCR/rewrite/translation choices should first be expressed behind a protocol or small strategy object when the behavior is expected to vary.
+- View controllers should stay focused on presentation and event forwarding; workflow sequencing belongs in coordinators/use cases.
+- New screenshot annotation tools should be designed as commands so undo/delete/save/copy behavior stays predictable.
+- Do not introduce a generic abstraction before behavior is stable; extract from verified product behavior, not speculation.
+
 ## ADR-005: Release ASR/VAD Resources On Idle, Not After Every Input
 
 Date: 2026-06-25
@@ -12,23 +38,23 @@ Decision:
 
 - Keep ASR and VAD resources warm while the user is actively typing or speaking.
 - Do not unload the native recognizer after every transcription.
-- After speech input, rewrite, translation, paste/history persistence, and realtime snapshot work are fully idle, schedule ASR/VAD cache release.
-- If the process memory footprint reaches the warning threshold while idle, release ASR/VAD resources immediately.
-- The next recording or recognition path must be able to reload the model automatically.
+- Do not use an idle timer that unloads models after N seconds of inactivity.
+- If the process memory footprint reaches the warning threshold while the app is idle, release ASR/VAD resources and immediately warm-load them again.
+- The release path must flush the expanded native memory arena without making the next recording pay the cold-load cost.
 
 Reasoning:
 
 - Keeping the recognizer warm gives better continuous-input latency.
 - Unloading after every sentence would reduce memory but make the product feel slower and less commercial-ready.
-- Letting the recognizer and VAD cache stay resident forever causes Activity Monitor memory to grow and remain high during long typing sessions.
-- Idle-time release preserves the fast path for active sessions while still allowing memory to fall back after the user pauses.
+- Letting the recognizer and VAD cache stay resident forever can leave Activity Monitor memory high after long typing sessions.
+- A high-memory-only safety net preserves the fast path for active sessions while still providing a way to flush expanded ONNX Runtime arenas.
 
 Consequences:
 
-- `SpeechInputCoordinator` owns the idle-release timer because it knows whether recording, recognition, rewrite, paste, and realtime preview are active.
+- `SpeechInputCoordinator` owns the high-memory safety check because it knows whether recording, recognition, rewrite, paste, and realtime preview are active.
 - `NativeSenseVoiceBridge` owns actual release of recognizer and native VAD cache.
-- Future ASR/OCR/model providers should expose explicit cache-release APIs rather than relying on process exit.
-- Manual QA should check two paths: continuous dictation should not reload on every sentence, and memory should drop after the idle-release delay or when idle above the warning threshold.
+- Future ASR/OCR/model providers should expose explicit cache-release and warm-load APIs rather than relying on process exit.
+- Manual QA should check two paths: continuous dictation should not reload on every sentence, and memory should drop only when idle and above the warning threshold.
 
 ## ADR-004: Screenshot Overlay Must Not Activate The Main App Window
 

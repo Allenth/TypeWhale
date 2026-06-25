@@ -1,5 +1,10 @@
 import AppKit
 
+private enum RecentTranscriptionStorageKey {
+    static let records = "recentTranscriptionRecords"
+    static let legacyTexts = "recentTranscriptions"
+}
+
 extension MainViewController {
     func addRecentTranscription(
         _ text: String,
@@ -19,26 +24,26 @@ extension MainViewController {
             usage: usage
         )
         recentRecords.insert(record, at: 0)
-        recentRecords = Array(recentRecords.prefix(maxRecentTranscriptions))
+        recentRecords = limitedRecentRecords(recentRecords)
         saveRecentTranscriptions()
         rebuildRecentRows()
     }
 
     func loadRecentTranscriptions() -> [RecentTranscription] {
-        if let data = UserDefaults.standard.data(forKey: "recentTranscriptionRecords"),
+        if let data = UserDefaults.standard.data(forKey: RecentTranscriptionStorageKey.records),
            let records = try? JSONDecoder().decode([RecentTranscription].self, from: data) {
-            return Array(records.prefix(maxRecentTranscriptions))
+            return limitedRecentRecords(records)
         }
-        let legacy = UserDefaults.standard.stringArray(forKey: "recentTranscriptions") ?? []
+        let legacy = UserDefaults.standard.stringArray(forKey: RecentTranscriptionStorageKey.legacyTexts) ?? []
         return Array(legacy.prefix(maxRecentTranscriptions)).map { RecentTranscription(text: $0, recognitionSeconds: nil) }
     }
 
     func saveRecentTranscriptions() {
-        recentRecords = Array(recentRecords.prefix(maxRecentTranscriptions))
+        recentRecords = limitedRecentRecords(recentRecords)
         if let data = try? JSONEncoder().encode(recentRecords) {
-            UserDefaults.standard.set(data, forKey: "recentTranscriptionRecords")
+            UserDefaults.standard.set(data, forKey: RecentTranscriptionStorageKey.records)
         }
-        UserDefaults.standard.set(recentRecords.map(\.text), forKey: "recentTranscriptions")
+        UserDefaults.standard.set(recentRecords.map(\.text), forKey: RecentTranscriptionStorageKey.legacyTexts)
     }
 
     func rebuildRecentRows() {
@@ -156,5 +161,9 @@ extension MainViewController {
             return record.text
         }
         return "\(direction.sourceLabel)：\(sourceText)\n\(direction.targetLabel)：\(translatedText)"
+    }
+
+    private func limitedRecentRecords(_ records: [RecentTranscription]) -> [RecentTranscription] {
+        Array(records.prefix(maxRecentTranscriptions))
     }
 }
