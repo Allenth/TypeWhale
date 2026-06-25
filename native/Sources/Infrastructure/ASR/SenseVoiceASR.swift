@@ -113,16 +113,28 @@ final class NativeSenseVoiceBridge {
 
     func stop() {
         queue.sync {
-            if let recognizer {
-                TypeSpeakerNativeRecognizerDestroy(recognizer)
-                self.recognizer = nil
-                self.loadedEngine = nil
-            }
+            releaseCachedResourcesOnQueue()
         }
     }
 
     func reload() {
         stop()
+    }
+
+    func releaseCachedResources() {
+        queue.async { [weak self] in
+            self?.releaseCachedResourcesOnQueue()
+        }
+    }
+
+    private func releaseCachedResourcesOnQueue() {
+        if let recognizer {
+            TypeSpeakerNativeRecognizerDestroy(recognizer)
+            self.recognizer = nil
+        }
+        TypeSpeakerNativeReleaseCachedResources()
+        loadedEngine = nil
+        loadedEngineLabel = nil
     }
 
     private func loadRecognizer(for configuration: ASRConfiguration) throws -> TypeSpeakerNativeRecognizer {

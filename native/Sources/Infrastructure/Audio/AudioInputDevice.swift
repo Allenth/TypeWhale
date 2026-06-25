@@ -137,3 +137,87 @@ enum AudioInputDeviceProvider {
         return value as String?
     }
 }
+
+enum AudioInputRouteChangeReason {
+    case defaultInputDevice
+    case deviceList
+
+    var userMessage: String {
+        switch self {
+        case .defaultInputDevice:
+            return "系统默认麦克风已变化。"
+        case .deviceList:
+            return "麦克风设备列表已变化。"
+        }
+    }
+}
+
+final class AudioInputRouteObserver {
+    private let queue = DispatchQueue(label: "com.waykingah.typespeaker.audio-route")
+    private let onChange: (AudioInputRouteChangeReason) -> Void
+    private var isStarted = false
+    private var defaultInputAddress = AudioObjectPropertyAddress(
+        mSelector: kAudioHardwarePropertyDefaultInputDevice,
+        mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain
+    )
+    private var devicesAddress = AudioObjectPropertyAddress(
+        mSelector: kAudioHardwarePropertyDevices,
+        mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain
+    )
+    private lazy var listener: AudioObjectPropertyListenerBlock = { [weak self] addressCount, addresses in
+        guard let self else { return }
+        let reason = Self.routeChangeReason(addressCount: addressCount, addresses: addresses)
+        DispatchQueue.main.async { [weak self] in
+            self?.onChange(reason)
+        }
+    }
+
+    init(onChange: @escaping (AudioInputRouteChangeReason) -> Void) {
+        self.onChange = onChange
+    }
+
+    func start() {
+        guard !isStarted else { return }
+        let systemObjectID = AudioObjectID(kAudioObjectSystemObject)
+        let defaultStatus = AudioObjectAddPropertyListenerBlock(
+            systemObjectID,
+            &defaultInputAddress,
+            queue,
+            listener
+        )
+        let devicesStatus = AudioObjectAddPropertyListenerBlock(
+            systemObjectID,
+            &devicesAddress,
+            queue,
+            listener
+        )
+        isStarted = defaultStatus == noErr || devicesStatus == noErr
+    }
+
+    func stop() {
+        guard isStarted else { return }
+        let systemObjectID = AudioObjectID(kAudioObjectSystemObject)
+        AudioObjectRemovePropertyListenerBlock(systemObjectID, &defaultInputAddress, queue, listener)
+        AudioObjectRemovePropertyListenerBlock(systemObjectID, &devicesAddress, queue, listener)
+        isStarted = false
+    }
+
+    private static func routeChangeReason(
+        addressCount: UInt32,
+        addresses: UnsafePointer<AudioObjectPropertyAddress>
+    ) -> AudioInputRouteChangeReason {
+        for index in 0..<Int(addressCount) {
+            switch addresses[index].mSelector {
+            case kAudioHardwarePropertyDefaultInputDevice:
+                return .defaultInputDevice
+            case kAudioHardwarePropertyDevices:
+                return .deviceList
+            default:
+                continue
+            }
+        }
+        return .deviceList
+    }
+}

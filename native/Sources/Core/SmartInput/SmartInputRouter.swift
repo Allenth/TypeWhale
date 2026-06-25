@@ -7,33 +7,38 @@ struct SmartInputContext {
     let windowTitle: String?
     let isSecureTextEntry: Bool
     let developerGlossary: String?
+    let recordingSessionId: String?
 
     init(
         targetAppName: String?,
         targetBundleIdentifier: String?,
         windowTitle: String? = nil,
         isSecureTextEntry: Bool = false,
-        developerGlossary: String? = nil
+        developerGlossary: String? = nil,
+        recordingSessionId: String? = nil
     ) {
         self.targetAppName = targetAppName
         self.targetBundleIdentifier = targetBundleIdentifier
         self.windowTitle = windowTitle
         self.isSecureTextEntry = isSecureTextEntry
         self.developerGlossary = developerGlossary
+        self.recordingSessionId = recordingSessionId
     }
 
     init(
         targetApp: NSRunningApplication?,
         windowTitle: String? = nil,
         isSecureTextEntry: Bool = false,
-        developerGlossary: String? = nil
+        developerGlossary: String? = nil,
+        recordingSessionId: String? = nil
     ) {
         self.init(
             targetAppName: targetApp?.localizedName,
             targetBundleIdentifier: targetApp?.bundleIdentifier,
             windowTitle: windowTitle,
             isSecureTextEntry: isSecureTextEntry,
-            developerGlossary: developerGlossary
+            developerGlossary: developerGlossary,
+            recordingSessionId: recordingSessionId
         )
     }
 
@@ -43,7 +48,8 @@ struct SmartInputContext {
             targetBundleIdentifier: targetBundleIdentifier,
             windowTitle: windowTitle,
             isSecureTextEntry: isSecureTextEntry,
-            developerGlossary: glossary
+            developerGlossary: glossary,
+            recordingSessionId: recordingSessionId
         )
     }
 }

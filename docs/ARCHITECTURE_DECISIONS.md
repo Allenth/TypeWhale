@@ -2,6 +2,34 @@
 
 This document records architecture decisions made during the refactor. New decisions should be appended in reverse chronological order.
 
+## ADR-005: Release ASR/VAD Resources On Idle, Not After Every Input
+
+Date: 2026-06-25
+
+Status: Accepted
+
+Decision:
+
+- Keep ASR and VAD resources warm while the user is actively typing or speaking.
+- Do not unload the native recognizer after every transcription.
+- After speech input, rewrite, translation, paste/history persistence, and realtime snapshot work are fully idle, schedule ASR/VAD cache release.
+- If the process memory footprint reaches the warning threshold while idle, release ASR/VAD resources immediately.
+- The next recording or recognition path must be able to reload the model automatically.
+
+Reasoning:
+
+- Keeping the recognizer warm gives better continuous-input latency.
+- Unloading after every sentence would reduce memory but make the product feel slower and less commercial-ready.
+- Letting the recognizer and VAD cache stay resident forever causes Activity Monitor memory to grow and remain high during long typing sessions.
+- Idle-time release preserves the fast path for active sessions while still allowing memory to fall back after the user pauses.
+
+Consequences:
+
+- `SpeechInputCoordinator` owns the idle-release timer because it knows whether recording, recognition, rewrite, paste, and realtime preview are active.
+- `NativeSenseVoiceBridge` owns actual release of recognizer and native VAD cache.
+- Future ASR/OCR/model providers should expose explicit cache-release APIs rather than relying on process exit.
+- Manual QA should check two paths: continuous dictation should not reload on every sentence, and memory should drop after the idle-release delay or when idle above the warning threshold.
+
 ## ADR-004: Screenshot Overlay Must Not Activate The Main App Window
 
 Date: 2026-06-25

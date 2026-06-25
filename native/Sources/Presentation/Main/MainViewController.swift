@@ -82,6 +82,8 @@ final class MainViewController: NSViewController {
     let realtimeDraft = label("等待实时文本", size: 12)
     let realtimeTextView = NSTextView()
     private let realtimeScroll = NSScrollView()
+    private let memoryLabel = label("内存 -- MB", size: 11, weight: .medium)
+    private var lastMemoryLevel: MemoryMonitor.Level = .normal
     var onInstallModel: (() -> Void)?
     var onHotkeysChange: ((HotkeyBinding, HotkeyBinding?, HotkeyBinding, HotkeyBinding?, HotkeyBinding?) -> Void)?
 
@@ -266,7 +268,11 @@ final class MainViewController: NSViewController {
         footerButtons.spacing = 10
         footerButtons.translatesAutoresizingMaskIntoConstraints = false
 
-        let stack = NSStackView(views: [brandStack, modelEntry, permissionEntry, spacer, footerButtons])
+        memoryLabel.textColor = .secondaryLabelColor
+        memoryLabel.toolTip = "TypeWhale 当前物理内存占用（与活动监视器“内存”一致）"
+        updateMemoryReadout()
+
+        let stack = NSStackView(views: [brandStack, modelEntry, permissionEntry, spacer, memoryLabel, footerButtons])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 12
@@ -506,6 +512,28 @@ final class MainViewController: NSViewController {
         realtimeScroll.borderType = .noBorder
         realtimeScroll.automaticallyAdjustsContentInsets = false
         realtimeScroll.translatesAutoresizingMaskIntoConstraints = false
+    }
+
+    /// 刷新左栏内存读数，并按阈值变色；升级到更高档位时给一次提醒。
+    func updateMemoryReadout() {
+        let megabytes = MemoryMonitor.currentFootprintMB
+        memoryLabel.stringValue = "内存 \(megabytes) MB · 峰值 \(MemoryMonitor.peakFootprintMB) MB"
+        let level = MemoryMonitor.level(forMB: megabytes)
+        switch level {
+        case .normal: memoryLabel.textColor = .secondaryLabelColor
+        case .warn: memoryLabel.textColor = .systemOrange
+        case .high: memoryLabel.textColor = .systemRed
+        }
+        // 升到预警档位（默认 1GB）时弹一次提示。
+        if level != .normal, lastMemoryLevel == .normal {
+            detail.stringValue = "内存达到 \(megabytes) MB（预警阈值 \(MemoryMonitor.warnThresholdMB) MB）。可重启 App 释放，或避免超长录音。"
+        }
+        lastMemoryLevel = level
+    }
+
+    /// 当前内存是否处于预警/高档位，供胶囊在录音时同步状态色与提示。
+    var isMemoryElevated: Bool {
+        MemoryMonitor.level(forMB: MemoryMonitor.currentFootprintMB) != .normal
     }
 
     /// 更新实时文本区，并滚动到末尾：始终显示最新内容，最旧的被挤到上方滚出可视区。

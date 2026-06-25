@@ -74,6 +74,49 @@ static int vad_accept_samples(
   return has_speech;
 }
 
+// 缓存 Silero VAD 检测器：录音时每秒会多次判断有无人声，逐次 Create/Destroy 会话开销大。
+// 这里按模型路径缓存复用，每次使用前 Reset 清空内部状态。所有调用都走同一个串行队列，无并发问题。
+static const SherpaOnnxVoiceActivityDetector *g_cached_vad = NULL;
+static char *g_cached_vad_model = NULL;
+
+static const SherpaOnnxVoiceActivityDetector *acquire_cached_vad(const char *model_path) {
+  if (g_cached_vad != NULL && g_cached_vad_model != NULL &&
+      strcmp(g_cached_vad_model, model_path) == 0) {
+    SherpaOnnxVoiceActivityDetectorReset(g_cached_vad);
+    return g_cached_vad;
+  }
+  if (g_cached_vad != NULL) {
+    SherpaOnnxDestroyVoiceActivityDetector(g_cached_vad);
+    g_cached_vad = NULL;
+  }
+  if (g_cached_vad_model != NULL) {
+    free(g_cached_vad_model);
+    g_cached_vad_model = NULL;
+  }
+
+  SherpaOnnxVadModelConfig config;
+  memset(&config, 0, sizeof(config));
+  config.silero_vad.model = model_path;
+  config.silero_vad.threshold = 0.50f;
+  config.silero_vad.min_silence_duration = 0.30f;
+  config.silero_vad.min_speech_duration = 0.25f;
+  config.silero_vad.max_speech_duration = 10.0f;
+  config.silero_vad.window_size = 512;
+  config.sample_rate = 16000;
+  config.num_threads = 1;
+  config.provider = "cpu";
+  config.debug = 0;
+
+  const SherpaOnnxVoiceActivityDetector *vad =
+      SherpaOnnxCreateVoiceActivityDetector(&config, 30.0f);
+  if (vad == NULL) {
+    return NULL;
+  }
+  g_cached_vad = vad;
+  g_cached_vad_model = strdup(model_path);
+  return vad;
+}
+
 int TypeSpeakerNativeVadHasSpeech(
     const char *audio_path,
     const char *model_path,
@@ -96,21 +139,7 @@ int TypeSpeakerNativeVadHasSpeech(
     return -1;
   }
 
-  SherpaOnnxVadModelConfig config;
-  memset(&config, 0, sizeof(config));
-  config.silero_vad.model = model_path;
-  config.silero_vad.threshold = 0.50f;
-  config.silero_vad.min_silence_duration = 0.30f;
-  config.silero_vad.min_speech_duration = 0.25f;
-  config.silero_vad.max_speech_duration = 10.0f;
-  config.silero_vad.window_size = 512;
-  config.sample_rate = 16000;
-  config.num_threads = 1;
-  config.provider = "cpu";
-  config.debug = 0;
-
-  const SherpaOnnxVoiceActivityDetector *vad =
-      SherpaOnnxCreateVoiceActivityDetector(&config, 30.0f);
+  const SherpaOnnxVoiceActivityDetector *vad = acquire_cached_vad(model_path);
   if (vad == NULL) {
     SherpaOnnxFreeWave(wave);
     set_error(error_message, "无法创建 Silero VAD 检测器");
@@ -128,7 +157,6 @@ int TypeSpeakerNativeVadHasSpeech(
         SherpaOnnxCreateLinearResampler(
             input_rate, output_rate, 0.99f * 0.5f * (float)min_rate, 6);
     if (resampler == NULL) {
-      SherpaOnnxDestroyVoiceActivityDetector(vad);
       SherpaOnnxFreeWave(wave);
       set_error(error_message, "无法创建 VAD 重采样器");
       return -1;
@@ -138,7 +166,6 @@ int TypeSpeakerNativeVadHasSpeech(
             resampler, wave->samples, wave->num_samples, 1);
     if (resampled == NULL) {
       SherpaOnnxDestroyLinearResampler(resampler);
-      SherpaOnnxDestroyVoiceActivityDetector(vad);
       SherpaOnnxFreeWave(wave);
       set_error(error_message, "无法重采样录音以进行 VAD 检测");
       return -1;
@@ -148,7 +175,6 @@ int TypeSpeakerNativeVadHasSpeech(
     SherpaOnnxDestroyLinearResampler(resampler);
   }
 
-  SherpaOnnxDestroyVoiceActivityDetector(vad);
   SherpaOnnxFreeWave(wave);
   return has_speech ? 1 : 0;
 }
@@ -170,7 +196,7 @@ TypeSpeakerNativeRecognizer TypeSpeakerNativeRecognizerCreate(
   config.model_config.sense_voice.language = sense_voice_language();
   config.model_config.sense_voice.use_itn = 1;
   config.model_config.tokens = tokens_path;
-  config.model_config.num_threads = 4;
+  config.model_config.num_threads = 2;
   config.model_config.provider = "cpu";
   config.decoding_method = "greedy_search";
 
@@ -229,7 +255,7 @@ TypeSpeakerNativeRecognizer TypeSpeakerNativeQwen3RecognizerCreate(
   config.model_config.qwen3_asr.max_new_tokens = 256;
   config.model_config.qwen3_asr.hotwords =
       hotwords != NULL && hotwords[0] != '\0' ? hotwords : NULL;
-  config.model_config.num_threads = 4;
+  config.model_config.num_threads = 2;
   config.model_config.provider = "cpu";
   config.model_config.debug = 0;
   config.decoding_method = "greedy_search";
@@ -320,6 +346,17 @@ void TypeSpeakerNativeRecognizerDestroy(TypeSpeakerNativeRecognizer recognizer) 
     }
     free(state->hotwords);
     free(state);
+  }
+}
+
+void TypeSpeakerNativeReleaseCachedResources(void) {
+  if (g_cached_vad != NULL) {
+    SherpaOnnxDestroyVoiceActivityDetector(g_cached_vad);
+    g_cached_vad = NULL;
+  }
+  if (g_cached_vad_model != NULL) {
+    free(g_cached_vad_model);
+    g_cached_vad_model = NULL;
   }
 }
 

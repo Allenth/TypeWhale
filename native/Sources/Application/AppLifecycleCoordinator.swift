@@ -1,9 +1,10 @@
 import AppKit
 
 @MainActor
-final class AppLifecycleCoordinator: NSObject {
+final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
     let controller: MainViewController
     private var statusItem: NSStatusItem?
+    private let memoryStatusItem = NSMenuItem(title: "内存 -- MB", action: nil, keyEquivalent: "")
     private var window: NSWindow?
     private var thirdPartyNoticesWindow: NSWindow?
     private var allowsTermination = false
@@ -83,6 +84,11 @@ final class AppLifecycleCoordinator: NSObject {
         }
 
         let menu = NSMenu()
+        menu.delegate = self
+        memoryStatusItem.isEnabled = false
+        updateMemoryStatusItem()
+        menu.addItem(memoryStatusItem)
+        menu.addItem(.separator())
         let showItem = NSMenuItem(title: "打开 TypeWhale 面板", action: #selector(openMainWindowFromStatusItem), keyEquivalent: "")
         showItem.target = self
         menu.addItem(showItem)
@@ -134,6 +140,33 @@ final class AppLifecycleCoordinator: NSObject {
 
         image.isTemplate = false
         return image
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        updateMemoryStatusItem()
+        controller.updateMemoryReadout()
+    }
+
+    private func updateMemoryStatusItem() {
+        let megabytes = MemoryMonitor.currentFootprintMB
+        memoryStatusItem.title = "内存 \(megabytes) MB"
+        switch MemoryMonitor.level(forMB: megabytes) {
+        case .normal:
+            memoryStatusItem.attributedTitle = NSAttributedString(
+                string: memoryStatusItem.title,
+                attributes: [.foregroundColor: NSColor.secondaryLabelColor]
+            )
+        case .warn:
+            memoryStatusItem.attributedTitle = NSAttributedString(
+                string: "\(memoryStatusItem.title) · 偏高",
+                attributes: [.foregroundColor: NSColor.systemOrange]
+            )
+        case .high:
+            memoryStatusItem.attributedTitle = NSAttributedString(
+                string: "\(memoryStatusItem.title) · 高",
+                attributes: [.foregroundColor: NSColor.systemRed]
+            )
+        }
     }
 
     private func setupMainWindow() {

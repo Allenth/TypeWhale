@@ -62,8 +62,8 @@ final class LockedRecordingState: @unchecked Sendable {
 
 final class AudioRecorder: @unchecked Sendable {
     private enum RealtimeTiming {
-        static let firstSnapshotSeconds: Double = 0.30
-        static let snapshotIntervalSeconds: Double = 0.50
+        static let firstSnapshotSeconds: Double = 0.80
+        static let snapshotIntervalSeconds: Double = 0.80
         static let maxBufferedSeconds: Double = 20.0
     }
     private enum Finalization {
@@ -84,14 +84,25 @@ final class AudioRecorder: @unchecked Sendable {
     private var realtimeEnabled = false
     private var snapshotWriteInFlight = false
     private var snapshotRequestedWhileBusy = false
+    private var inputRouteObserver: AudioInputRouteObserver?
+    private var engineConfigurationObserver: NSObjectProtocol?
     private var inputFormatDescription = ""
     private var latestEmptyRecordingReason: String?
     private(set) var isRecording = false
     var onBands: (([Float]) -> Void)?
     var onRealtimeSnapshot: ((UUID, URL) -> Void)?
+    var onInputRouteChanged: ((String) -> Void)?
 
     var emptyRecordingReason: String? {
         latestEmptyRecordingReason
+    }
+
+    /// 清空实时预览滑动窗口缓冲，让下一个快照只包含“当前这一段”的音频。
+    /// 只影响实时预览，最终整段录音文件不受影响。在实时缓冲所在的处理队列上执行，保证线程安全。
+    func resetRealtimeWindow() {
+        processingQueue.async { [weak self] in
+            self?.realtimeBuffers.removeAll(keepingCapacity: true)
+        }
     }
 
     var latestURL: URL {
@@ -168,6 +179,7 @@ final class AudioRecorder: @unchecked Sendable {
         do {
             try engine.start()
             startedAt = Date()
+            startInputRouteMonitoring()
         } catch {
             state.stopAccepting()
             isRecording = false
@@ -263,11 +275,48 @@ final class AudioRecorder: @unchecked Sendable {
 
     private func releaseInputNode() {
         guard let engine else { return }
+        stopInputRouteMonitoring()
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         engine.reset()
         self.engine = nil
         DispatchQueue.main.async { [weak self] in self?.onBands?(Array(repeating: 0.1, count: 7)) }
+    }
+
+    private func startInputRouteMonitoring() {
+        stopInputRouteMonitoring()
+        let routeObserver = AudioInputRouteObserver { [weak self] reason in
+            self?.handleInputRouteChanged(reason.userMessage)
+        }
+        routeObserver.start()
+        inputRouteObserver = routeObserver
+        if let engine {
+            engineConfigurationObserver = NotificationCenter.default.addObserver(
+                forName: .AVAudioEngineConfigurationChange,
+                object: engine,
+                queue: .main
+            ) { [weak self] _ in
+                self?.handleInputRouteChanged("录音引擎配置已变化。")
+            }
+        }
+    }
+
+    private func stopInputRouteMonitoring() {
+        inputRouteObserver?.stop()
+        inputRouteObserver = nil
+        if let engineConfigurationObserver {
+            NotificationCenter.default.removeObserver(engineConfigurationObserver)
+        }
+        engineConfigurationObserver = nil
+    }
+
+    private func handleInputRouteChanged(_ message: String) {
+        guard isRecording else { return }
+        latestEmptyRecordingReason = "\(message)请重新开始录音。"
+        state.stopAccepting()
+        stopInputRouteMonitoring()
+        releaseInputNode()
+        onInputRouteChanged?(message)
     }
 
     private func scheduleRealtimeSnapshot(taskID: UUID, format: AVAudioFormat) {

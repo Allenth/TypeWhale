@@ -33,6 +33,11 @@ final class RecordingCapsuleView: NSView {
         didSet { needsDisplay = true }
     }
 
+    /// 状态边框颜色：录音倒计时临近/内存偏高时高亮整圈边框作为状态提示；nil 为默认白色描边。
+    var statusBorderColor: NSColor? {
+        didSet { needsDisplay = true }
+    }
+
     override var isOpaque: Bool { false }
 
     deinit {
@@ -105,9 +110,19 @@ final class RecordingCapsuleView: NSView {
             NSColor(calibratedWhite: 1, alpha: 0.00),
         ])?.draw(in: highlight, angle: 90)
 
-        NSColor(calibratedWhite: 1, alpha: 0.48).setStroke()
-        path.lineWidth = 1.2
-        path.stroke()
+        if let statusBorderColor {
+            // 状态高亮：先用半透明同色描一圈“光晕”，再描实色边框。
+            statusBorderColor.withAlphaComponent(0.35).setStroke()
+            path.lineWidth = 4.5
+            path.stroke()
+            statusBorderColor.setStroke()
+            path.lineWidth = 1.8
+            path.stroke()
+        } else {
+            NSColor(calibratedWhite: 1, alpha: 0.48).setStroke()
+            path.lineWidth = 1.2
+            path.stroke()
+        }
 
         let textColor = NSColor(calibratedWhite: 1, alpha: 0.96)
         guard !textBuffer.isEmpty else {

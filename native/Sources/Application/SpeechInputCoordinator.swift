@@ -1,5 +1,4 @@
 import AppKit
-import ApplicationServices
 import Foundation
 
 @MainActor
@@ -8,6 +7,14 @@ final class SpeechInputCoordinator {
         static let autoFinishPauseSeconds: TimeInterval = 1.5
         static let initialSilenceAutoFinishSeconds: TimeInterval = 3.0
         static let holdToRecordSeconds: TimeInterval = 0.28
+        /// 单次录音硬上限：超过即自动结束并识别，封住 ASR 识别时的内存峰值（识别内存随时长增长且不自动回落）。
+        static let maxRecordingSeconds: TimeInterval = 180
+        /// 连续输入体验优先：停止输入一段时间后再卸载 ASR/VAD 缓存，而不是每次识别后立即冷启动。
+        static let idleASRUnloadSeconds: TimeInterval = 90
+        /// 实时预览分段：停顿超过此值就把当前段冻结提交，重置预览窗口（避免滑窗重识别导致乱码）。
+        static let segmentCommitPauseSeconds: TimeInterval = 0.7
+        /// 连续说话不停顿时的强制分段上限：超过即强制提交并重置窗口，避免窗口滑动。
+        static let segmentMaxSeconds: TimeInterval = 16
     }
 
     /// 基于音频能量的语音活动检测（VAD）阈值，与 ASR 解耦，保证静音/人离判定每次稳定一致。
@@ -17,6 +24,7 @@ final class SpeechInputCoordinator {
     }
 
     private var recordingStartedAt: Date?
+    private var lastCapsuleStatusUpdateAt: Date?
     private var lastVoiceAt: Date?
     private var voiceEverDetected = false
 
@@ -44,6 +52,10 @@ final class SpeechInputCoordinator {
     private var completedFinalTaskIDs: Set<UUID> = []
     private var realtimeBusy = false
     private var pendingRealtimeSnapshot: RealtimeSnapshotRequest?
+    /// 每次分段提交/重置窗口时自增，用于丢弃跨越重置点、属于旧窗口的过期识别结果。
+    private var realtimeGeneration = 0
+    private var segmentStartedAt: Date?
+    private var pendingSegmentCommit = false
     private var workspaceActivationObserver: NSObjectProtocol?
     private var trackedTargetTaskID: UUID?
     private var trackedTargetApp: NSRunningApplication?
@@ -51,6 +63,8 @@ final class SpeechInputCoordinator {
     private var longPressWorkItem: DispatchWorkItem?
     private var autoFinishWorkItem: DispatchWorkItem?
     private var initialSilenceWorkItem: DispatchWorkItem?
+    private var idleASRUnloadWorkItem: DispatchWorkItem?
+    private var asrResourcesReleasedAfterIdle = false
     private var suppressNextHotkeyUp = false
     private var primaryHotkeyBinding = HotkeyBinding.load(
         storageKey: HotkeyBinding.chineseStorageKey,
@@ -85,9 +99,13 @@ final class SpeechInputCoordinator {
             self?.popup.updateBands(bands)
             self?.controller.updateInputBands(bands)
             self?.observeAudioEnergy(bands)
+            self?.refreshCapsuleStatusIfNeeded()
         }
         recorder.onRealtimeSnapshot = { [weak self] taskID, url in
             self?.receiveRealtimeSnapshot(taskID: taskID, url: url)
+        }
+        recorder.onInputRouteChanged = { [weak self] message in
+            self?.handleAudioInputRouteChanged(message)
         }
         controller.updateHotkeys(
             primary: primaryHotkeyBinding,
@@ -113,12 +131,14 @@ final class SpeechInputCoordinator {
             self?.controller.updateModelState(state)
             if case .ready = state {
                 self?.nativeASR.reload()
+                self?.asrResourcesReleasedAfterIdle = false
                 self?.controller.setPrimaryStatus(
                     "等待录音",
                     detail: "\(self?.primaryHotkeyBinding.displayName ?? "Fn") 录音",
                     tone: .idle,
                     resetWaveform: true
                 )
+                self?.scheduleIdleASRUnloadIfPossible()
             }
         }
         controller.onInstallModel = { [weak self] in
@@ -143,6 +163,7 @@ final class SpeechInputCoordinator {
         hotkey.start()
         asr.start()
         realtimeASR.start()
+        scheduleIdleASRUnloadIfPossible()
         startObservingTargetApplicationChanges()
         refreshPermissions()
         PermissionDiagnosticsProvider.requestAccessibilityIfNeeded()
@@ -150,6 +171,9 @@ final class SpeechInputCoordinator {
             Task { @MainActor in
                 self?.refreshPermissions()
                 self?.hotkey.start()
+                self?.controller.updateMemoryReadout()
+                self?.updateCapsuleStatus()
+                self?.releaseASRResourcesIfMemoryElevated()
             }
         }
         PermissionDiagnosticsProvider.requestMicrophone { [weak self] in self?.refreshPermissions() }
@@ -159,6 +183,7 @@ final class SpeechInputCoordinator {
         longPressWorkItem?.cancel()
         cancelAutoFinishTimer()
         cancelInitialSilenceTimer()
+        cancelIdleASRUnload()
         recorder.cancel()
         clearActiveRecording()
         pendingPasteResults.removeAll()
@@ -347,6 +372,27 @@ final class SpeechInputCoordinator {
         popup.updateModeName(next.displayName)
     }
 
+    private func refreshCapsuleStatusIfNeeded() {
+        let now = Date()
+        if let lastCapsuleStatusUpdateAt,
+           now.timeIntervalSince(lastCapsuleStatusUpdateAt) < 1 {
+            return
+        }
+        lastCapsuleStatusUpdateAt = now
+        updateCapsuleStatus()
+    }
+
+    /// 驱动胶囊状态：录音时显示剩余时长倒计时，内存偏高时高亮提示。
+    private func updateCapsuleStatus() {
+        let memoryHigh = controller.isMemoryElevated
+        if recorder.isRecording, let startedAt = recordingStartedAt {
+            let remaining = max(0, Int((Timing.maxRecordingSeconds - Date().timeIntervalSince(startedAt)).rounded()))
+            popup.updateRecordingStatus(remainingSeconds: remaining, memoryHigh: memoryHigh)
+        } else {
+            popup.updateRecordingStatus(remainingSeconds: nil, memoryHigh: memoryHigh)
+        }
+    }
+
     private func beginScreenshotFromHotkey() {
         guard activeSession == nil, !recorder.isRecording else { return }
         longPressWorkItem?.cancel()
@@ -364,6 +410,8 @@ final class SpeechInputCoordinator {
         channel: SpeechInputChannel? = nil
     ) {
         guard !recorder.isRecording else { return }
+        cancelIdleASRUnload()
+        asrResourcesReleasedAfterIdle = false
         let selectedBackend = controller.asrBackend
         let resolvedBackend = selectedBackend.resolvedBackend
         let realtimeEnabled = controller.realtimePreviewEnabled && resolvedBackend == .senseVoice
@@ -401,8 +449,13 @@ final class SpeechInputCoordinator {
                 inputDeviceID: AudioInputDeviceProvider.selectedDeviceID()
             )
             recordingStartedAt = Date()
+            lastCapsuleStatusUpdateAt = nil
+            updateCapsuleStatus()
             lastVoiceAt = nil
             voiceEverDetected = false
+            segmentStartedAt = nil
+            pendingSegmentCommit = false
+            realtimeGeneration += 1
         } catch {
             cancelAutoFinishTimer()
             clearActiveRecording()
@@ -432,6 +485,7 @@ final class SpeechInputCoordinator {
             inputState = .idle
             drainPendingPasteResultsIfPossible()
             showEmptyRecording()
+            scheduleIdleASRUnloadIfPossible()
             return
         }
         discardPendingRealtimeSnapshot()
@@ -500,8 +554,36 @@ final class SpeechInputCoordinator {
         cancelInitialSilenceTimer()
         outputAudioDucker.restore()
         activeSession = nil
+        recordingStartedAt = nil
+        lastCapsuleStatusUpdateAt = nil
+        updateCapsuleStatus()
         controller.resetInputBands()
         discardPendingRealtimeSnapshot()
+    }
+
+    private func handleAudioInputRouteChanged(_ message: String) {
+        guard activeSession != nil || recorder.isRecording else { return }
+        suppressNextHotkeyUp = hotkeyIsPressed
+        hotkeyIsPressed = false
+        longPressWorkItem?.cancel()
+        longPressWorkItem = nil
+        recorder.cancel()
+        clearActiveRecording()
+        trackedTargetTaskID = nil
+        trackedTargetApp = nil
+        inputState = .idle
+        drainPendingPasteResultsIfPossible()
+        scheduleIdleASRUnloadIfPossible()
+        controller.setPrimaryStatus(
+            "麦克风已切换",
+            detail: "\(message)已停止本次录音，请重新按快捷键开始。",
+            tone: .warning,
+            resetWaveform: true
+        )
+        popup.show(state: "麦克风已切换", draft: "请重新录音")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
+            self?.popup.hideAnimated()
+        }
     }
 
     private func discardPendingRealtimeSnapshot() {
@@ -532,6 +614,7 @@ final class SpeechInputCoordinator {
 
     private func transcribeRealtime(taskID: UUID, url: URL, configuration: ASRConfiguration) {
         realtimeBusy = true
+        let generation = realtimeGeneration
         realtimeASR.containsSpeech(audio: url) { [weak self] vadResponse in
             DispatchQueue.main.async {
                 guard let self else { return }
@@ -556,15 +639,18 @@ final class SpeechInputCoordinator {
                             try? FileManager.default.removeItem(at: url)
                             guard let self else { return }
                             if taskID == self.activeSession?.id,
+                               generation == self.realtimeGeneration,
                                case .success(let value) = response,
                                 (value["error"] as? String ?? "").isEmpty {
                                 let text = cleanRecognitionText(value["text"] as? String ?? "", languageMode: configuration.languageMode)
-                                let hasPriorPreview = self.activeSession?.latestPreviewText.isEmpty == false
-                                if isMeaningfulRecognitionText(text, hasPriorPreview: hasPriorPreview) {
-                                    // 仅用于展示实时预览文本；静音/停顿的结束判定改由能量 VAD 负责。
+                                let previousSegment = self.activeSession?.latestPreviewText ?? ""
+                                // text 只是“当前这一段”的识别结果；展示时拼在已冻结前缀之后。
+                                if isMeaningfulRealtimePreviewText(text, previousPreview: previousSegment) {
                                     self.activeSession?.latestPreviewText = text
-                                    self.controller.updateRealtimeDraft(text)
-                                    self.popup.updateDraft(text)
+                                    if self.segmentStartedAt == nil { self.segmentStartedAt = Date() }
+                                    let combined = (self.activeSession?.committedPreviewText ?? "") + text
+                                    self.controller.updateRealtimeDraft(combined)
+                                    self.popup.updateDraft(combined)
                                 }
                             }
                             self.finishRealtimeSnapshot()
@@ -689,7 +775,10 @@ final class SpeechInputCoordinator {
     private func rewriteTranslateAndSubmit(_ rawText: String, elapsed: Double, task: RecordingTask) {
         let preference = controller.smartRewritePreference
         let direction = controller.translationDirection
-        let context = SmartInputContext(targetApp: currentTargetApp(for: task))
+        let context = SmartInputContext(
+            targetApp: currentTargetApp(for: task),
+            recordingSessionId: task.id.uuidString
+        )
         Task { [weak self] in
             guard let self else { return }
             let rewriteResult: SmartRewriteResult
@@ -773,7 +862,10 @@ final class SpeechInputCoordinator {
 
     private func rewriteAndSubmit(_ rawText: String, elapsed: Double, task: RecordingTask) {
         let preference = controller.smartRewritePreference
-        let context = SmartInputContext(targetApp: currentTargetApp(for: task))
+        let context = SmartInputContext(
+            targetApp: currentTargetApp(for: task),
+            recordingSessionId: task.id.uuidString
+        )
         Task { [weak self] in
             guard let self else { return }
             let result = await self.smartInputRouter.rewrite(
@@ -895,6 +987,7 @@ final class SpeechInputCoordinator {
                 return
             }
             inputState = .idle
+            scheduleIdleASRUnloadIfPossible()
             return
         }
         if case .pasting = inputState {
@@ -906,10 +999,6 @@ final class SpeechInputCoordinator {
         let pasteTarget = currentTargetApp(for: result.task)
         guard let pasteTarget else {
             skipAutomaticPaste(result)
-            return
-        }
-        guard canPasteIntoFocusedElement(of: pasteTarget) else {
-            skipAutomaticPaste(result, detail: "当前焦点不是明确的文本输入区，可在最近转录中复制")
             return
         }
         inputState = .pasting(result.task)
@@ -931,50 +1020,12 @@ final class SpeechInputCoordinator {
                 tone: .warning,
                 resetWaveform: true
             )
-            popup.show(state: "已保存", draft: "")
-            hidePopup(after: 1.0, task: task)
+            hidePopup(after: 0, task: task)
         }
         inputState = .idle
         endTargetTrackingIfNeeded(task.id)
         drainPendingPasteResultsIfPossible()
-    }
-
-    private func canPasteIntoFocusedElement(of targetApp: NSRunningApplication) -> Bool {
-        guard AXIsProcessTrusted() else { return true }
-        let systemWide = AXUIElementCreateSystemWide()
-        var focusedValue: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(
-            systemWide,
-            kAXFocusedUIElementAttribute as CFString,
-            &focusedValue
-        ) == .success else {
-            return false
-        }
-        guard let focusedElement = focusedValue else { return false }
-        let element = focusedElement as! AXUIElement
-        var focusedPID: pid_t = 0
-        guard AXUIElementGetPid(element, &focusedPID) == .success,
-              focusedPID == targetApp.processIdentifier else {
-            return false
-        }
-        var roleValue: CFTypeRef?
-        if AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleValue) == .success,
-           let role = roleValue as? String,
-           isEditableTextRole(role) {
-            return true
-        }
-        var isSettable = DarwinBoolean(false)
-        if AXUIElementIsAttributeSettable(element, kAXValueAttribute as CFString, &isSettable) == .success,
-           isSettable.boolValue {
-            return true
-        }
-        return false
-    }
-
-    private func isEditableTextRole(_ role: String) -> Bool {
-        role == kAXTextFieldRole as String ||
-            role == kAXTextAreaRole as String ||
-            role == kAXComboBoxRole as String
+        scheduleIdleASRUnloadIfPossible()
     }
 
     private func finishFinalTask(_ task: RecordingTask) {
@@ -983,6 +1034,7 @@ final class SpeechInputCoordinator {
         }
         endTargetTrackingIfNeeded(task.id)
         drainPendingPasteResultsIfPossible()
+        scheduleIdleASRUnloadIfPossible()
     }
 
     private func showEmptyRecording() {
@@ -1019,10 +1071,14 @@ final class SpeechInputCoordinator {
             case .preservedUserClipboard:
                 controller.detail.stringValue = "识别结果已粘贴，检测到新的剪贴板内容并已保留"
                 hidePopup(after: 0, task: task)
-            case .failed(let message):
-                controller.setPrimaryStatus("自动粘贴失败", detail: message, tone: .error, resetWaveform: true)
-                popup.show(state: "粘贴失败", draft: "")
-                hidePopup(after: 1.2, task: task)
+            case .failed:
+                controller.setPrimaryStatus(
+                    "已保存到主页历史",
+                    detail: "自动粘贴未完成，可在最近转录中复制",
+                    tone: .warning,
+                    resetWaveform: true
+                )
+                hidePopup(after: 0, task: task)
             }
         }
         if activeSession == nil, !recorder.isRecording {
@@ -1030,6 +1086,55 @@ final class SpeechInputCoordinator {
         }
         endTargetTrackingIfNeeded(task.id)
         drainPendingPasteResultsIfPossible()
+        scheduleIdleASRUnloadIfPossible()
+    }
+
+    private func scheduleIdleASRUnloadIfPossible() {
+        guard isIdleForASRResourceRelease else { return }
+        idleASRUnloadWorkItem?.cancel()
+        if MemoryMonitor.currentFootprintMB >= MemoryMonitor.warnThresholdMB {
+            releaseASRResourcesIfIdle(reason: "memory_warn")
+            return
+        }
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.releaseASRResourcesIfIdle(reason: "idle_timeout")
+        }
+        idleASRUnloadWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + Timing.idleASRUnloadSeconds, execute: workItem)
+    }
+
+    private func releaseASRResourcesIfMemoryElevated() {
+        guard MemoryMonitor.currentFootprintMB >= MemoryMonitor.warnThresholdMB else { return }
+        releaseASRResourcesIfIdle(reason: "memory_timer")
+    }
+
+    private func releaseASRResourcesIfIdle(reason: String) {
+        guard isIdleForASRResourceRelease, !asrResourcesReleasedAfterIdle else { return }
+        idleASRUnloadWorkItem?.cancel()
+        idleASRUnloadWorkItem = nil
+        asrResourcesReleasedAfterIdle = true
+        LaunchDiagnostics.mark("release_asr_resources reason=\(reason) memory_mb=\(MemoryMonitor.currentFootprintMB)")
+        nativeASR.releaseCachedResources()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+            self?.controller.updateMemoryReadout()
+        }
+    }
+
+    private var isIdleForASRResourceRelease: Bool {
+        if activeSession != nil || recorder.isRecording || !pendingPasteResults.isEmpty || realtimeBusy {
+            return false
+        }
+        switch inputState {
+        case .idle, .failed:
+            return true
+        case .recording, .finalizing, .pasting:
+            return false
+        }
+    }
+
+    private func cancelIdleASRUnload() {
+        idleASRUnloadWorkItem?.cancel()
+        idleASRUnloadWorkItem = nil
     }
 
     private func addRecentTranscription(for result: PendingPasteResult, completedAt: Date) {
@@ -1074,12 +1179,62 @@ final class SpeechInputCoordinator {
     /// 与 ASR 解耦，逐缓冲连续评估，确保每次打开胶囊都能稳定一致地识别静音。
     private func observeAudioEnergy(_ bands: [Float]) {
         guard recorder.isRecording else { return }
+        if enforceMaxRecordingDuration() { return }
         let level = bands.max() ?? 0
         if level >= VAD.speechBandThreshold {
             voiceEverDetected = true
             lastVoiceAt = Date()
+            pendingSegmentCommit = false
+            if segmentStartedAt == nil { segmentStartedAt = Date() }
         }
+        evaluateRealtimeSegmentCommit()
         evaluateVADAutoFinish()
+    }
+
+    /// 实时预览分段提交：停顿超过阈值、或一段连续说话过长时，把当前段冻结进前缀并重置预览窗口。
+    /// 这样下一个快照只识别“当前这一段”，避免 20 秒滑窗整段重识别导致的乱码。
+    private func evaluateRealtimeSegmentCommit() {
+        guard activeSession?.realtimeEnabled == true,
+              let currentSegment = activeSession?.latestPreviewText,
+              !currentSegment.isEmpty else { return }
+        let now = Date()
+        let pausedLongEnough = !pendingSegmentCommit
+            && (lastVoiceAt.map { now.timeIntervalSince($0) >= Timing.segmentCommitPauseSeconds } ?? false)
+        let segmentTooLong = segmentStartedAt.map { now.timeIntervalSince($0) >= Timing.segmentMaxSeconds } ?? false
+        guard pausedLongEnough || segmentTooLong else { return }
+        commitRealtimeSegment()
+        if pausedLongEnough { pendingSegmentCommit = true }
+    }
+
+    private func commitRealtimeSegment() {
+        guard var session = activeSession else { return }
+        let segment = session.latestPreviewText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !segment.isEmpty else { return }
+        session.committedPreviewText += segment
+        session.latestPreviewText = ""
+        activeSession = session
+        // 让在途的旧窗口识别结果作废，并清空待处理快照与音频预览窗口，下一段从头开始。
+        realtimeGeneration += 1
+        segmentStartedAt = nil
+        discardPendingRealtimeSnapshot()
+        recorder.resetRealtimeWindow()
+    }
+
+    /// 录音超过单次硬上限时自动结束并识别，封住 ASR 内存峰值。返回是否已触发结束。
+    private func enforceMaxRecordingDuration() -> Bool {
+        guard let startedAt = recordingStartedAt,
+              Date().timeIntervalSince(startedAt) >= Timing.maxRecordingSeconds else { return false }
+        let minutes = Int(Timing.maxRecordingSeconds / 60)
+        controller.setPrimaryStatus(
+            "已达单次最长录音",
+            detail: "单次最长约 \(minutes) 分钟，已自动结束并开始识别",
+            tone: .warning,
+            resetWaveform: false
+        )
+        suppressNextHotkeyUp = hotkeyIsPressed
+        hotkeyIsPressed = false
+        finishRecording()
+        return true
     }
 
     private func evaluateVADAutoFinish() {

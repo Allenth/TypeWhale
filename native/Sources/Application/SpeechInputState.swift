@@ -12,7 +12,10 @@ struct SpeechSession {
     let configuration: ASRConfiguration
     let activation: RecordingActivation
     let realtimeEnabled: Bool
+    /// 当前在说的这一段（自上次静音/提交以来）的实时识别结果。
     var latestPreviewText: String
+    /// 已说完并冻结的前缀：分段提交后累积，不再被滑动窗口重识别覆盖。
+    var committedPreviewText: String = ""
 }
 
 struct RealtimeSnapshotRequest {

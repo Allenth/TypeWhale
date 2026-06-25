@@ -34,6 +34,7 @@ int TypeSpeakerNativeVadHasSpeech(
 );
 
 void TypeSpeakerNativeRecognizerDestroy(TypeSpeakerNativeRecognizer recognizer);
+void TypeSpeakerNativeReleaseCachedResources(void);
 void TypeSpeakerNativeStringFree(char *value);
 
 // Defined in LaunchProbe.c. Declared here so Swift (via this bridging header)

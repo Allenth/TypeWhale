@@ -26,5 +26,15 @@ func cleanRecognitionText(_ text: String, languageMode: RecognitionLanguageMode 
         with: " ",
         options: .regularExpression
     )
+    cleaned = cleaned.replacingOccurrences(
+        of: #"^[\p{P}\p{S}\s]+"#,
+        with: "",
+        options: .regularExpression
+    )
+    cleaned = cleaned.replacingOccurrences(
+        of: #"^(?:[A-Za-z]{1,2}\s*[\p{P}\p{S}]+\s*)+"#,
+        with: "",
+        options: [.regularExpression, .caseInsensitive]
+    )
     return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
 }

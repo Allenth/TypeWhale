@@ -11,6 +11,8 @@ final class RecordingPanel: NSPanel {
     private let modeButton = NSButton()
     private let translationDotLabel = NSTextField(labelWithString: "·")
     private let translationBadge = NSTextField(labelWithString: "自动翻译")
+    private let statusDotLabel = NSTextField(labelWithString: "·")
+    private let statusBadge = NSTextField(labelWithString: "")
     private let infoBarHeight: CGFloat = 22
     private var hasContext = false
     private let fadeDuration: TimeInterval = 0.25
@@ -89,12 +91,22 @@ final class RecordingPanel: NSPanel {
         translationBadge.toolTip = "自动翻译已开启"
         translationBadge.isHidden = true
 
+        statusDotLabel.font = .systemFont(ofSize: 11, weight: .bold)
+        statusDotLabel.textColor = NSColor(calibratedWhite: 1, alpha: 0.5)
+        statusDotLabel.isHidden = true
+
+        statusBadge.font = .systemFont(ofSize: 11, weight: .semibold)
+        statusBadge.textColor = NSColor(calibratedWhite: 1, alpha: 0.96)
+        statusBadge.lineBreakMode = .byTruncatingTail
+        statusBadge.maximumNumberOfLines = 1
+        statusBadge.isHidden = true
+
         infoBar.orientation = .horizontal
         infoBar.alignment = .centerY
         infoBar.spacing = 5
         infoBar.translatesAutoresizingMaskIntoConstraints = false
         infoBar.setViews(
-            [appIconView, appNameLabel, dotLabel, modeButton, translationDotLabel, translationBadge],
+            [appIconView, appNameLabel, dotLabel, modeButton, translationDotLabel, translationBadge, statusDotLabel, statusBadge],
             in: .leading
         )
         infoBar.isHidden = true
@@ -143,6 +155,38 @@ final class RecordingPanel: NSPanel {
 
     func updateAutoTranslateEnabled(_ enabled: Bool) {
         setTranslationBadgeVisible(enabled)
+        if hasContext { resizeAndPosition() }
+    }
+
+    /// 录音倒计时与内存状态：用整圈边框颜色 + 顶部小字提示当前状态。
+    /// remainingSeconds 为 nil 表示非录音；memoryHigh 表示内存达到预警档位。
+    func updateRecordingStatus(remainingSeconds: Int?, memoryHigh: Bool) {
+        var badgeText: String?
+        var badgeColor = NSColor(calibratedWhite: 1, alpha: 0.78)
+        var borderColor: NSColor?
+
+        if let remainingSeconds {
+            badgeText = String(format: "剩 %d:%02d", remainingSeconds / 60, remainingSeconds % 60)
+            if remainingSeconds <= 10 {
+                borderColor = .systemRed
+            } else if remainingSeconds <= 30 {
+                borderColor = .systemOrange
+            } else {
+                borderColor = nil
+            }
+        }
+        if memoryHigh {
+            badgeText = badgeText.map { "\($0) · 内存偏高" } ?? "内存偏高"
+            badgeColor = .systemRed
+            borderColor = .systemRed
+        }
+
+        let hasStatus = (badgeText != nil)
+        statusBadge.stringValue = badgeText ?? ""
+        statusBadge.textColor = badgeColor
+        statusBadge.isHidden = !(hasStatus && hasContext)
+        statusDotLabel.isHidden = !(hasStatus && hasContext)
+        capsule.statusBorderColor = hasStatus ? borderColor : nil
         if hasContext { resizeAndPosition() }
     }
 

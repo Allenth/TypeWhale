@@ -378,6 +378,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         case resize(handle: SelectionHandle, startSelection: NSRect)
         case annotate
         case moveMarkup(index: Int, startPoint: NSPoint, original: Markup)
+        case pendingWindowSelect(ScreenshotWindowCandidate)
     }
 
     private let screen: NSScreen
@@ -408,6 +409,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     private var activePenPoints: [NSPoint] = []
     private var activeTextField: NSTextField?
     private var activeTextOrigin: NSPoint?
+    private let clickDragThreshold: CGFloat = 4
 
     init(
         screen: NSScreen,
@@ -480,12 +482,15 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
 
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        if activeTextField != nil {
-            commitActiveTextField()
-        }
-        if event.clickCount >= 2, hasUsableSelection, selection.contains(point), !isAnnotating {
+        if event.clickCount >= 2, hasUsableSelection, selection.contains(point) {
+            if activeTextField != nil {
+                commitActiveTextField()
+            }
             copySelection()
             return
+        }
+        if activeTextField != nil {
+            commitActiveTextField()
         }
         if let action = action(at: point), hasUsableSelection {
             perform(action)
@@ -508,7 +513,8 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
            let windowCandidate = currentWindowCandidate,
            let windowSelection = localWindowRect(for: windowCandidate),
            windowSelection.contains(point) {
-            onSelectWindow(windowCandidate)
+            dragStart = point
+            dragMode = .pendingWindowSelect(windowCandidate)
             return
         }
         if let handle = handle(at: point), hasUsableSelection {
@@ -551,6 +557,12 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             if markups.indices.contains(index) {
                 markups[index] = moved(original, dx: localPoint.x - startPoint.x, dy: localPoint.y - startPoint.y)
             }
+        case .pendingWindowSelect:
+            if distance(from: dragStart, to: current) >= clickDragThreshold {
+                dragMode = .create
+                selection = normalizedRect(from: dragStart, to: current)
+                markups.removeAll()
+            }
         }
         needsDisplay = true
     }
@@ -569,7 +581,15 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     }
 
     override func mouseUp(with event: NSEvent) {
-        guard dragStart != nil else { return }
+        guard let startPoint = dragStart else { return }
+        let point = clamped(convert(event.locationInWindow, from: nil))
+        if case .pendingWindowSelect(let candidate) = dragMode,
+           distance(from: startPoint, to: point) < clickDragThreshold {
+            self.dragStart = nil
+            dragMode = nil
+            onSelectWindow(candidate)
+            return
+        }
         if case .annotate = dragMode {
             finishMarkup()
         }
