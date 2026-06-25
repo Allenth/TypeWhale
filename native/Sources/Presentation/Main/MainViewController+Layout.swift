@@ -285,7 +285,7 @@ extension MainViewController {
         box.addSubview(inner)
 
         // 实时文本区最小高度设为非必需优先级：极端内容时让位给“填满卡片”，避免约束冲突。
-        let draftMinHeight = realtimeScroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 54)
+        let draftMinHeight = realtimeScroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 40)
         draftMinHeight.priority = NSLayoutConstraint.Priority(740)
 
         NSLayoutConstraint.activate([

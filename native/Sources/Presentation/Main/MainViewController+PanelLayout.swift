@@ -25,6 +25,11 @@ extension MainViewController {
         panelScrollView = scroll
 
         wireHotkeyButtons()
+
+        // 当前会话固定在左侧，不随横向滚动移动；窄一些，把更多纵向空间留给最近转录。
+        let fixedSession = panel("当前会话", width: 300, buildSessionAndRecentContent())
+        container.addSubview(fixedSession)
+
         let panelViews = buildPanels()
         let panels = NSStackView(views: panelViews)
         panels.orientation = .horizontal
@@ -41,7 +46,11 @@ extension MainViewController {
             topBar.topAnchor.constraint(equalTo: container.topAnchor, constant: 14),
             topBar.heightAnchor.constraint(equalToConstant: 38),
 
-            scroll.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 18),
+            fixedSession.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 18),
+            fixedSession.topAnchor.constraint(equalTo: topBar.bottomAnchor, constant: 12),
+            fixedSession.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -16),
+
+            scroll.leadingAnchor.constraint(equalTo: fixedSession.trailingAnchor, constant: 14),
             scroll.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -18),
             scroll.topAnchor.constraint(equalTo: topBar.bottomAnchor, constant: 12),
             scroll.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -16),
@@ -136,26 +145,43 @@ extension MainViewController {
 
     private func buildPanels() -> [NSView] {
         [
-            panel("当前会话", width: 360, buildSessionAndRecentContent()),
-            panel("快捷设置", width: 176, buildQuickSettingsCardContent()),
-            panel("状态", width: 200, buildStatusPanelContent()),
-            panel("智能整理", width: 236, buildSmartRewritePanelContent()),
+            panel("整理设置", width: 250, buildComboQuickSmartContent()),
             panel("快捷键", width: 300, buildHotkeysPanelContent()),
             panel("更多设置", width: 236, buildMiscSettingsContent()),
+            panel("状态", width: 204, buildStatusPanelContent()),
         ]
     }
 
-    // 子分区：在一列里用小标题 + 分隔线划清边界，容纳内容很少的几类设置。
+    // 子分区：在一列里用小标题 + 分隔线划清边界。
     private func subSection(_ title: String, _ rows: [NSView]) -> NSView {
+        subSectionView(title, rowStack(rows))
+    }
+
+    private func subSectionView(_ title: String, _ body: NSView) -> NSView {
         let header = label(title, size: 11, weight: .semibold)
         header.textColor = .secondaryLabelColor
-        let body = rowStack(rows)
         let stack = NSStackView(views: [header, body])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 6
         stack.translatesAutoresizingMaskIntoConstraints = false
         body.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        return stack
+    }
+
+    // 快捷设置 + 智能整理 合并为一列，两个子分区用分隔线划清边界。
+    private func buildComboQuickSmartContent() -> NSView {
+        let quick = subSectionView("快捷设置", buildQuickSettingsCardContent())
+        let smart = subSectionView("智能整理", buildSmartRewritePanelContent())
+        let divider = hairlineView()
+        let stack = NSStackView(views: [quick, divider, smart])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 12
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        [quick, divider, smart].forEach {
+            $0.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        }
         return stack
     }
 
