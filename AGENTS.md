@@ -28,6 +28,12 @@
 - 若行为语义会影响后续开发判断，更新 `docs/ARCHITECTURE_DECISIONS.md`。
 - 不要只在聊天里声明流程；需要持久化到本文件或项目文档。
 
+## 字体与素材授权
+
+- 不要向仓库或 App 包内引入未经明确授权的字体文件（如 `.ttf`、`.otf`、`.woff`、`.woff2`）。
+- UI 代码优先使用平台系统字体 API，例如 macOS 的 `NSFont.systemFont` / `NSFont.monospacedSystemFont`；Web mockup 使用 `system-ui` / `ui-monospace` 等通用字体族。
+- 不要硬编码商业字体名作为产品默认字体。若确需使用第三方字体，必须先确认许可证、记录来源，并更新第三方声明。
+
 ## 内存治理策略
 
 - ASR / VAD 模型资源不能在每次输入后立即卸载，否则会破坏连续语音输入的速度和体验。
