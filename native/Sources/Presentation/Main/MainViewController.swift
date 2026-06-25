@@ -354,8 +354,8 @@ final class MainViewController: NSViewController {
     }
 
     private func buildSidebarQuickSettings() -> NSView {
-        smartRewriteMode.widthAnchor.constraint(equalToConstant: 88).isActive = true
-        translationDirectionMode.widthAnchor.constraint(equalToConstant: 78).isActive = true
+        smartRewriteMode.widthAnchor.constraint(equalToConstant: 108).isActive = true
+        translationDirectionMode.widthAnchor.constraint(equalToConstant: 96).isActive = true
         smartRewriteMode.controlSize = .small
         translationDirectionMode.controlSize = .small
         smartRewriteMode.font = .systemFont(ofSize: 11, weight: .medium)
@@ -392,7 +392,8 @@ final class MainViewController: NSViewController {
         recentScroll.drawsBackground = false
         recentScroll.borderType = .noBorder
         recentScroll.translatesAutoresizingMaskIntoConstraints = false
-        recentScroll.heightAnchor.constraint(equalToConstant: recentViewportHeight).isActive = true
+        recentScroll.setContentHuggingPriority(.defaultLow, for: .vertical)
+        recentScroll.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         let recentCard = roundedBox(recentScroll, hPad: 8, vPad: 6)
 
         let sessionSection = section("当前会话", sessionPanel)
@@ -407,15 +408,17 @@ final class MainViewController: NSViewController {
         for sectionView in sections {
             sectionView.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         }
-        // 「当前会话」吸收中间栏的多余高度，让卡片底边靠近「最近转录」、实时文本区做大；
-        // 「最近转录」保持固定高度不被压缩。窗口固定尺寸，整体仍稳定。
-        sessionSection.setContentHuggingPriority(.defaultLow, for: .vertical)
-        recentSection.setContentHuggingPriority(.required, for: .vertical)
-        recentSection.setContentCompressionResistancePriority(.required, for: .vertical)
+        // 「最近转录」吸收中间栏的多余高度并拉高（可滚动看更多条）；
+        // 「当前会话」保持紧凑：实时文本区只占几行，不再撑大整块。窗口固定尺寸，整体仍稳定。
+        recentSection.setContentHuggingPriority(.defaultLow, for: .vertical)
+        sessionSection.setContentHuggingPriority(.required, for: .vertical)
+        sessionSection.setContentCompressionResistancePriority(.required, for: .vertical)
         let sessionMinHeight = sessionPanel.heightAnchor.constraint(greaterThanOrEqualToConstant: 150)
+        let recentMinHeight = recentScroll.heightAnchor.constraint(greaterThanOrEqualToConstant: recentViewportHeight)
         NSLayoutConstraint.activate([
             recentStack.widthAnchor.constraint(equalTo: recentScroll.contentView.widthAnchor),
             sessionMinHeight,
+            recentMinHeight,
         ])
         return stack
     }
@@ -1304,7 +1307,9 @@ final class MainViewController: NSViewController {
             return
         }
         let popover = preferencesPopover ?? NSPopover()
-        popover.behavior = .transient
+        // 半瞬态：在偏好里录快捷键、编辑提示词/术语会弹出 NSAlert，transient 会被焦点切换误关；
+        // semitransient 只在点主窗口内容时关闭，编辑期间不会整块消失。
+        popover.behavior = .semitransient
         popover.animates = true
         popover.contentSize = NSSize(width: 540, height: 400)
         popover.contentViewController = makePreferencesViewController()
