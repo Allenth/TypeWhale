@@ -7,11 +7,21 @@ func isMeaningfulRecognitionText(
     meaningfulRecognitionTextParts(text).isMeaningful(hasPriorPreview: hasPriorPreview)
 }
 
+/// 仅用于「胶囊实时预览」的静音幻觉短语黑名单：SenseVoice 在静音/呼吸时常吐出的
+/// 字幕腔短语与语气词。只在预览阶段整段精确匹配时过滤，不影响最终识别与粘贴——
+/// 即使误过滤，最终路径仍会正常识别并粘贴，取一个平衡。
+private let realtimePreviewSilencePhrases: Set<String> = [
+    "我", "嗯", "啊", "呃", "额", "哦", "唔", "呣", "诶", "哎", "呐", "嗯嗯", "啊啊",
+    "谢谢", "谢谢大家", "谢谢观看", "谢谢观赏", "请", "请观看", "字幕", "中文字幕", "字幕志愿者",
+]
+
 func isMeaningfulRealtimePreviewText(
     _ text: String,
     previousPreview: String
 ) -> Bool {
     let parts = meaningfulRecognitionTextParts(text)
+    // 整段恰好是静音常见幻觉短语 → 预览不显示（无论前面是否已有内容）。
+    if realtimePreviewSilencePhrases.contains(parts.semanticText) { return false }
     guard parts.isMeaningful(hasPriorPreview: !previousPreview.isEmpty) else { return false }
 
     let previousParts = meaningfulRecognitionTextParts(previousPreview)
