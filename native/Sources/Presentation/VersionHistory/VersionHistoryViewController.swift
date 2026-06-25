@@ -9,6 +9,24 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.3.71 (Build 279)",
+            date: "2026-06-25",
+            changes: [
+                "新增「翻译截图」快捷键，默认 Option + T，可在偏好设置 > 快捷键中修改或恢复默认。",
+                "翻译截图快捷键复用截图快捷键录入逻辑，支持双击修饰键、修饰键组合和耳机播放键。",
+                "使用翻译截图进入截图浮层后，拖拽选区松开会自动 OCR 并将英译中结果覆盖到截图中。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.3.58 (Build 266)",
+            date: "2026-06-25",
+            changes: [
+                "高内存安全网：内存达预警阈值释放被撑大的识别内存池后，立刻用全新内存池热加载模型，开口第一句不再卡顿（带 30s 冷却防抖）。",
+                "主窗口右侧精简为「快捷设置」：只保留整理模式、自动翻译、翻译方向三个高频开关，加一个「偏好设置…」按钮。",
+                "新增「偏好设置」窗口（⌘,），分快捷键 / 智能整理 / 翻译 / 截图 / 系统五个标签页，原右栏的配置项全部归类进去。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.3.56 (Build 264)",
             date: "2026-06-25",
             changes: [

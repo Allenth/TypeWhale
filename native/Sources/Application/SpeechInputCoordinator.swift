@@ -62,7 +62,8 @@ final class SpeechInputCoordinator {
     private var autoFinishWorkItem: DispatchWorkItem?
     private var initialSilenceWorkItem: DispatchWorkItem?
     private var idleASRUnloadWorkItem: DispatchWorkItem?
-    private var asrResourcesReleasedAfterIdle = false
+    private var lastASRArenaFlushAt: Date?
+    private let asrArenaFlushCooldownSeconds: TimeInterval = 30
     private var suppressNextHotkeyUp = false
     private var primaryHotkeyBinding = HotkeyBinding.load(
         storageKey: HotkeyBinding.chineseStorageKey,
@@ -77,6 +78,10 @@ final class SpeechInputCoordinator {
     )
     private var secondaryScreenshotHotkeyBinding = HotkeyBinding.loadOptional(
         storageKey: HotkeyBinding.secondaryScreenshotStorageKey
+    )
+    private var screenshotTranslationHotkeyBinding = HotkeyBinding.load(
+        storageKey: HotkeyBinding.screenshotTranslationStorageKey,
+        fallback: .screenshotTranslationDefaultBinding
     )
     private var autoTranslateHotkeyBinding = HotkeyBinding.loadOptional(
         storageKey: HotkeyBinding.autoTranslateStorageKey
@@ -113,6 +118,7 @@ final class SpeechInputCoordinator {
             secondary: secondaryHotkeyBinding,
             screenshot: screenshotHotkeyBinding,
             secondaryScreenshot: secondaryScreenshotHotkeyBinding,
+            screenshotTranslation: screenshotTranslationHotkeyBinding,
             autoTranslate: autoTranslateHotkeyBinding,
             mainWindow: mainWindowHotkeyBinding
         )
@@ -121,6 +127,7 @@ final class SpeechInputCoordinator {
             secondary: secondaryHotkeyBinding,
             screenshot: screenshotHotkeyBinding,
             secondaryScreenshot: secondaryScreenshotHotkeyBinding,
+            screenshotTranslation: screenshotTranslationHotkeyBinding,
             autoTranslate: autoTranslateHotkeyBinding,
             mainWindow: mainWindowHotkeyBinding
         )
@@ -128,13 +135,13 @@ final class SpeechInputCoordinator {
         hotkey.onUp = { [weak self] channel, binding in self?.handleHotkeyUp(channel: channel, binding: binding) }
         hotkey.onAutoTranslateToggle = { [weak self] in self?.toggleAutoTranslateFromHotkey() }
         hotkey.onScreenshot = { [weak self] in self?.beginScreenshotFromHotkey() }
+        hotkey.onScreenshotTranslation = { [weak self] in self?.beginScreenshotTranslationFromHotkey() }
         hotkey.onMainWindow = { [weak self] in self?.showMainWindowFromHotkey() }
         popup.onCycleMode = { [weak self] in self?.cycleSmartRewriteModeFromCapsule() }
         modelInstaller.onStateChange = { [weak self] state in
             self?.controller.updateModelState(state)
             if case .ready = state {
                 self?.nativeASR.reload()
-                self?.asrResourcesReleasedAfterIdle = false
                 self?.controller.setPrimaryStatus(
                     "等待录音",
                     detail: "\(self?.primaryHotkeyBinding.displayName ?? "Fn") 录音",
@@ -147,11 +154,12 @@ final class SpeechInputCoordinator {
         controller.onInstallModel = { [weak self] in
             self?.modelInstaller.install()
         }
-        controller.onHotkeysChange = { [weak self] primary, secondary, screenshot, secondaryScreenshot, autoTranslate, mainWindow in
+        controller.onHotkeysChange = { [weak self] primary, secondary, screenshot, secondaryScreenshot, screenshotTranslation, autoTranslate, mainWindow in
             self?.primaryHotkeyBinding = primary
             self?.secondaryHotkeyBinding = secondary
             self?.screenshotHotkeyBinding = screenshot
             self?.secondaryScreenshotHotkeyBinding = secondaryScreenshot
+            self?.screenshotTranslationHotkeyBinding = screenshotTranslation
             self?.autoTranslateHotkeyBinding = autoTranslate
             self?.mainWindowHotkeyBinding = mainWindow
             self?.hotkey.update(
@@ -159,6 +167,7 @@ final class SpeechInputCoordinator {
                 secondary: secondary,
                 screenshot: screenshot,
                 secondaryScreenshot: secondaryScreenshot,
+                screenshotTranslation: screenshotTranslation,
                 autoTranslate: autoTranslate,
                 mainWindow: mainWindow
             )
@@ -417,6 +426,14 @@ final class SpeechInputCoordinator {
     }
 
     private func beginScreenshotFromHotkey() {
+        beginScreenshotFromHotkey(translateAfterSelection: false)
+    }
+
+    private func beginScreenshotTranslationFromHotkey() {
+        beginScreenshotFromHotkey(translateAfterSelection: true)
+    }
+
+    private func beginScreenshotFromHotkey(translateAfterSelection: Bool) {
         guard activeSession == nil, !recorder.isRecording else { return }
         longPressWorkItem?.cancel()
         longPressWorkItem = nil
@@ -424,7 +441,11 @@ final class SpeechInputCoordinator {
         if !shouldKeepMainWindowVisibleForScreenshot() {
             hideMainWindow()
         }
-        screenshotCoordinator.begin()
+        if translateAfterSelection {
+            screenshotCoordinator.beginTranslation()
+        } else {
+            screenshotCoordinator.begin()
+        }
     }
 
     private func startRecording(
@@ -434,7 +455,6 @@ final class SpeechInputCoordinator {
     ) {
         guard !recorder.isRecording else { return }
         cancelIdleASRUnload()
-        asrResourcesReleasedAfterIdle = false
         let selectedBackend = controller.asrBackend
         let resolvedBackend = selectedBackend.resolvedBackend
         let realtimeEnabled = controller.realtimePreviewEnabled && resolvedBackend == .senseVoice
@@ -1124,17 +1144,24 @@ final class SpeechInputCoordinator {
 
     private func releaseASRResourcesIfMemoryElevated() {
         guard MemoryMonitor.currentFootprintMB >= MemoryMonitor.warnThresholdMB else { return }
+        // 冷却期内不重复释放，避免 flush→reload→flush 抖动。
+        if let lastFlush = lastASRArenaFlushAt,
+           Date().timeIntervalSince(lastFlush) < asrArenaFlushCooldownSeconds {
+            return
+        }
         releaseASRResourcesIfIdle(reason: "memory_timer")
     }
 
     private func releaseASRResourcesIfIdle(reason: String) {
-        guard isIdleForASRResourceRelease, !asrResourcesReleasedAfterIdle else { return }
+        guard isIdleForASRResourceRelease else { return }
         idleASRUnloadWorkItem?.cancel()
         idleASRUnloadWorkItem = nil
-        asrResourcesReleasedAfterIdle = true
+        lastASRArenaFlushAt = Date()
         LaunchDiagnostics.mark("release_asr_resources reason=\(reason) memory_mb=\(MemoryMonitor.currentFootprintMB)")
-        nativeASR.releaseCachedResources()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+        // 释放被高水位撑大的 onnxruntime 内存池，并立刻用全新内存池热加载回来：
+        // 清掉膨胀，但不让下一句录音承担重载延迟（reload = flush + warmUp）。
+        nativeASR.reload()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
             self?.controller.updateMemoryReadout()
         }
     }

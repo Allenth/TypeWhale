@@ -46,6 +46,14 @@ final class MainViewController: NSViewController {
         size: 13,
         weight: .medium
     )
+    let screenshotTranslationHotkeyValue = label(
+        HotkeyBinding.load(
+            storageKey: HotkeyBinding.screenshotTranslationStorageKey,
+            fallback: .screenshotTranslationDefaultBinding
+        ).screenshotDisplayName,
+        size: 13,
+        weight: .medium
+    )
     let autoTranslateHotkeyValue = label(
         HotkeyBinding.loadOptional(storageKey: HotkeyBinding.autoTranslateStorageKey)?.actionDisplayName ?? "未设置",
         size: 13,
@@ -64,6 +72,8 @@ final class MainViewController: NSViewController {
     let screenshotHotkeyResetButton = NSButton(title: "恢复默认", target: nil, action: nil)
     let secondaryScreenshotHotkeyCaptureButton = NSButton(title: "未设置", target: nil, action: nil)
     let secondaryScreenshotHotkeyClearButton = NSButton(title: "清空", target: nil, action: nil)
+    let screenshotTranslationHotkeyCaptureButton = NSButton(title: "Option + T", target: nil, action: nil)
+    let screenshotTranslationHotkeyResetButton = NSButton(title: "恢复默认", target: nil, action: nil)
     let autoTranslateHotkeyCaptureButton = NSButton(title: "未设置", target: nil, action: nil)
     let autoTranslateHotkeyClearButton = NSButton(title: "清空", target: nil, action: nil)
     let mainWindowHotkeyCaptureButton = NSButton(title: "未设置", target: nil, action: nil)
@@ -92,7 +102,9 @@ final class MainViewController: NSViewController {
     private let memoryLabel = label("内存 -- MB", size: 11, weight: .medium)
     private var lastMemoryLevel: MemoryMonitor.Level = .normal
     var onInstallModel: (() -> Void)?
-    var onHotkeysChange: ((HotkeyBinding, HotkeyBinding?, HotkeyBinding, HotkeyBinding?, HotkeyBinding?, HotkeyBinding?) -> Void)?
+    var onHotkeysChange: ((HotkeyBinding, HotkeyBinding?, HotkeyBinding, HotkeyBinding?, HotkeyBinding, HotkeyBinding?, HotkeyBinding?) -> Void)?
+    var onOpenPreferences: (() -> Void)?
+    private var preferencesViewController: NSViewController?
 
     private let modelEntryName = label("SenseVoice int8", size: 13, weight: .semibold)
     private let modelEntryStatus = label("检查中", size: 11, weight: .medium)
@@ -127,6 +139,7 @@ final class MainViewController: NSViewController {
         case secondary
         case screenshot
         case screenshotSecondary
+        case screenshotTranslation
         case autoTranslate
         case mainWindow
     }
@@ -213,6 +226,10 @@ final class MainViewController: NSViewController {
             secondary: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryChineseStorageKey),
             screenshot: HotkeyBinding.load(storageKey: HotkeyBinding.screenshotStorageKey, fallback: .screenshotDefaultBinding),
             secondaryScreenshot: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryScreenshotStorageKey),
+            screenshotTranslation: HotkeyBinding.load(
+                storageKey: HotkeyBinding.screenshotTranslationStorageKey,
+                fallback: .screenshotTranslationDefaultBinding
+            ),
             autoTranslate: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.autoTranslateStorageKey),
             mainWindow: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey)
         )
@@ -759,8 +776,63 @@ final class MainViewController: NSViewController {
 
     // MARK: - Right column
 
+    // 右栏只保留按会话高频切换的「快捷设置」；其余配置项移入「偏好设置」窗口（⌘,）。
     private func buildRightColumn() -> NSView {
-        [hotkeyValue, secondaryHotkeyValue, screenshotHotkeyValue, secondaryScreenshotHotkeyValue, autoTranslateHotkeyValue, mainWindowHotkeyValue].forEach {
+        smartRewriteMode.widthAnchor.constraint(equalToConstant: 132).isActive = true
+        translationDirectionMode.widthAnchor.constraint(equalToConstant: 110).isActive = true
+
+        let quickCard = listCard([
+            optionRow("整理模式", smartRewriteMode),
+            optionRow("自动翻译", autoTranslate),
+            optionRow("翻译方向", translationDirectionMode),
+        ], hPad: UILayout.cardPadH, vPad: UILayout.cardPadV)
+
+        let prefsButton = NSButton(title: " 偏好设置…", target: self, action: #selector(openPreferences))
+        prefsButton.bezelStyle = .rounded
+        prefsButton.controlSize = .large
+        prefsButton.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: "偏好设置")
+        prefsButton.imagePosition = .imageLeading
+        prefsButton.font = .systemFont(ofSize: 12, weight: .medium)
+        prefsButton.toolTip = "打开偏好设置（⌘,）：快捷键、智能整理、翻译、截图、系统"
+        prefsButton.setAccessibilityLabel("偏好设置")
+        prefsButton.translatesAutoresizingMaskIntoConstraints = false
+
+        let quickStack = NSStackView(views: [quickCard, prefsButton])
+        quickStack.orientation = .vertical
+        quickStack.alignment = .leading
+        quickStack.spacing = 12
+        quickStack.translatesAutoresizingMaskIntoConstraints = false
+        quickCard.widthAnchor.constraint(equalTo: quickStack.widthAnchor).isActive = true
+        prefsButton.widthAnchor.constraint(equalTo: quickStack.widthAnchor).isActive = true
+
+        let sections = [
+            section("快捷设置", quickStack),
+        ]
+        let stack = NSStackView(views: sections)
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = UILayout.sectionSpacing
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        for sectionView in sections {
+            sectionView.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        }
+        return stack
+    }
+
+    // MARK: - Preferences window (⌘,)
+
+    /// 偏好窗口内容懒构建一次：把快捷键 / 智能整理 / 翻译 / 截图 / 系统的配置控件装进标签页。
+    func makePreferencesViewController() -> NSViewController {
+        if let cached = preferencesViewController { return cached }
+        let controller = NSViewController()
+        controller.view = buildPreferencesContentView()
+        controller.title = "偏好设置"
+        preferencesViewController = controller
+        return controller
+    }
+
+    private func buildPreferencesContentView() -> NSView {
+        [hotkeyValue, secondaryHotkeyValue, screenshotHotkeyValue, secondaryScreenshotHotkeyValue, screenshotTranslationHotkeyValue, autoTranslateHotkeyValue, mainWindowHotkeyValue].forEach {
             $0.lineBreakMode = .byTruncatingMiddle
         }
         hotkeyCaptureButton.target = self
@@ -779,6 +851,10 @@ final class MainViewController: NSViewController {
         secondaryScreenshotHotkeyCaptureButton.action = #selector(beginSecondaryScreenshotHotkeyCapture)
         secondaryScreenshotHotkeyClearButton.target = self
         secondaryScreenshotHotkeyClearButton.action = #selector(clearSecondaryScreenshotHotkey)
+        screenshotTranslationHotkeyCaptureButton.target = self
+        screenshotTranslationHotkeyCaptureButton.action = #selector(beginScreenshotTranslationHotkeyCapture)
+        screenshotTranslationHotkeyResetButton.target = self
+        screenshotTranslationHotkeyResetButton.action = #selector(resetScreenshotTranslationHotkey)
         autoTranslateHotkeyCaptureButton.target = self
         autoTranslateHotkeyCaptureButton.action = #selector(beginAutoTranslateHotkeyCapture)
         autoTranslateHotkeyClearButton.target = self
@@ -796,6 +872,8 @@ final class MainViewController: NSViewController {
             screenshotHotkeyResetButton,
             secondaryScreenshotHotkeyCaptureButton,
             secondaryScreenshotHotkeyClearButton,
+            screenshotTranslationHotkeyCaptureButton,
+            screenshotTranslationHotkeyResetButton,
             autoTranslateHotkeyCaptureButton,
             autoTranslateHotkeyClearButton,
             mainWindowHotkeyCaptureButton,
@@ -806,100 +884,103 @@ final class MainViewController: NSViewController {
             $0.controlSize = .small
             $0.font = .systemFont(ofSize: 11, weight: .medium)
         }
-        let captureWidth: CGFloat = 88
+        let captureWidth: CGFloat = 96
         let trailingWidth: CGFloat = 56
-        [hotkeyCaptureButton, secondaryHotkeyCaptureButton, screenshotHotkeyCaptureButton, secondaryScreenshotHotkeyCaptureButton, autoTranslateHotkeyCaptureButton, mainWindowHotkeyCaptureButton].forEach {
+        [hotkeyCaptureButton, secondaryHotkeyCaptureButton, screenshotHotkeyCaptureButton, secondaryScreenshotHotkeyCaptureButton, screenshotTranslationHotkeyCaptureButton, autoTranslateHotkeyCaptureButton, mainWindowHotkeyCaptureButton].forEach {
             $0.widthAnchor.constraint(equalToConstant: captureWidth).isActive = true
         }
-        [hotkeyResetButton, secondaryHotkeyClearButton, screenshotHotkeyResetButton, secondaryScreenshotHotkeyClearButton, autoTranslateHotkeyClearButton, mainWindowHotkeyResetButton].forEach {
+        [hotkeyResetButton, secondaryHotkeyClearButton, screenshotHotkeyResetButton, secondaryScreenshotHotkeyClearButton, screenshotTranslationHotkeyResetButton, autoTranslateHotkeyClearButton, mainWindowHotkeyResetButton].forEach {
             $0.widthAnchor.constraint(equalToConstant: trailingWidth).isActive = true
         }
-        let primaryRow = shortcutRow(
-            title: "主快捷键",
-            captureButton: hotkeyCaptureButton,
-            fallbackButton: hotkeyResetButton
-        )
-        let secondaryRow = shortcutRow(
-            title: "备用快捷键",
-            captureButton: secondaryHotkeyCaptureButton,
-            fallbackButton: secondaryHotkeyClearButton
-        )
-        let screenshotRow = shortcutRow(
-            title: "截图快捷键",
-            captureButton: screenshotHotkeyCaptureButton,
-            fallbackButton: screenshotHotkeyResetButton
-        )
-        let secondaryScreenshotRow = shortcutRow(
-            title: "截图备用",
-            captureButton: secondaryScreenshotHotkeyCaptureButton,
-            fallbackButton: secondaryScreenshotHotkeyClearButton
-        )
-        let autoTranslateHotkeyRow = shortcutRow(
-            title: "自动翻译",
-            captureButton: autoTranslateHotkeyCaptureButton,
-            fallbackButton: autoTranslateHotkeyClearButton
-        )
-        let mainWindowHotkeyRow = shortcutRow(
-            title: "唤起主页",
-            captureButton: mainWindowHotkeyCaptureButton,
-            fallbackButton: mainWindowHotkeyResetButton
-        )
-        let smartRewriteControls = NSStackView(views: [smartRewriteMode, autoScopeButton, promptSettingsButton, developerTermsButton, deepSeekKeyButton, deepSeekBalanceButton])
+        let primaryRow = shortcutRow(title: "主快捷键", captureButton: hotkeyCaptureButton, fallbackButton: hotkeyResetButton)
+        let secondaryRow = shortcutRow(title: "备用快捷键", captureButton: secondaryHotkeyCaptureButton, fallbackButton: secondaryHotkeyClearButton)
+        let screenshotRow = shortcutRow(title: "截图快捷键", captureButton: screenshotHotkeyCaptureButton, fallbackButton: screenshotHotkeyResetButton)
+        let secondaryScreenshotRow = shortcutRow(title: "截图备用", captureButton: secondaryScreenshotHotkeyCaptureButton, fallbackButton: secondaryScreenshotHotkeyClearButton)
+        let screenshotTranslationRow = shortcutRow(title: "翻译截图", captureButton: screenshotTranslationHotkeyCaptureButton, fallbackButton: screenshotTranslationHotkeyResetButton)
+        let autoTranslateHotkeyRow = shortcutRow(title: "自动翻译", captureButton: autoTranslateHotkeyCaptureButton, fallbackButton: autoTranslateHotkeyClearButton)
+        let mainWindowHotkeyRow = shortcutRow(title: "唤起主页", captureButton: mainWindowHotkeyCaptureButton, fallbackButton: mainWindowHotkeyResetButton)
+
+        let smartRewriteControls = NSStackView(views: [autoScopeButton, promptSettingsButton, developerTermsButton, deepSeekKeyButton, deepSeekBalanceButton])
         smartRewriteControls.orientation = .horizontal
         smartRewriteControls.alignment = .centerY
-        smartRewriteControls.spacing = 3
-        smartRewriteMode.widthAnchor.constraint(equalToConstant: 66).isActive = true
-        autoScopeButton.widthAnchor.constraint(equalToConstant: 40).isActive = true
-        promptSettingsButton.widthAnchor.constraint(equalToConstant: 48).isActive = true
-        developerTermsButton.widthAnchor.constraint(equalToConstant: 40).isActive = true
-        deepSeekKeyButton.widthAnchor.constraint(equalToConstant: 34).isActive = true
-        deepSeekBalanceButton.widthAnchor.constraint(equalToConstant: 22).isActive = true
+        smartRewriteControls.spacing = 6
+        autoScopeButton.widthAnchor.constraint(equalToConstant: 56).isActive = true
+        promptSettingsButton.widthAnchor.constraint(equalToConstant: 64).isActive = true
+        developerTermsButton.widthAnchor.constraint(equalToConstant: 56).isActive = true
+        deepSeekKeyButton.widthAnchor.constraint(equalToConstant: 48).isActive = true
+        deepSeekBalanceButton.widthAnchor.constraint(equalToConstant: 26).isActive = true
 
-        let translationControls = NSStackView(views: [translationDirectionMode, translationPromptButton])
-        translationControls.orientation = .horizontal
-        translationControls.alignment = .centerY
-        translationControls.spacing = 6
-        translationDirectionMode.widthAnchor.constraint(equalToConstant: 84).isActive = true
-        translationPromptButton.widthAnchor.constraint(equalToConstant: 56).isActive = true
-        screenshotSaveLocationButton.widthAnchor.constraint(equalToConstant: 112).isActive = true
+        translationPromptButton.widthAnchor.constraint(equalToConstant: 72).isActive = true
+        screenshotSaveLocationButton.widthAnchor.constraint(equalToConstant: 132).isActive = true
 
-        let optionGroups = NSStackView(views: [
-            inspectorGroup("快捷键", [primaryRow, secondaryRow, screenshotRow, secondaryScreenshotRow, autoTranslateHotkeyRow, mainWindowHotkeyRow]),
-            inspectorGroup("智能整理", [
-                stackedOptionRow("模式", smartRewriteControls),
-            ]),
-            inspectorGroup("翻译", [
-                optionRow("自动翻译", autoTranslate),
-                optionRow("方向", translationControls),
-            ]),
-            inspectorGroup("系统", [
-                optionRow("胶囊实时预览", realtime),
-                optionRow("停顿自动完成", autoFinish),
-                optionRow("录音时降低电脑声音", duckSystemAudio),
-                optionRow("开机自动启动", launchAtLogin),
-                optionRow("截图保存位置", screenshotSaveLocationButton),
-            ]),
+        let tabView = NSTabView()
+        tabView.translatesAutoresizingMaskIntoConstraints = false
+        tabView.addTabViewItem(preferencesTab("快捷键", [primaryRow, secondaryRow, screenshotRow, secondaryScreenshotRow, screenshotTranslationRow, autoTranslateHotkeyRow, mainWindowHotkeyRow]))
+        tabView.addTabViewItem(preferencesTab(
+            "智能整理",
+            [stackedOptionRow("范围 · 提示词 · 术语 · Key", smartRewriteControls)],
+            caption: "整理「模式」可在主界面右侧快捷设置或桌面胶囊上快速切换。"
+        ))
+        tabView.addTabViewItem(preferencesTab(
+            "翻译",
+            [optionRow("翻译提示词", translationPromptButton)],
+            caption: "「自动翻译」开关与「翻译方向」可在主界面右侧快捷设置中快速切换。"
+        ))
+        tabView.addTabViewItem(preferencesTab("截图", [optionRow("截图保存位置", screenshotSaveLocationButton)]))
+        tabView.addTabViewItem(preferencesTab("系统", [
+            optionRow("胶囊实时预览", realtime),
+            optionRow("停顿自动完成", autoFinish),
+            optionRow("录音时降低电脑声音", duckSystemAudio),
+            optionRow("开机自动启动", launchAtLogin),
+        ]))
+
+        let content = NSView(frame: NSRect(x: 0, y: 0, width: 520, height: 360))
+        content.appearance = NSAppearance(named: .darkAqua)
+        content.addSubview(tabView)
+        NSLayoutConstraint.activate([
+            tabView.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
+            tabView.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
+            tabView.topAnchor.constraint(equalTo: content.topAnchor, constant: 14),
+            tabView.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -16),
         ])
-        optionGroups.orientation = .vertical
-        optionGroups.alignment = .leading
-        optionGroups.spacing = UILayout.groupSpacing
-        optionGroups.translatesAutoresizingMaskIntoConstraints = false
-        for groupView in optionGroups.arrangedSubviews {
-            groupView.widthAnchor.constraint(equalTo: optionGroups.widthAnchor).isActive = true
-        }
+        return content
+    }
 
-        let sections = [
-            section("选项", optionGroups),
-        ]
-        let stack = NSStackView(views: sections)
+    private func preferencesTab(_ title: String, _ rows: [NSView], caption: String? = nil) -> NSTabViewItem {
+        let card = listCard(rows, hPad: UILayout.cardPadH, vPad: UILayout.cardPadV)
+        var arranged: [NSView] = [card]
+        if let caption {
+            let cap = label(caption, size: 11)
+            cap.textColor = .secondaryLabelColor
+            cap.maximumNumberOfLines = 0
+            arranged.append(cap)
+        }
+        let stack = NSStackView(views: arranged)
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = UILayout.sectionSpacing
+        stack.spacing = 10
         stack.translatesAutoresizingMaskIntoConstraints = false
-        for sectionView in sections {
-            sectionView.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        for arrangedView in arranged {
+            arrangedView.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         }
-        return stack
+
+        let container = NSView()
+        container.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 14),
+            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -14),
+            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: 16),
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: container.bottomAnchor, constant: -14),
+        ])
+
+        let item = NSTabViewItem(identifier: title)
+        item.label = title
+        item.view = container
+        return item
+    }
+
+    @objc private func openPreferences() {
+        onOpenPreferences?()
     }
 
     private func section(_ title: String, _ card: NSView) -> NSView {
@@ -927,19 +1008,6 @@ final class MainViewController: NSViewController {
         row.setContentCompressionResistancePriority(.required, for: .vertical)
         row.heightAnchor.constraint(equalToConstant: UILayout.rowHeight).isActive = true
         return row
-    }
-
-    private func inspectorGroup(_ title: String, _ rows: [NSView]) -> NSView {
-        let titleLabel = label(title, size: 11, weight: .medium)
-        titleLabel.textColor = UITheme.sectionTitle
-        let card = listCard(rows, hPad: UILayout.cardPadH, vPad: UILayout.cardPadV)
-        let stack = NSStackView(views: [titleLabel, card])
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 6
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        card.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-        return stack
     }
 
     private func optionRow(_ title: String, _ control: NSView) -> NSView {
@@ -1518,6 +1586,10 @@ final class MainViewController: NSViewController {
         beginHotkeyCaptureForSlot(.screenshotSecondary)
     }
 
+    @objc private func beginScreenshotTranslationHotkeyCapture() {
+        beginHotkeyCaptureForSlot(.screenshotTranslation)
+    }
+
     @objc private func beginAutoTranslateHotkeyCapture() {
         beginHotkeyCaptureForSlot(.autoTranslate)
     }
@@ -1537,6 +1609,7 @@ final class MainViewController: NSViewController {
         secondaryHotkeyCaptureButton.isEnabled = false
         screenshotHotkeyCaptureButton.isEnabled = false
         secondaryScreenshotHotkeyCaptureButton.isEnabled = false
+        screenshotTranslationHotkeyCaptureButton.isEnabled = false
         autoTranslateHotkeyCaptureButton.isEnabled = false
         mainWindowHotkeyCaptureButton.isEnabled = false
         startHotkeyCaptureTap()
@@ -1553,6 +1626,10 @@ final class MainViewController: NSViewController {
 
     @objc private func resetScreenshotHotkey() {
         applyHotkey(.screenshotDefaultBinding, slot: .screenshot, channel: .chinese)
+    }
+
+    @objc private func resetScreenshotTranslationHotkey() {
+        applyHotkey(.screenshotTranslationDefaultBinding, slot: .screenshotTranslation, channel: .chinese)
     }
 
     @objc private func clearSecondaryScreenshotHotkey() {
@@ -1584,6 +1661,10 @@ final class MainViewController: NSViewController {
             secondary: nil,
             screenshot: HotkeyBinding.load(storageKey: HotkeyBinding.screenshotStorageKey, fallback: .screenshotDefaultBinding),
             secondaryScreenshot: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryScreenshotStorageKey),
+            screenshotTranslation: HotkeyBinding.load(
+                storageKey: HotkeyBinding.screenshotTranslationStorageKey,
+                fallback: .screenshotTranslationDefaultBinding
+            ),
             autoTranslate: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.autoTranslateStorageKey),
             mainWindow: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey)
         )
@@ -1595,6 +1676,7 @@ final class MainViewController: NSViewController {
         secondary: HotkeyBinding?,
         screenshot: HotkeyBinding,
         secondaryScreenshot: HotkeyBinding?,
+        screenshotTranslation: HotkeyBinding,
         autoTranslate: HotkeyBinding?,
         mainWindow: HotkeyBinding?
     ) {
@@ -1614,6 +1696,10 @@ final class MainViewController: NSViewController {
         secondaryScreenshotHotkeyValue.textColor = secondaryScreenshot == nil ? .tertiaryLabelColor : NSColor(calibratedWhite: 1, alpha: 0.92)
         secondaryScreenshotHotkeyCaptureButton.title = secondaryScreenshot?.screenshotDisplayName ?? "未设置"
         secondaryScreenshotHotkeyCaptureButton.toolTip = "点击录入截图备用快捷键"
+        screenshotTranslationHotkeyValue.stringValue = screenshotTranslation.screenshotDisplayName
+        screenshotTranslationHotkeyValue.textColor = NSColor(calibratedWhite: 1, alpha: 0.92)
+        screenshotTranslationHotkeyCaptureButton.title = screenshotTranslation.screenshotDisplayName
+        screenshotTranslationHotkeyCaptureButton.toolTip = "点击录入翻译截图快捷键：双击修饰键、修饰键+按键组合，或耳机播放键"
         autoTranslateHotkeyValue.stringValue = autoTranslate?.actionDisplayName ?? "未设置"
         autoTranslateHotkeyValue.textColor = autoTranslate == nil ? .tertiaryLabelColor : NSColor(calibratedWhite: 1, alpha: 0.92)
         autoTranslateHotkeyCaptureButton.title = autoTranslate?.actionDisplayName ?? "未设置"
@@ -1631,6 +1717,10 @@ final class MainViewController: NSViewController {
             secondary: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryChineseStorageKey),
             screenshot: HotkeyBinding.load(storageKey: HotkeyBinding.screenshotStorageKey, fallback: .screenshotDefaultBinding),
             secondaryScreenshot: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryScreenshotStorageKey),
+            screenshotTranslation: HotkeyBinding.load(
+                storageKey: HotkeyBinding.screenshotTranslationStorageKey,
+                fallback: .screenshotTranslationDefaultBinding
+            ),
             autoTranslate: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.autoTranslateStorageKey),
             mainWindow: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey)
         )
@@ -1834,6 +1924,8 @@ final class MainViewController: NSViewController {
             binding.save(storageKey: HotkeyBinding.screenshotStorageKey)
         case .screenshotSecondary:
             binding.save(storageKey: HotkeyBinding.secondaryScreenshotStorageKey)
+        case .screenshotTranslation:
+            binding.save(storageKey: HotkeyBinding.screenshotTranslationStorageKey)
         case .autoTranslate:
             binding.save(storageKey: HotkeyBinding.autoTranslateStorageKey)
         case .mainWindow:
@@ -1858,6 +1950,7 @@ final class MainViewController: NSViewController {
         secondaryHotkeyCaptureButton.isEnabled = true
         screenshotHotkeyCaptureButton.isEnabled = true
         secondaryScreenshotHotkeyCaptureButton.isEnabled = true
+        screenshotTranslationHotkeyCaptureButton.isEnabled = true
         autoTranslateHotkeyCaptureButton.isEnabled = true
         mainWindowHotkeyCaptureButton.isEnabled = true
         captureModifierKeyCodes.removeAll()
@@ -1869,6 +1962,10 @@ final class MainViewController: NSViewController {
             secondary: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryChineseStorageKey),
             screenshot: HotkeyBinding.load(storageKey: HotkeyBinding.screenshotStorageKey, fallback: .screenshotDefaultBinding),
             secondaryScreenshot: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryScreenshotStorageKey),
+            screenshotTranslation: HotkeyBinding.load(
+                storageKey: HotkeyBinding.screenshotTranslationStorageKey,
+                fallback: .screenshotTranslationDefaultBinding
+            ),
             autoTranslate: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.autoTranslateStorageKey),
             mainWindow: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey)
         )
@@ -1880,6 +1977,10 @@ final class MainViewController: NSViewController {
             HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryChineseStorageKey),
             HotkeyBinding.load(storageKey: HotkeyBinding.screenshotStorageKey, fallback: .screenshotDefaultBinding),
             HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryScreenshotStorageKey),
+            HotkeyBinding.load(
+                storageKey: HotkeyBinding.screenshotTranslationStorageKey,
+                fallback: .screenshotTranslationDefaultBinding
+            ),
             HotkeyBinding.loadOptional(storageKey: HotkeyBinding.autoTranslateStorageKey),
             HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey)
         )
@@ -1895,6 +1996,8 @@ final class MainViewController: NSViewController {
             return screenshotHotkeyCaptureButton
         case .screenshotSecondary:
             return secondaryScreenshotHotkeyCaptureButton
+        case .screenshotTranslation:
+            return screenshotTranslationHotkeyCaptureButton
         case .autoTranslate:
             return autoTranslateHotkeyCaptureButton
         case .mainWindow:

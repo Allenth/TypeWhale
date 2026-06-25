@@ -25,16 +25,22 @@ final class HotkeyMonitor {
         fallback: .screenshotDefaultBinding
     )
     private var secondaryScreenshotBinding = HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryScreenshotStorageKey)
+    private var screenshotTranslationBinding = HotkeyBinding.load(
+        storageKey: HotkeyBinding.screenshotTranslationStorageKey,
+        fallback: .screenshotTranslationDefaultBinding
+    )
     private var autoTranslateBinding = HotkeyBinding.loadOptional(storageKey: HotkeyBinding.autoTranslateStorageKey)
     private var mainWindowBinding = HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey)
     private var activeModifierKeyCodes: Set<Int> = []
     private var triggerDown = false
     private var screenshotTriggerDown = false
     private var secondaryScreenshotTriggerDown = false
+    private var screenshotTranslationTriggerDown = false
     private var autoTranslateTriggerDown = false
     private var mainWindowTriggerDown = false
     private var lastScreenshotTapAt: Date?
     private var lastSecondaryScreenshotTapAt: Date?
+    private var lastScreenshotTranslationTapAt: Date?
     private var actionTapState: [String: (count: Int, lastAt: Date)] = [:]
     private var activeChannel: SpeechInputChannel?
     private var activeBinding: HotkeyBinding?
@@ -42,6 +48,7 @@ final class HotkeyMonitor {
     var onUp: ((SpeechInputChannel, HotkeyBinding) -> Void)?
     var onAutoTranslateToggle: (() -> Void)?
     var onScreenshot: (() -> Void)?
+    var onScreenshotTranslation: (() -> Void)?
     var onMainWindow: (() -> Void)?
 
     func start() {
@@ -104,6 +111,7 @@ final class HotkeyMonitor {
             secondary: secondary,
             screenshot: screenshotBinding,
             secondaryScreenshot: secondaryScreenshotBinding,
+            screenshotTranslation: screenshotTranslationBinding,
             autoTranslate: autoTranslateBinding,
             mainWindow: mainWindowBinding
         )
@@ -114,22 +122,26 @@ final class HotkeyMonitor {
         secondary: HotkeyBinding?,
         screenshot: HotkeyBinding,
         secondaryScreenshot: HotkeyBinding? = nil,
+        screenshotTranslation: HotkeyBinding,
         autoTranslate: HotkeyBinding? = nil,
         mainWindow: HotkeyBinding? = nil
     ) {
         self.bindings = [primary] + (secondary.map { [$0] } ?? [])
         self.screenshotBinding = screenshot
         self.secondaryScreenshotBinding = secondaryScreenshot
+        self.screenshotTranslationBinding = screenshotTranslation
         self.autoTranslateBinding = autoTranslate
         self.mainWindowBinding = mainWindow
         activeModifierKeyCodes.removeAll()
         triggerDown = false
         screenshotTriggerDown = false
         secondaryScreenshotTriggerDown = false
+        screenshotTranslationTriggerDown = false
         autoTranslateTriggerDown = false
         mainWindowTriggerDown = false
         lastScreenshotTapAt = nil
         lastSecondaryScreenshotTapAt = nil
+        lastScreenshotTranslationTapAt = nil
         actionTapState.removeAll()
         activeChannel = nil
         activeBinding = nil
@@ -164,7 +176,8 @@ final class HotkeyMonitor {
             keyCode: keyCode,
             eventFlags: eventFlags,
             triggerDown: &screenshotTriggerDown,
-            lastTapAt: &lastScreenshotTapAt
+            lastTapAt: &lastScreenshotTapAt,
+            action: { [weak self] in self?.onScreenshot?() }
         ) {
             return true
         }
@@ -173,7 +186,18 @@ final class HotkeyMonitor {
             keyCode: keyCode,
             eventFlags: eventFlags,
             triggerDown: &secondaryScreenshotTriggerDown,
-            lastTapAt: &lastSecondaryScreenshotTapAt
+            lastTapAt: &lastSecondaryScreenshotTapAt,
+            action: { [weak self] in self?.onScreenshot?() }
+        ) {
+            return true
+        }
+        if handleScreenshotFlagsChanged(
+            binding: screenshotTranslationBinding,
+            keyCode: keyCode,
+            eventFlags: eventFlags,
+            triggerDown: &screenshotTranslationTriggerDown,
+            lastTapAt: &lastScreenshotTranslationTapAt,
+            action: { [weak self] in self?.onScreenshotTranslation?() }
         ) {
             return true
         }
@@ -246,7 +270,8 @@ final class HotkeyMonitor {
             eventKeyCode: eventKeyCode,
             eventFlags: event.flags,
             isDown: isDown,
-            triggerDown: &screenshotTriggerDown
+            triggerDown: &screenshotTriggerDown,
+            action: { [weak self] in self?.onScreenshot?() }
         ) {
             return true
         }
@@ -256,7 +281,19 @@ final class HotkeyMonitor {
             eventKeyCode: eventKeyCode,
             eventFlags: event.flags,
             isDown: isDown,
-            triggerDown: &secondaryScreenshotTriggerDown
+            triggerDown: &secondaryScreenshotTriggerDown,
+            action: { [weak self] in self?.onScreenshot?() }
+        ) {
+            return true
+        }
+
+        if handleScreenshotKey(
+            binding: screenshotTranslationBinding,
+            eventKeyCode: eventKeyCode,
+            eventFlags: event.flags,
+            isDown: isDown,
+            triggerDown: &screenshotTranslationTriggerDown,
+            action: { [weak self] in self?.onScreenshotTranslation?() }
         ) {
             return true
         }
@@ -291,10 +328,13 @@ final class HotkeyMonitor {
         ) {
             return true
         }
-        if handleScreenshotMedia(binding: screenshotBinding, isDown: isDown, triggerDown: &screenshotTriggerDown) {
+        if handleScreenshotMedia(binding: screenshotBinding, isDown: isDown, triggerDown: &screenshotTriggerDown, action: { [weak self] in self?.onScreenshot?() }) {
             return true
         }
-        if handleScreenshotMedia(binding: secondaryScreenshotBinding, isDown: isDown, triggerDown: &secondaryScreenshotTriggerDown) {
+        if handleScreenshotMedia(binding: secondaryScreenshotBinding, isDown: isDown, triggerDown: &secondaryScreenshotTriggerDown, action: { [weak self] in self?.onScreenshot?() }) {
+            return true
+        }
+        if handleScreenshotMedia(binding: screenshotTranslationBinding, isDown: isDown, triggerDown: &screenshotTranslationTriggerDown, action: { [weak self] in self?.onScreenshotTranslation?() }) {
             return true
         }
         guard let binding = bindings.first(where: { $0.kind == .mediaPlay }) else {
@@ -308,14 +348,15 @@ final class HotkeyMonitor {
         keyCode: Int,
         eventFlags: CGEventFlags,
         triggerDown: inout Bool,
-        lastTapAt: inout Date?
+        lastTapAt: inout Date?,
+        action: () -> Void
     ) -> Bool {
         guard let binding, binding.kind == .function || binding.kind == .modifier else { return false }
         let isDown = isBindingDown(binding, keyCode: keyCode, eventFlags: eventFlags)
         guard isDown != triggerDown else { return false }
         triggerDown = isDown
         if !isDown {
-            return registerScreenshotTap(lastTapAt: &lastTapAt) || screenshotConflictsWithSpeechBinding(binding)
+            return registerScreenshotTap(lastTapAt: &lastTapAt, action: action) || screenshotConflictsWithSpeechBinding(binding)
         }
         return screenshotConflictsWithSpeechBinding(binding)
     }
@@ -325,7 +366,8 @@ final class HotkeyMonitor {
         eventKeyCode: Int,
         eventFlags: CGEventFlags,
         isDown: Bool,
-        triggerDown: inout Bool
+        triggerDown: inout Bool,
+        action: () -> Void
     ) -> Bool {
         guard let binding,
               binding.kind == .combo,
@@ -337,23 +379,23 @@ final class HotkeyMonitor {
         if isDown != triggerDown {
             triggerDown = isDown
             if isDown {
-                onScreenshot?()
+                action()
             }
         }
         return true
     }
 
-    private func handleScreenshotMedia(binding: HotkeyBinding?, isDown: Bool, triggerDown: inout Bool) -> Bool {
+    private func handleScreenshotMedia(binding: HotkeyBinding?, isDown: Bool, triggerDown: inout Bool, action: () -> Void) -> Bool {
         guard let binding, binding.kind == .mediaPlay else { return false }
         guard isDown != triggerDown else { return true }
         triggerDown = isDown
         if isDown {
-            onScreenshot?()
+            action()
         }
         return true
     }
 
-    private func registerScreenshotTap(lastTapAt: inout Date?) -> Bool {
+    private func registerScreenshotTap(lastTapAt: inout Date?, action: () -> Void) -> Bool {
         let now = Date()
         guard let previousTapAt = lastTapAt,
               now.timeIntervalSince(previousTapAt) <= Timing.screenshotDoubleTapWindowSeconds else {
@@ -361,7 +403,7 @@ final class HotkeyMonitor {
             return false
         }
         lastTapAt = nil
-        onScreenshot?()
+        action()
         return true
     }
 

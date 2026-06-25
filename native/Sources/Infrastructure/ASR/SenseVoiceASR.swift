@@ -118,7 +118,13 @@ final class NativeSenseVoiceBridge {
     }
 
     func reload() {
-        stop()
+        // 先释放旧资源（含被撑大的内存池），再立刻用全新内存池热加载回来，
+        // 不要留到下一次唤起时才加载，避免开口第一句卡顿。
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.releaseCachedResourcesOnQueue()
+            _ = try? self.loadRecognizer(for: .current())
+        }
     }
 
     func releaseCachedResources() {

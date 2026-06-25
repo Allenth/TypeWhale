@@ -21,10 +21,14 @@ final class ScreenshotCoordinator {
     }
 
     func begin() {
-        begin(preselectedWindowFrame: nil)
+        begin(preselectedWindowFrame: nil, autoTranslateAfterSelection: false)
     }
 
-    private func begin(preselectedWindowFrame: CGRect?) {
+    func beginTranslation() {
+        begin(preselectedWindowFrame: nil, autoTranslateAfterSelection: true)
+    }
+
+    private func begin(preselectedWindowFrame: CGRect?, autoTranslateAfterSelection: Bool) {
         guard !isActive else { return }
         invalidatePendingOperations()
         let windowCandidates = Self.visibleWindowCandidates()
@@ -37,7 +41,10 @@ final class ScreenshotCoordinator {
                 screenshot: image,
                 windowCandidates: windowCandidates,
                 preselectedWindowFrame: preselectedWindowFrame,
-                onSelectWindow: { [weak self] candidate in self?.focusWindowThenBeginScreenshot(candidate) },
+                autoTranslateAfterSelection: autoTranslateAfterSelection,
+                onSelectWindow: { [weak self] candidate in
+                    self?.focusWindowThenBeginScreenshot(candidate, autoTranslateAfterSelection: autoTranslateAfterSelection)
+                },
                 onCopy: { [weak self] image in self?.copy(image) },
                 onOCR: { [weak self] image in self?.recognizeText(in: image) },
                 onTranslate: { [weak self] image, completion in self?.translateText(in: image, completion: completion) },
@@ -54,14 +61,16 @@ final class ScreenshotCoordinator {
         overlays.forEach { $0.orderFrontRegardless() }
         // 只让截图覆盖层接收键盘事件，不激活 TypeWhale App，避免把已在后方的主页窗口推到最前。
         overlays.first?.makeKeyAndOrderFront(nil)
-        if preselectedWindowFrame == nil {
+        if autoTranslateAfterSelection {
+            onStatus("翻译截图", "拖拽选择区域，松开后自动 OCR 并翻译覆盖", .processing)
+        } else if preselectedWindowFrame == nil {
             onStatus("截图模式", "拖拽选择区域，复制后会写入剪贴板", .processing)
         } else {
             onStatus("窗口已置顶", "边框已自动对齐窗口，可复制、OCR、标注或保存", .processing)
         }
     }
 
-    private func focusWindowThenBeginScreenshot(_ candidate: ScreenshotWindowCandidate) {
+    private func focusWindowThenBeginScreenshot(_ candidate: ScreenshotWindowCandidate, autoTranslateAfterSelection: Bool) {
         operationGeneration += 1
         let generation = operationGeneration
         closeAll()
@@ -70,7 +79,7 @@ final class ScreenshotCoordinator {
         Task { [weak self] in
             try? await Task.sleep(nanoseconds: 180_000_000)
             guard let self, generation == operationGeneration else { return }
-            begin(preselectedWindowFrame: candidate.frame)
+            begin(preselectedWindowFrame: candidate.frame, autoTranslateAfterSelection: autoTranslateAfterSelection)
         }
     }
 
@@ -282,6 +291,7 @@ private final class ScreenshotOverlayWindow: NSWindow {
         screenshot: CGImage,
         windowCandidates: [ScreenshotWindowCandidate],
         preselectedWindowFrame: CGRect?,
+        autoTranslateAfterSelection: Bool,
         onSelectWindow: @escaping (ScreenshotWindowCandidate) -> Void,
         onCopy: @escaping (NSImage) -> Void,
         onOCR: @escaping (NSImage) -> Void,
@@ -296,6 +306,7 @@ private final class ScreenshotOverlayWindow: NSWindow {
             screenshot: screenshot,
             windowCandidates: windowCandidates,
             preselectedWindowFrame: preselectedWindowFrame,
+            autoTranslateAfterSelection: autoTranslateAfterSelection,
             onSelectWindow: onSelectWindow,
             onCopy: onCopy,
             onOCR: onOCR,
@@ -435,6 +446,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     private let displayBounds: CGRect
     private let screenshot: CGImage
     private let windowCandidates: [ScreenshotWindowCandidate]
+    private let autoTranslateAfterSelection: Bool
     private let onSelectWindow: (ScreenshotWindowCandidate) -> Void
     private let onCopy: (NSImage) -> Void
     private let onOCR: (NSImage) -> Void
@@ -460,6 +472,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     private var activeTextField: NSTextField?
     private var activeTextOrigin: NSPoint?
     private var isTranslating = false
+    private var hasAutoTranslatedSelection = false
     private let clickDragThreshold: CGFloat = 4
 
     init(
@@ -468,6 +481,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         screenshot: CGImage,
         windowCandidates: [ScreenshotWindowCandidate],
         preselectedWindowFrame: CGRect?,
+        autoTranslateAfterSelection: Bool,
         onSelectWindow: @escaping (ScreenshotWindowCandidate) -> Void,
         onCopy: @escaping (NSImage) -> Void,
         onOCR: @escaping (NSImage) -> Void,
@@ -481,6 +495,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         self.displayBounds = CGDisplayBounds(displayID)
         self.screenshot = screenshot
         self.windowCandidates = windowCandidates
+        self.autoTranslateAfterSelection = autoTranslateAfterSelection
         self.onSelectWindow = onSelectWindow
         self.onCopy = onCopy
         self.onOCR = onOCR
@@ -493,6 +508,11 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             selection = localWindowRect(for: preselectedWindowFrame) ?? .zero
         }
         wantsLayer = true
+        if autoTranslateAfterSelection, hasUsableSelection {
+            DispatchQueue.main.async { [weak self] in
+                self?.translateSelectionIfNeeded()
+            }
+        }
     }
 
     required init?(coder: NSCoder) {
@@ -597,12 +617,14 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         case .create, nil:
             selection = normalizedRect(from: dragStart, to: current)
             markups.removeAll()
+            hasAutoTranslatedSelection = false
         case .move(let startSelection):
             let movedSelection = moved(startSelection, from: dragStart, to: current)
             selection = movedSelection
         case .resize(let handle, let startSelection):
             selection = resized(startSelection, handle: handle, to: current)
             markups.removeAll()
+            hasAutoTranslatedSelection = false
         case .annotate:
             updateMarkup(to: current)
         case .moveMarkup(let index, let startPoint, let original):
@@ -650,6 +672,8 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         dragMode = nil
         if !hasUsableSelection {
             selection = .zero
+        } else {
+            translateSelectionIfNeeded()
         }
         needsDisplay = true
     }
@@ -956,6 +980,12 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             }
             self.needsDisplay = true
         }
+    }
+
+    private func translateSelectionIfNeeded() {
+        guard autoTranslateAfterSelection, !hasAutoTranslatedSelection, hasUsableSelection else { return }
+        hasAutoTranslatedSelection = true
+        translateSelection()
     }
 
     private static func translationErrorMessage(_ error: Error) -> String {
