@@ -10,7 +10,8 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
     private var thirdPartyNoticesWindow: NSWindow?
     private var allowsTermination = false
     private var workspaceObserver: NSObjectProtocol?
-    private let windowSize = NSSize(width: 920, height: 560)
+    // 尺寸唯一真值在 MainViewController；窗口实际高度由其必需约束决定，这里跟随它即可。
+    private let windowSize = MainViewController.windowContentSize
 
     init(controller: MainViewController) {
         self.controller = controller

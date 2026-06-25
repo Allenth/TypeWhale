@@ -11,8 +11,11 @@ final class MainViewController: NSViewController {
         case error
     }
 
-    let contentWidth: CGFloat = 920
-    let contentHeight: CGFloat = 560
+    /// 主窗口内容尺寸的唯一真值。窗口实际高度由本 VC 的必需约束决定，
+    /// AppLifecycleCoordinator.windowSize 直接引用它，避免两处尺寸不一致。
+    static let windowContentSize = NSSize(width: 920, height: 560)
+    let contentWidth: CGFloat = MainViewController.windowContentSize.width
+    let contentHeight: CGFloat = MainViewController.windowContentSize.height
     let leftColumnWidth: CGFloat = 200
     let leftTopInset: CGFloat = 28
     let rightTopInset: CGFloat = 18
