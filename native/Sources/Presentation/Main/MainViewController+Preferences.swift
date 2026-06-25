@@ -162,7 +162,7 @@ extension MainViewController {
     }
 
     @objc func openPreferences() {
-        showPreferencesPopoverFromMenu()
+        scrollToConfigPanels()
     }
 
     func section(_ title: String, _ card: NSView) -> NSView {

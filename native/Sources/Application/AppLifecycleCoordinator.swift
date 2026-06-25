@@ -241,7 +241,7 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
 
     @objc private func showPreferences() {
         showMainWindow()
-        controller.showPreferencesPopoverFromMenu()
+        controller.scrollToConfigPanels()
         NSApp.activate(ignoringOtherApps: true)
     }
 

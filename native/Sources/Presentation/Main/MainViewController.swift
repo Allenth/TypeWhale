@@ -13,7 +13,7 @@ final class MainViewController: NSViewController {
 
     /// 主窗口内容尺寸的唯一真值。窗口实际高度由本 VC 的必需约束决定，
     /// AppLifecycleCoordinator.windowSize 直接引用它，避免两处尺寸不一致。
-    static let windowContentSize = NSSize(width: 920, height: 560)
+    static let windowContentSize = NSSize(width: 1000, height: 580)
     let contentWidth: CGFloat = MainViewController.windowContentSize.width
     let contentHeight: CGFloat = MainViewController.windowContentSize.height
     let leftColumnWidth: CGFloat = 200
@@ -29,9 +29,7 @@ final class MainViewController: NSViewController {
     let accessibilityStatus = label("检测中", size: 12, weight: .medium)
     let screenRecordingStatus = label("检测中", size: 12, weight: .medium)
     let hotkeyStatus = label("检测中", size: 12, weight: .medium)
-    // 权限折叠：全部授权时显示一行汇总，缺权限时展开 4 行明细。
-    var permissionDetailEntry: NSView?
-    var permissionSummaryEntry: NSView?
+    var panelScrollView: NSScrollView?
     let hotkeyValue = label(
         HotkeyBinding.load(storageKey: HotkeyBinding.chineseStorageKey, fallback: .defaultBinding).displayName,
         size: 13,
@@ -206,19 +204,13 @@ final class MainViewController: NSViewController {
         launchAtLogin.target = self; launchAtLogin.action = #selector(toggleLaunchAtLogin)
         configureOptionAccessibility()
 
-        let left = buildLeftColumn()
-        let center = buildCenterColumn()
-        view.addSubview(left)
-        view.addSubview(center)
+        let surface = buildMainSurface()
+        view.addSubview(surface)
         NSLayoutConstraint.activate([
-            left.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            left.topAnchor.constraint(equalTo: view.topAnchor),
-            left.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            left.widthAnchor.constraint(equalToConstant: leftColumnWidth),
-            center.leadingAnchor.constraint(equalTo: left.trailingAnchor, constant: 16),
-            center.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -18),
-            center.topAnchor.constraint(equalTo: view.topAnchor, constant: rightTopInset),
-            center.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -20),
+            surface.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            surface.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            surface.topAnchor.constraint(equalTo: view.topAnchor),
+            surface.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
 
         updateHotkeys(

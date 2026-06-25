@@ -226,12 +226,6 @@ final class SpeechInputCoordinator {
             controller.hotkeyStatus.stringValue = "● 未监听"
             controller.hotkeyStatus.textColor = .systemOrange
         }
-        controller.updatePermissionDisplay(
-            allGranted: permissions.microphoneAuthorized
-                && permissions.accessibilityTrusted
-                && permissions.screenRecordingAuthorized
-                && globalListening
-        )
     }
 
     private func startObservingTargetApplicationChanges() {
