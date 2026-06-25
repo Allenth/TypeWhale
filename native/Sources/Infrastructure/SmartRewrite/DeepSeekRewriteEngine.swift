@@ -23,7 +23,8 @@ final class DeepSeekRewriteEngine: SmartRewriteEngine {
     func rewrite(
         rawText: String,
         mode: RewriteMode,
-        context: SmartInputContext
+        context: SmartInputContext,
+        preference: SmartRewritePreference
     ) async throws -> SmartRewriteEngineOutput {
         guard let apiKey = apiKeyProvider(), !apiKey.isEmpty else {
             throw DeepSeekRewriteError.missingAPIKey
@@ -36,7 +37,7 @@ final class DeepSeekRewriteEngine: SmartRewriteEngine {
             rawText: rawText,
             mode: mode,
             context: context,
-            preference: .automatic
+            preference: preference
         )
         return try await complete(
             prompt: prompt,

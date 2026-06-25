@@ -2,6 +2,123 @@
 
 This document records architecture decisions made during the refactor. New decisions should be appended in reverse chronological order.
 
+## ADR-010: Remove Short-Segment Preview State From The Active Code Path
+
+Date: 2026-06-25
+
+Status: Accepted
+
+Decision:
+
+- The active realtime preview path must not keep dormant short-segment state or reset-window helpers.
+- Remove `committedPreviewText`, `realtimeGeneration`, `segmentStartedAt`, `pendingSegmentCommit`, `evaluateRealtimeSegmentCommit`, `commitRealtimeSegment`, `resetRealtimeWindow`, and unused realtime-buffer trimming helpers from active source.
+- `SpeechSession.latestPreviewText` means the latest cumulative realtime ASR result for the current recording.
+- VAD energy tracking may still drive auto-finish and safety timeouts, but it must not split realtime preview text or reset the realtime audio window.
+
+Reasoning:
+
+- Dormant segmentation code is not harmless: it preserves the wrong mental model and makes future agents likely to reconnect the failed short-segment path.
+- The restored 1.2 capsule experience depends on a clean contract: cumulative audio snapshot in, visual catch-up cache out.
+- If segmentation is needed for a future streaming ASR design, it should be introduced as a new architecture with its own reducer and review, not by reusing old disabled fields.
+
+Consequences:
+
+- Searches for segment commit/reset-window symbols should return no active source hits.
+- Future preview changes should start from ADR-009 and this ADR, not from the 1.3/1.4 short-segment experiment.
+- Historical development-log entries may still mention the removed symbols as past work; that history should not be copied back into active implementation.
+
+## ADR-009: Restore 1.2 Capsule Preview Mechanics
+
+Date: 2026-06-25
+
+Status: Accepted
+
+Supersedes: ADR-008's non-prefix replacement strategy
+
+Decision:
+
+- The recording capsule realtime preview should restore the proven 1.2 behavior from `v1.2.42-build199`.
+- Realtime preview uses cumulative snapshots from the start of the current recording, not short-pause segmentation or a sliding window that resets on silence.
+- `SpeechInputCoordinator.transcribeRealtime` should display the cleaned cumulative preview text directly in the controller and capsule.
+- `CapsuleTextBuffer` should keep the 1.2 `refreshedDisplayPreservingLength` strategy, then animate newly appended tail characters with the existing draft timer.
+- The first visible preview should start its local fade at index 0, matching 1.2.
+- `RecordingCapsuleView` should keep the 1.2 draft timer and fade timer rhythm, alpha floor, and 7-bar waveform behavior unless a future change is explicitly tested against the old app.
+
+Reasoning:
+
+- The user has directly reported that the current capsule is worse than the 1.2 experience.
+- The 1.2 implementation already solved the important product job: the user can see what they are saying with enough certainty while speaking.
+- The later "non-prefix clean replacement" direction was a reaction to the 1.3 segmented/sliding-window architecture; it should not be treated as a universal capsule display rule.
+- Under cumulative snapshots, preserving the current displayed length and refreshing characters is part of the old smoothness, not the root problem.
+- The root regression came from changing both the ASR preview architecture and the display layer away from the 1.2 behavior.
+
+Consequences:
+
+- Future capsule work must compare against `v1.2.42-build199` before changing animation or preview-buffer policy.
+- If true streaming ASR is introduced later, it needs a new stability reducer and a separate design review; do not reuse the failed short-segment preview path.
+- `CapsuleTextBufferCheck` should lock 1.2 behavior, including initial fade at 0 and non-prefix refresh preserving the displayed length.
+- Manual QA must include a real recording with natural pauses and silence, because unit tests cannot verify perceived smoothness.
+
+## ADR-008: Capsule Realtime Preview Is A Confidence Anchor With Local Motion Continuity
+
+Date: 2026-06-25
+
+Status: Accepted
+
+Note: Superseded in part by ADR-009. The confidence-anchor principle remains accepted, but the clean non-prefix replacement strategy did not match the 1.2 experience and should not guide current capsule work.
+
+Decision:
+
+- The recording capsule realtime preview exists to help the user clearly see what they are saying while speaking.
+- Capsule text animation must preserve certainty and motion continuity: no whole-text flashing, no hard jump as the default transition, and no old/new text mixed by index.
+- Append-only ASR updates use a typewriter progression with a short local fade on newly added characters.
+- Non-prefix ASR corrections replace the old text cleanly, but must keep a readable new-text head and animate the tail into place.
+- Non-prefix corrections must not collapse to one visible character unless the whole target text is that short.
+- UI, interaction, animation, layout, and feedback-state changes require design-review skill or independent subagent review before being treated as complete.
+
+Reasoning:
+
+- The user has already experienced better capsule behavior in earlier versions, so regression is a product failure, not just an implementation detail.
+- Removing animation avoids one bug but destroys the user's sense of continuity.
+- Whole-text fade avoids hard jumps but makes the entire capsule look like it is flashing.
+- Showing only one character during a correction makes the recognition feel lost and unstable.
+- The correct boundary is local motion: clean semantic replacement, readable head, animated tail, and only newly appearing characters fading in.
+
+Consequences:
+
+- `CapsuleTextBuffer` owns text-stability policy and should remain regression-testable without AppKit.
+- `RecordingCapsuleView` owns visual rendering and may use local fade only for the newly appearing tail.
+- Future ASR preview strategy changes must preserve the capsule's confidence-anchor role before optimizing for implementation simplicity.
+- Manual QA should include long pauses, natural silence, non-prefix ASR corrections, and append-only growth.
+
+## ADR-007: Automatic Smart Rewrite Rules Match Target And Content Separately
+
+Date: 2026-06-25
+
+Status: Accepted
+
+Decision:
+
+- Smart rewrite automatic mode may choose a rewrite mode from both target context and the current final ASR text.
+- Each automatic rule declares whether it matches target context, content text, or both.
+- Target context means target App name, Bundle ID, and window title.
+- Content text means the final local ASR text after trimming and before remote rewrite.
+- Manual rewrite preferences still override automatic rules.
+- Secure text entry still forces raw mode before any automatic rule is evaluated.
+
+Reasoning:
+
+- App-only routing is too coarse: the same target window can receive a chat reply, a development task, or a meeting summary.
+- Content-only routing is too risky: a development window should still default to development-oriented formatting unless a more specific content rule intentionally wins.
+- Keeping target and content matching explicit lets users tune automatic behavior without hiding policy in code.
+
+Consequences:
+
+- Default automatic rules may include content-intent rules such as summary/meeting-note phrasing.
+- Rule order matters; more specific content-intent rules should appear before broad target rules.
+- Stored rule migration must preserve older target-only rules as `matchTarget = true` and `matchContent = false`.
+- Progress UI can only estimate from target context before final ASR is available; final routing may become more specific after recognition.
+
 ## ADR-006: Prefer Strategy, Coordinator/Use Case, And Command For Extension Points
 
 Date: 2026-06-25

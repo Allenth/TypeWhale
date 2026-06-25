@@ -90,7 +90,7 @@ final class SmartInputRouter {
         }
 
         let profile = RewriteProfile(
-            mode: chooseMode(preference: preference, context: context),
+            mode: chooseMode(preference: preference, context: context, rawText: trimmed),
             timeoutSeconds: 8.0
         )
 
@@ -139,6 +139,7 @@ final class SmartInputRouter {
                 rawText: rewriteText,
                 mode: profile.mode,
                 context: rewriteContext,
+                preference: preference,
                 timeoutSeconds: profile.timeoutSeconds
             )
             let rewritten = output.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -183,7 +184,8 @@ final class SmartInputRouter {
 
     private func chooseMode(
         preference: SmartRewritePreference,
-        context: SmartInputContext
+        context: SmartInputContext,
+        rawText: String = ""
     ) -> RewriteMode {
         if context.isSecureTextEntry {
             return .raw
@@ -192,18 +194,26 @@ final class SmartInputRouter {
             return manualMode
         }
 
-        return SmartRewriteAutoRuleStore.mode(for: context)
+        return SmartRewriteAutoRuleStore.mode(for: context, rawText: rawText)
     }
 
     private func rewriteWithTimeout(
         rawText: String,
         mode: RewriteMode,
         context: SmartInputContext,
+        preference: SmartRewritePreference,
         timeoutSeconds: TimeInterval
     ) async throws -> SmartRewriteEngineOutput {
         // 用独立 Task 发请求：超时只放弃等待、不取消请求，让它后台跑完并把已计费的 usage 补记进账本。
         // 否则超时的请求会被 DeepSeek 计费却不计入每日次数/成本，从而绕过成本上限。
-        let work = Task { try await self.engine.rewrite(rawText: rawText, mode: mode, context: context) }
+        let work = Task {
+            try await self.engine.rewrite(
+                rawText: rawText,
+                mode: mode,
+                context: context,
+                preference: preference
+            )
+        }
         do {
             return try await withThrowingTaskGroup(of: SmartRewriteEngineOutput.self) { group in
                 group.addTask { try await work.value }

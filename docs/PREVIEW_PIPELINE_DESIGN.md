@@ -20,13 +20,14 @@ This can cause:
 
 Realtime preview is not final transcription.
 
-It is a temporary listening aid whose goals are:
+It is a confidence anchor whose goals are:
 
-- appear quickly
-- remain readable
+- let the user clearly see what TypeWhale currently thinks they are saying
+- appear quickly enough to support live self-correction
+- remain readable across natural pauses and silence
 - avoid obvious duplication
 - avoid heavy backward jumping
-- give confidence that recording is working
+- give the user enough certainty to continue speaking
 
 Final paste must use full audio transcription.
 
@@ -40,12 +41,32 @@ Audio cumulative snapshot
 
 ## Current Product Choice
 
-The active product path follows the v1.1.1 baseline:
+The active product path follows a stability-first variant of the v1.2 baseline:
 
 - realtime snapshots are cumulative during a recording
-- the realtime ASR result is passed directly to the capsule
+- the realtime ASR result is passed to the capsule only after realtime VAD
 - the capsule owns only visual catch-up state
+- ordinary pauses must not reset the realtime audio window
+- realtime audio buffers are not trimmed during a normal recording; preserving context is more important than minimizing snapshot size
 - final paste never consumes realtime preview text
+
+Do not commit/reset the realtime preview window on short natural pauses. A short
+silence, breath, or thinking pause is part of normal speech; treating it as a
+segment boundary causes the capsule to restart the preview too often and makes
+the text appear to jump.
+
+Do not trim the realtime audio window on a short sliding horizon while the user
+is still recording. A sliding offline-ASR window can cut the sentence head after
+silence or a long pause, causing the next recognition result to lose context and
+visibly diverge from the previously displayed text. The proven workaround for
+the current non-streaming ASR architecture is cumulative context.
+
+For the current cumulative-snapshot architecture, the capsule should restore
+the v1.2 visual cache behavior: refresh the already-visible character span from
+the latest cumulative ASR result, then animate any newly appended tail. Do not
+apply the later short-segment "clean replacement" rule to this path; that rule
+was a workaround for reset/sliding-window previews, and it made the capsule feel
+less stable than the 1.2 baseline.
 
 ## Capsule View Responsibility
 
@@ -53,10 +74,12 @@ The active product path follows the v1.1.1 baseline:
 
 Current active behavior:
 
-- owns the v1.1.1-style visual catch-up cache
+- owns the v1.2-style visual catch-up cache
 - renders text, waveform, and capsule transitions
 - receives raw realtime draft text from the coordinator
 - never participates in final paste
+- may refresh the current visible span from the latest cumulative ASR result
+- must not receive short-window segment drafts that would make positional refresh mix unrelated text
 
 Future target:
 

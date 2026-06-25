@@ -6,16 +6,45 @@ private final class SlowRewriteEngine: SmartRewriteEngine {
     func rewrite(
         rawText: String,
         mode: RewriteMode,
-        context: SmartInputContext
+        context: SmartInputContext,
+        preference: SmartRewritePreference
     ) async throws -> SmartRewriteEngineOutput {
         try await Task.sleep(nanoseconds: 9_000_000_000)
         return SmartRewriteEngineOutput(text: "should-time-out", usage: nil)
     }
 }
 
+private final class CapturingRewriteEngine: SmartRewriteEngine {
+    let displayName = "Capture Test Engine"
+    private(set) var lastMode: RewriteMode?
+    private(set) var lastPreference: SmartRewritePreference?
+
+    func rewrite(
+        rawText: String,
+        mode: RewriteMode,
+        context: SmartInputContext,
+        preference: SmartRewritePreference
+    ) async throws -> SmartRewriteEngineOutput {
+        lastMode = mode
+        lastPreference = preference
+        return SmartRewriteEngineOutput(text: rawText.trimmingCharacters(in: .whitespacesAndNewlines), usage: nil)
+    }
+}
+
 @main
 struct SmartInputCheck {
     static func main() async {
+        let autoRulesKey = "smartRewriteAutoConfiguration.v1"
+        let originalAutoRules = UserDefaults.standard.data(forKey: autoRulesKey)
+        defer {
+            if let originalAutoRules {
+                UserDefaults.standard.set(originalAutoRules, forKey: autoRulesKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: autoRulesKey)
+            }
+        }
+        SmartRewriteAutoRuleStore.reset()
+
         let noopRouter = SmartInputRouter(engine: NoopRewriteEngine())
 
         let codex = SmartInputContext(
@@ -69,6 +98,14 @@ struct SmartInputCheck {
         precondition(summaryResult.mode == .exhaustiveSummary)
         precondition(summaryResult.text == "今天讲了产品方向、风险和下一步计划")
 
+        let automaticSummaryResult = await noopRouter.rewrite(
+            rawText: "  帮我总结一下今天会议的要点和行动项  ",
+            preference: .automatic,
+            context: SmartInputContext(targetAppName: "Notes", targetBundleIdentifier: "com.apple.Notes")
+        )
+        precondition(automaticSummaryResult.mode == .exhaustiveSummary)
+        precondition(automaticSummaryResult.text == "帮我总结一下今天会议的要点和行动项")
+
         let secureResult = await noopRouter.rewrite(
             rawText: "  secret  ",
             preference: .developerRequirement,
@@ -89,5 +126,36 @@ struct SmartInputCheck {
         )
         precondition(timeoutResult.didFallback)
         precondition(timeoutResult.text == "需要回退")
+
+        let captureEngine = CapturingRewriteEngine()
+        let captureRouter = SmartInputRouter(engine: captureEngine)
+        _ = await captureRouter.rewrite(
+            rawText: "  修掉智能整理偏好丢失的问题  ",
+            preference: .developerRequirement,
+            context: codex
+        )
+        precondition(captureEngine.lastMode == .developerRequirement)
+        precondition(captureEngine.lastPreference == .developerRequirement)
+
+        let legacyJSON = """
+        {
+          "rules": [
+            {
+              "id": "legacy-chat",
+              "title": "旧聊天规则",
+              "keywords": ["wechat"],
+              "mode": "chat",
+              "isEnabled": true
+            }
+          ],
+          "fallbackMode": "polish"
+        }
+        """.data(using: .utf8)!
+        UserDefaults.standard.set(legacyJSON, forKey: autoRulesKey)
+        let migrated = SmartRewriteAutoRuleStore.load()
+        let legacyRule = migrated.rules.first { $0.id == "legacy-chat" }
+        precondition(legacyRule?.matchTarget == true)
+        precondition(legacyRule?.matchContent == false)
+        precondition(migrated.rules.contains { $0.id == "summary-intent" && $0.matchContent && !$0.matchTarget })
     }
 }

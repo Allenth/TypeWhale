@@ -11,10 +11,6 @@ final class SpeechInputCoordinator {
         static let maxRecordingSeconds: TimeInterval = 360
         /// 录音中持续无语音/文字产出的上限：超过即强制取消，避免话筒空开持续耗电发热。
         static let noTextTimeoutSeconds: TimeInterval = 300
-        /// 实时预览分段：停顿超过此值就把当前段冻结提交，重置预览窗口（避免滑窗重识别导致乱码）。
-        static let segmentCommitPauseSeconds: TimeInterval = 0.7
-        /// 连续说话不停顿时的强制分段上限：超过即强制提交并重置窗口，避免窗口滑动。
-        static let segmentMaxSeconds: TimeInterval = 16
     }
 
     /// 基于音频能量的语音活动检测（VAD）阈值，与 ASR 解耦，保证静音/人离判定每次稳定一致。
@@ -52,10 +48,6 @@ final class SpeechInputCoordinator {
     private var completedFinalTaskIDs: Set<UUID> = []
     private var realtimeBusy = false
     private var pendingRealtimeSnapshot: RealtimeSnapshotRequest?
-    /// 每次分段提交/重置窗口时自增，用于丢弃跨越重置点、属于旧窗口的过期识别结果。
-    private var realtimeGeneration = 0
-    private var segmentStartedAt: Date?
-    private var pendingSegmentCommit = false
     private var workspaceActivationObserver: NSObjectProtocol?
     private var trackedTargetTaskID: UUID?
     private var trackedTargetApp: NSRunningApplication?
@@ -498,9 +490,6 @@ final class SpeechInputCoordinator {
             updateCapsuleStatus()
             lastVoiceAt = nil
             voiceEverDetected = false
-            segmentStartedAt = nil
-            pendingSegmentCommit = false
-            realtimeGeneration += 1
         } catch {
             cancelAutoFinishTimer()
             clearActiveRecording()
@@ -659,7 +648,6 @@ final class SpeechInputCoordinator {
 
     private func transcribeRealtime(taskID: UUID, url: URL, configuration: ASRConfiguration) {
         realtimeBusy = true
-        let generation = realtimeGeneration
         realtimeASR.containsSpeech(audio: url) { [weak self] vadResponse in
             DispatchQueue.main.async {
                 guard let self else { return }
@@ -684,18 +672,13 @@ final class SpeechInputCoordinator {
                             try? FileManager.default.removeItem(at: url)
                             guard let self else { return }
                             if taskID == self.activeSession?.id,
-                               generation == self.realtimeGeneration,
                                case .success(let value) = response,
                                 (value["error"] as? String ?? "").isEmpty {
                                 let text = cleanRecognitionText(value["text"] as? String ?? "", languageMode: configuration.languageMode)
-                                let previousSegment = self.activeSession?.latestPreviewText ?? ""
-                                // text 只是“当前这一段”的识别结果；展示时拼在已冻结前缀之后。
-                                if isMeaningfulRealtimePreviewText(text, previousPreview: previousSegment) {
+                                if isMeaningfulRealtimePreviewText(text, previousPreview: self.activeSession?.latestPreviewText ?? "") {
                                     self.activeSession?.latestPreviewText = text
-                                    if self.segmentStartedAt == nil { self.segmentStartedAt = Date() }
-                                    let combined = (self.activeSession?.committedPreviewText ?? "") + text
-                                    self.controller.updateRealtimeDraft(combined)
-                                    self.popup.updateDraft(combined)
+                                    self.controller.updateRealtimeDraft(text)
+                                    self.popup.updateDraft(text)
                                 }
                             }
                             self.finishRealtimeSnapshot()
@@ -1228,40 +1211,8 @@ final class SpeechInputCoordinator {
         if level >= VAD.speechBandThreshold {
             voiceEverDetected = true
             lastVoiceAt = Date()
-            pendingSegmentCommit = false
-            if segmentStartedAt == nil { segmentStartedAt = Date() }
         }
-        evaluateRealtimeSegmentCommit()
         evaluateVADAutoFinish()
-    }
-
-    /// 实时预览分段提交：停顿超过阈值、或一段连续说话过长时，把当前段冻结进前缀并重置预览窗口。
-    /// 这样下一个快照只识别“当前这一段”，避免 20 秒滑窗整段重识别导致的乱码。
-    private func evaluateRealtimeSegmentCommit() {
-        guard activeSession?.realtimeEnabled == true,
-              let currentSegment = activeSession?.latestPreviewText,
-              !currentSegment.isEmpty else { return }
-        let now = Date()
-        let pausedLongEnough = !pendingSegmentCommit
-            && (lastVoiceAt.map { now.timeIntervalSince($0) >= Timing.segmentCommitPauseSeconds } ?? false)
-        let segmentTooLong = segmentStartedAt.map { now.timeIntervalSince($0) >= Timing.segmentMaxSeconds } ?? false
-        guard pausedLongEnough || segmentTooLong else { return }
-        commitRealtimeSegment()
-        if pausedLongEnough { pendingSegmentCommit = true }
-    }
-
-    private func commitRealtimeSegment() {
-        guard var session = activeSession else { return }
-        let segment = session.latestPreviewText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !segment.isEmpty else { return }
-        session.committedPreviewText += segment
-        session.latestPreviewText = ""
-        activeSession = session
-        // 让在途的旧窗口识别结果作废，并清空待处理快照与音频预览窗口，下一段从头开始。
-        realtimeGeneration += 1
-        segmentStartedAt = nil
-        discardPendingRealtimeSnapshot()
-        recorder.resetRealtimeWindow()
     }
 
     /// 录音超过单次硬上限时自动结束并识别，封住 ASR 内存峰值。返回是否已触发结束。

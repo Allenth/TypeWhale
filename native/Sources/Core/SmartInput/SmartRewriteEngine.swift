@@ -6,7 +6,8 @@ protocol SmartRewriteEngine {
     func rewrite(
         rawText: String,
         mode: RewriteMode,
-        context: SmartInputContext
+        context: SmartInputContext,
+        preference: SmartRewritePreference
     ) async throws -> SmartRewriteEngineOutput
 }
 
@@ -16,7 +17,8 @@ final class NoopRewriteEngine: SmartRewriteEngine {
     func rewrite(
         rawText: String,
         mode: RewriteMode,
-        context: SmartInputContext
+        context: SmartInputContext,
+        preference: SmartRewritePreference
     ) async throws -> SmartRewriteEngineOutput {
         SmartRewriteEngineOutput(
             text: rawText.trimmingCharacters(in: .whitespacesAndNewlines),

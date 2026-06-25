@@ -10,7 +10,7 @@ This is a public test build. It is not notarized with Developer ID yet, so macOS
 
 中文用户可以直接点击上面的链接下载安装包。如果浏览器没有开始下载，请右键链接选择“链接另存为”，或打开 [TypeWhale 1.3.0 (208) Test Release](https://github.com/Allenth/TypeWhale/releases/tag/v1.3.0-build208) 页面，在 **Assets** 区域下载 `TypeWhale-1.3.0-208.dmg`。
 
-Current local release build in this repository is `1.4.18 (306)`. It has been built, installed locally from source, and packaged as `dist/TypeWhale-1.4.18-306.dmg`. The public GitHub DMG link above still points to the last uploaded public test artifact.
+Current local release build in this repository is `1.4.32 (320)`. It has been built, installed locally from source, and packaged as `dist/TypeWhale-1.4.32-320.dmg`. The public GitHub DMG link above still points to the last uploaded public test artifact.
 
 The current macOS baseline is:
 
@@ -251,6 +251,14 @@ TypeWhale 运行后会出现在 macOS 顶部状态栏。状态栏图标是黄色
 
 开启后，录音胶囊会显示实时预览文字。关闭后，仍然会在录音结束后做最终识别和粘贴。
 
+### 智能整理
+
+智能整理会在本地最终识别完成后、粘贴前整理文本。可选模式包括自动、原文、润色、开发需求和极致归纳。
+
+自动模式会根据目标 App、Bundle ID、窗口标题和本次口述内容选择整理方式。例如编程窗口默认倾向开发需求；口述里包含“总结、归纳、要点、行动项”等意图时，会自动使用极致归纳。自动范围、提示词、开发术语词库和 DeepSeek API Key 可在偏好设置里配置。
+
+智能整理需要配置 DeepSeek API Key；未配置、超时或达到成本限制时，会回退到本地识别原文。
+
 ### 开机自动启动
 
 开启后，登录 macOS 时自动启动 TypeWhale。系统可能要求你在登录项设置里确认。
@@ -285,6 +293,7 @@ TypeWhale 的设计目标是本地优先：
 - 录音文件保存在本机缓存目录。
 - 识别在本机运行。
 - 不需要把音频上传到云端。
+- 只有在启用智能整理、自动翻译或截图翻译并配置 DeepSeek API Key 后，对应文本才会发送给 DeepSeek 处理。
 - 自动粘贴时会短暂改写剪贴板，然后尽量恢复原剪贴板内容。
 
 如果未来加入联网识别或遥测，必须在代码、界面和文档里明确说明。

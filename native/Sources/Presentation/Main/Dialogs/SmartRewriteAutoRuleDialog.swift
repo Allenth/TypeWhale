@@ -12,6 +12,8 @@ final class SmartRewriteAutoRuleDialog: NSObject {
     private final class RuleRow {
         let id: String
         let enabledButton: NSButton
+        let targetButton: NSButton
+        let contentButton: NSButton
         let titleField: NSTextField
         let keywordField: NSTextField
         let modePicker: NSPopUpButton
@@ -20,6 +22,12 @@ final class SmartRewriteAutoRuleDialog: NSObject {
             id = rule.id
             enabledButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
             enabledButton.state = rule.isEnabled ? .on : .off
+            targetButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
+            targetButton.state = rule.matchTarget ? .on : .off
+            targetButton.toolTip = "匹配目标 App、Bundle ID 或窗口标题"
+            contentButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
+            contentButton.state = rule.matchContent ? .on : .off
+            contentButton.toolTip = "匹配本次原始语音识别文本"
 
             titleField = NSTextField(string: rule.title)
             titleField.font = .systemFont(ofSize: 12, weight: .medium)
@@ -44,7 +52,9 @@ final class SmartRewriteAutoRuleDialog: NSObject {
                 title: titleField.stringValue,
                 keywords: [],
                 mode: Self.selectedMode(from: modePicker),
-                isEnabled: enabledButton.state == .on
+                isEnabled: enabledButton.state == .on,
+                matchTarget: targetButton.state == .on,
+                matchContent: contentButton.state == .on
             )
             value.keywordText = keywordField.stringValue
             return value
@@ -83,7 +93,7 @@ final class SmartRewriteAutoRuleDialog: NSObject {
     func runModal() -> Result {
         let alert = NSAlert()
         alert.messageText = "自动模式范围"
-        alert.informativeText = "为常用窗口设置自动使用的智能整理模式。匹配内容来自目标 App 名、Bundle ID 和窗口标题。"
+        alert.informativeText = "为常用窗口或口述内容设置自动使用的智能整理模式。匹配来源可选择目标窗口、原始语音文本，或两者同时使用。"
         alert.alertStyle = .informational
         alert.addButton(withTitle: "保存")
         alert.addButton(withTitle: "恢复默认")
@@ -124,7 +134,7 @@ final class SmartRewriteAutoRuleDialog: NSObject {
         fallbackRow.alignment = .centerY
         fallbackRow.spacing = 10
 
-        let hint = NSTextField(labelWithString: "提示：关键词支持 App 名、窗口标题、Bundle ID 片段，例如 codex、com.openai.chat、xcode。")
+        let hint = NSTextField(labelWithString: "提示：目标匹配支持 App 名、窗口标题、Bundle ID 片段；内容匹配支持本次口述里的关键词，例如“总结”“行动项”。")
         hint.font = .systemFont(ofSize: 11)
         hint.textColor = .secondaryLabelColor
         hint.maximumNumberOfLines = 2
@@ -136,33 +146,37 @@ final class SmartRewriteAutoRuleDialog: NSObject {
         stack.spacing = 8
         stack.translatesAutoresizingMaskIntoConstraints = false
 
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 560, height: 286))
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 620, height: 326))
         container.addSubview(stack)
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             stack.topAnchor.constraint(equalTo: container.topAnchor),
             stack.bottomAnchor.constraint(lessThanOrEqualTo: container.bottomAnchor),
-            fallbackRow.widthAnchor.constraint(equalToConstant: 560),
+            fallbackRow.widthAnchor.constraint(equalToConstant: 620),
             fallbackPicker.widthAnchor.constraint(equalToConstant: 116),
-            hint.widthAnchor.constraint(equalToConstant: 560),
+            hint.widthAnchor.constraint(equalToConstant: 620),
         ])
         return container
     }
 
     private func buildHeaderRow() -> NSView {
         let enabled = headerLabel("启用")
+        let target = headerLabel("目标")
+        let content = headerLabel("内容")
         let title = headerLabel("范围")
         let keywords = headerLabel("匹配关键词")
         let mode = headerLabel("模式")
-        let row = NSStackView(views: [enabled, title, keywords, mode])
+        let row = NSStackView(views: [enabled, target, content, title, keywords, mode])
         row.orientation = .horizontal
         row.alignment = .centerY
         row.spacing = 8
         NSLayoutConstraint.activate([
             enabled.widthAnchor.constraint(equalToConstant: 34),
-            title.widthAnchor.constraint(equalToConstant: 118),
-            keywords.widthAnchor.constraint(equalToConstant: 266),
+            target.widthAnchor.constraint(equalToConstant: 34),
+            content.widthAnchor.constraint(equalToConstant: 34),
+            title.widthAnchor.constraint(equalToConstant: 108),
+            keywords.widthAnchor.constraint(equalToConstant: 244),
             mode.widthAnchor.constraint(equalToConstant: 116),
         ])
         return row
@@ -171,6 +185,8 @@ final class SmartRewriteAutoRuleDialog: NSObject {
     private func buildRuleRow(_ rowModel: RuleRow) -> NSView {
         let row = NSStackView(views: [
             rowModel.enabledButton,
+            rowModel.targetButton,
+            rowModel.contentButton,
             rowModel.titleField,
             rowModel.keywordField,
             rowModel.modePicker,
@@ -180,8 +196,10 @@ final class SmartRewriteAutoRuleDialog: NSObject {
         row.spacing = 8
         NSLayoutConstraint.activate([
             rowModel.enabledButton.widthAnchor.constraint(equalToConstant: 34),
-            rowModel.titleField.widthAnchor.constraint(equalToConstant: 118),
-            rowModel.keywordField.widthAnchor.constraint(equalToConstant: 266),
+            rowModel.targetButton.widthAnchor.constraint(equalToConstant: 34),
+            rowModel.contentButton.widthAnchor.constraint(equalToConstant: 34),
+            rowModel.titleField.widthAnchor.constraint(equalToConstant: 108),
+            rowModel.keywordField.widthAnchor.constraint(equalToConstant: 244),
             rowModel.modePicker.widthAnchor.constraint(equalToConstant: 116),
             row.heightAnchor.constraint(equalToConstant: 30),
         ])
@@ -195,4 +213,3 @@ final class SmartRewriteAutoRuleDialog: NSObject {
         return label
     }
 }
-
