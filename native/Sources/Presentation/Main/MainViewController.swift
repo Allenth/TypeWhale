@@ -11,14 +11,14 @@ final class MainViewController: NSViewController {
         case error
     }
 
-    private let contentWidth: CGFloat = 920
-    private let contentHeight: CGFloat = 560
-    private let leftColumnWidth: CGFloat = 200
-    private let leftTopInset: CGFloat = 28
-    private let rightTopInset: CGFloat = 18
-    private let recentViewportHeight: CGFloat = 190
-    private let brandIconVisibleSize: CGFloat = 48
-    private let maxRecentTranscriptions = 20
+    let contentWidth: CGFloat = 920
+    let contentHeight: CGFloat = 560
+    let leftColumnWidth: CGFloat = 200
+    let leftTopInset: CGFloat = 28
+    let rightTopInset: CGFloat = 18
+    let recentViewportHeight: CGFloat = 190
+    let brandIconVisibleSize: CGFloat = 48
+    let maxRecentTranscriptions = 20
 
     let status = label("等待录音", size: 15, weight: .semibold)
     let detail = label("Fn 录音", size: 12)
@@ -98,43 +98,43 @@ final class MainViewController: NSViewController {
     let screenshotSaveLocationButton = NSButton(title: "下载", target: nil, action: nil)
     let realtimeDraft = label("等待实时文本", size: 12)
     let realtimeTextView = NSTextView()
-    private let realtimeScroll = NSScrollView()
-    private let memoryLabel = label("内存 -- MB", size: 11, weight: .medium)
-    private var lastMemoryLevel: MemoryMonitor.Level = .normal
+    let realtimeScroll = NSScrollView()
+    let memoryLabel = label("内存 -- MB", size: 11, weight: .medium)
+    var lastMemoryLevel: MemoryMonitor.Level = .normal
     var onInstallModel: (() -> Void)?
     var onHotkeysChange: ((HotkeyBinding, HotkeyBinding?, HotkeyBinding, HotkeyBinding?, HotkeyBinding, HotkeyBinding?, HotkeyBinding?) -> Void)?
-    private var preferencesViewController: NSViewController?
+    var preferencesViewController: NSViewController?
 
-    private let modelEntryName = label("SenseVoice int8", size: 13, weight: .semibold)
-    private let modelEntryStatus = label("检查中", size: 11, weight: .medium)
-    private let modelEntryDot = NSView()
-    private let modelPathLabel = label("", size: 11)
-    private let statusDot = NSView()
-    private let waveform = MiniWaveformView()
-    private let processingProgress = NSProgressIndicator()
+    let modelEntryName = label("SenseVoice int8", size: 13, weight: .semibold)
+    let modelEntryStatus = label("检查中", size: 11, weight: .medium)
+    let modelEntryDot = NSView()
+    let modelPathLabel = label("", size: 11)
+    let statusDot = NSView()
+    let waveform = MiniWaveformView()
+    let processingProgress = NSProgressIndicator()
 
-    private let recentStack = FlippedStackView()
-    private let recentScroll = NSScrollView()
-    private var recentRecords: [RecentTranscription] = []
-    private var isCapturingHotkey = false
-    private var capturingChannel: SpeechInputChannel?
-    private var capturingHotkeySlot: HotkeySlot?
-    private var hotkeyCaptureMonitor: Any?
-    private var hotkeyCaptureTap: CFMachPort?
-    private var hotkeyCaptureSource: CFRunLoopSource?
-    private var captureModifierKeyCodes: Set<Int> = []
-    private var captureConfirmWorkItem: DispatchWorkItem?
-    private var usageGuidePopover: NSPopover?
-    private var versionHistoryPopover: NSPopover?
-    private var testLogsPopover: NSPopover?
-    private var preferencesPopover: NSPopover?
-    private var modelDetailPopover: NSPopover?
-    private var deepSeekBalancePopover: NSPopover?
-    private let deepSeekBalanceClient = DeepSeekBalanceClient()
-    private lazy var versionHistoryViewController = VersionHistoryViewController()
-    private lazy var testLogsViewController = TestLogsViewController()
+    let recentStack = FlippedStackView()
+    let recentScroll = NSScrollView()
+    var recentRecords: [RecentTranscription] = []
+    var isCapturingHotkey = false
+    var capturingChannel: SpeechInputChannel?
+    var capturingHotkeySlot: HotkeySlot?
+    var hotkeyCaptureMonitor: Any?
+    var hotkeyCaptureTap: CFMachPort?
+    var hotkeyCaptureSource: CFRunLoopSource?
+    var captureModifierKeyCodes: Set<Int> = []
+    var captureConfirmWorkItem: DispatchWorkItem?
+    var usageGuidePopover: NSPopover?
+    var versionHistoryPopover: NSPopover?
+    var testLogsPopover: NSPopover?
+    var preferencesPopover: NSPopover?
+    var modelDetailPopover: NSPopover?
+    var deepSeekBalancePopover: NSPopover?
+    let deepSeekBalanceClient = DeepSeekBalanceClient()
+    lazy var versionHistoryViewController = VersionHistoryViewController()
+    lazy var testLogsViewController = TestLogsViewController()
 
-    private enum HotkeySlot {
+    enum HotkeySlot {
         case primary
         case secondary
         case screenshot
@@ -144,7 +144,7 @@ final class MainViewController: NSViewController {
         case mainWindow
     }
 
-    private enum MediaKeyCapture {
+    enum MediaKeyCapture {
         static let systemDefinedEventType = CGEventType(rawValue: 14)!
         static let auxControlButtonSubtype = 8
         static let play = 16
@@ -234,7 +234,7 @@ final class MainViewController: NSViewController {
 
     // MARK: - Left column
 
-    private func buildLeftColumn() -> NSView {
+    func buildLeftColumn() -> NSView {
         let container = NSView()
         container.translatesAutoresizingMaskIntoConstraints = false
         container.wantsLayer = true
@@ -333,7 +333,7 @@ final class MainViewController: NSViewController {
         return container
     }
 
-    private func footerIconButton(title: String, symbolName: String, action: Selector) -> NSButton {
+    func footerIconButton(title: String, symbolName: String, action: Selector) -> NSButton {
         let button = NSButton(title: "", target: self, action: action)
         let config = NSImage.SymbolConfiguration(pointSize: 15, weight: .medium)
         button.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: title)?
@@ -353,7 +353,7 @@ final class MainViewController: NSViewController {
         return button
     }
 
-    private func buildSidebarQuickSettings() -> NSView {
+    func buildSidebarQuickSettings() -> NSView {
         smartRewriteMode.widthAnchor.constraint(equalToConstant: 86).isActive = true
         translationDirectionMode.widthAnchor.constraint(equalToConstant: 80).isActive = true
         smartRewriteMode.controlSize = .small
@@ -374,7 +374,7 @@ final class MainViewController: NSViewController {
         return section("快捷设置", card)
     }
 
-    private func buildCenterColumn() -> NSView {
+    func buildCenterColumn() -> NSView {
         let sessionPanel = buildSessionPanel()
         sessionPanel.setContentHuggingPriority(.required, for: .vertical)
         sessionPanel.setContentCompressionResistancePriority(.required, for: .vertical)
@@ -423,7 +423,7 @@ final class MainViewController: NSViewController {
         return stack
     }
 
-    private func buildSessionPanel() -> NSView {
+    func buildSessionPanel() -> NSView {
         status.alignment = .center
         status.maximumNumberOfLines = 1
         status.lineBreakMode = .byTruncatingTail
@@ -548,7 +548,7 @@ final class MainViewController: NSViewController {
         return box
     }
 
-    private func configureRealtimeTextView() {
+    func configureRealtimeTextView() {
         realtimeTextView.isEditable = false
         realtimeTextView.isSelectable = true
         realtimeTextView.drawsBackground = false
@@ -607,7 +607,7 @@ final class MainViewController: NSViewController {
         realtimeTextView.scrollToEndOfDocument(nil)
     }
 
-    private func buildStatusPanel() -> NSView {
+    func buildStatusPanel() -> NSView {
         status.alignment = .center
         status.maximumNumberOfLines = 1
         status.lineBreakMode = .byTruncatingTail
@@ -684,7 +684,7 @@ final class MainViewController: NSViewController {
         return box
     }
 
-    private func buildModelEntry() -> NSView {
+    func buildModelEntry() -> NSView {
         let caption = label("当前模型", size: 10, weight: .medium)
         caption.textColor = UITheme.sectionTitle
         modelEntryName.maximumNumberOfLines = 1
@@ -722,7 +722,7 @@ final class MainViewController: NSViewController {
         return box
     }
 
-    private func buildRealtimeDraftEntry() -> NSView {
+    func buildRealtimeDraftEntry() -> NSView {
         realtimeDraft.textColor = .secondaryLabelColor
         realtimeDraft.maximumNumberOfLines = 4
         realtimeDraft.lineBreakMode = .byWordWrapping
@@ -742,7 +742,7 @@ final class MainViewController: NSViewController {
         return section("实时文本", roundedBox(draftContent, hPad: 12, vPad: 10))
     }
 
-    private func buildPermissionEntry() -> NSView {
+    func buildPermissionEntry() -> NSView {
         let micButton = sidebarPermissionButton(accessibilityLabel: "打开麦克风权限设置", action: #selector(openMicrophone))
         let accessButton = sidebarPermissionButton(accessibilityLabel: "打开辅助功能权限设置", action: #selector(openAccessibility))
         let screenButton = sidebarPermissionButton(accessibilityLabel: "打开屏幕录制权限设置", action: #selector(openScreenRecording))
@@ -756,7 +756,7 @@ final class MainViewController: NSViewController {
         return section("权限", card)
     }
 
-    private func sidebarPermissionButton(accessibilityLabel: String, action: Selector) -> NSButton {
+    func sidebarPermissionButton(accessibilityLabel: String, action: Selector) -> NSButton {
         let button = NSButton()
         button.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: accessibilityLabel)
         button.bezelStyle = .inline
@@ -775,7 +775,7 @@ final class MainViewController: NSViewController {
         return button
     }
 
-    private func sidebarPermissionRow(icon: String, name: String, status: NSTextField, button: NSButton) -> NSView {
+    func sidebarPermissionRow(icon: String, name: String, status: NSTextField, button: NSButton) -> NSView {
         let iconView = symbolIcon(icon, size: 13)
         let nameLabel = label(name, size: 11, weight: .medium)
         nameLabel.maximumNumberOfLines = 1
@@ -812,7 +812,7 @@ final class MainViewController: NSViewController {
         return controller
     }
 
-    private func buildPreferencesContentView() -> NSView {
+    func buildPreferencesContentView() -> NSView {
         [hotkeyValue, secondaryHotkeyValue, screenshotHotkeyValue, secondaryScreenshotHotkeyValue, screenshotTranslationHotkeyValue, autoTranslateHotkeyValue, mainWindowHotkeyValue].forEach {
             $0.lineBreakMode = .byTruncatingMiddle
         }
@@ -927,7 +927,7 @@ final class MainViewController: NSViewController {
         return content
     }
 
-    private func preferencesTab(_ title: String, _ rows: [NSView], caption: String? = nil) -> NSTabViewItem {
+    func preferencesTab(_ title: String, _ rows: [NSView], caption: String? = nil) -> NSTabViewItem {
         let card = listCard(rows, hPad: UILayout.cardPadH, vPad: UILayout.cardPadV)
         var arranged: [NSView] = [card]
         if let caption {
@@ -960,11 +960,11 @@ final class MainViewController: NSViewController {
         return item
     }
 
-    @objc private func openPreferences() {
+    @objc func openPreferences() {
         showPreferencesPopoverFromMenu()
     }
 
-    private func section(_ title: String, _ card: NSView) -> NSView {
+    func section(_ title: String, _ card: NSView) -> NSView {
         let stack = NSStackView(views: [sectionHeader(title), card])
         stack.orientation = .vertical
         stack.alignment = .leading
@@ -973,7 +973,7 @@ final class MainViewController: NSViewController {
         return stack
     }
 
-    private func shortcutRow(
+    func shortcutRow(
         title: String,
         captureButton: NSButton,
         fallbackButton: NSButton
@@ -991,7 +991,7 @@ final class MainViewController: NSViewController {
         return row
     }
 
-    private func optionRow(_ title: String, _ control: NSView) -> NSView {
+    func optionRow(_ title: String, _ control: NSView) -> NSView {
         let titleLabel = label(title, size: 12)
         control.translatesAutoresizingMaskIntoConstraints = false
         control.setAccessibilityLabel(title)
@@ -1003,7 +1003,7 @@ final class MainViewController: NSViewController {
         return row
     }
 
-    private func compactOptionRow(_ title: String, _ control: NSView) -> NSView {
+    func compactOptionRow(_ title: String, _ control: NSView) -> NSView {
         let titleLabel = label(title, size: 10, weight: .medium)
         titleLabel.textColor = NSColor(calibratedWhite: 1, alpha: 0.72)
         titleLabel.maximumNumberOfLines = 1
@@ -1018,7 +1018,7 @@ final class MainViewController: NSViewController {
         return row
     }
 
-    private func stackedOptionRow(_ title: String, _ control: NSView) -> NSView {
+    func stackedOptionRow(_ title: String, _ control: NSView) -> NSView {
         let titleLabel = label(title, size: 12, weight: .medium)
         titleLabel.textColor = .secondaryLabelColor
         control.translatesAutoresizingMaskIntoConstraints = false
@@ -1033,7 +1033,7 @@ final class MainViewController: NSViewController {
         return row
     }
 
-    private func configureOptionAccessibility() {
+    func configureOptionAccessibility() {
         smartRewriteMode.setAccessibilityLabel("智能整理")
         asrBackendMode.setAccessibilityLabel("识别模型")
         asrBackendMode.toolTip = "选择 final 识别使用的本地 ASR 后端"
@@ -1052,7 +1052,7 @@ final class MainViewController: NSViewController {
         launchAtLogin.setAccessibilityLabel("开机自动启动")
     }
 
-    private func configureSmartRewriteModeMenu(_ preference: SmartRewritePreference) {
+    func configureSmartRewriteModeMenu(_ preference: SmartRewritePreference) {
         smartRewriteMode.removeAllItems()
         for item in SmartRewritePreference.allCases {
             smartRewriteMode.addItem(withTitle: item.displayName)
@@ -1065,7 +1065,7 @@ final class MainViewController: NSViewController {
         smartRewriteMode.font = .systemFont(ofSize: 12)
     }
 
-    private func configureASRBackendMenu(_ backend: ASRBackend) {
+    func configureASRBackendMenu(_ backend: ASRBackend) {
         asrBackendMode.removeAllItems()
         for item in ASRBackend.allCases {
             asrBackendMode.addItem(withTitle: item.displayName)
@@ -1078,7 +1078,7 @@ final class MainViewController: NSViewController {
         asrBackendMode.font = .systemFont(ofSize: 12)
     }
 
-    private func configureDeepSeekKeyButton() {
+    func configureDeepSeekKeyButton() {
         deepSeekKeyButton.target = self
         deepSeekKeyButton.action = #selector(configureDeepSeekAPIKey)
         deepSeekKeyButton.bezelStyle = .rounded
@@ -1094,7 +1094,7 @@ final class MainViewController: NSViewController {
         refreshDeepSeekKeyButton()
     }
 
-    private func configurePromptSettingsButton() {
+    func configurePromptSettingsButton() {
         promptSettingsButton.target = self
         promptSettingsButton.action = #selector(configureSmartRewritePrompts)
         promptSettingsButton.bezelStyle = .rounded
@@ -1103,7 +1103,7 @@ final class MainViewController: NSViewController {
         promptSettingsButton.toolTip = "调整、修改并保存智能整理提示词"
     }
 
-    private func configureAutoScopeButton() {
+    func configureAutoScopeButton() {
         autoScopeButton.target = self
         autoScopeButton.action = #selector(configureSmartRewriteAutoRules)
         autoScopeButton.bezelStyle = .rounded
@@ -1112,7 +1112,7 @@ final class MainViewController: NSViewController {
         autoScopeButton.toolTip = "设置自动模式在不同窗口中使用的整理模式"
     }
 
-    private func configureDeveloperTermsButton() {
+    func configureDeveloperTermsButton() {
         developerTermsButton.target = self
         developerTermsButton.action = #selector(configureDeveloperTerms)
         developerTermsButton.bezelStyle = .rounded
@@ -1121,7 +1121,7 @@ final class MainViewController: NSViewController {
         developerTermsButton.toolTip = "管理开发术语和别名"
     }
 
-    private func configureTranslationPromptButton() {
+    func configureTranslationPromptButton() {
         translationPromptButton.target = self
         translationPromptButton.action = #selector(configureTranslationPrompts)
         translationPromptButton.bezelStyle = .rounded
@@ -1130,7 +1130,7 @@ final class MainViewController: NSViewController {
         translationPromptButton.toolTip = "调整、修改并保存自动翻译提示词"
     }
 
-    private func configureScreenshotSaveLocationButton() {
+    func configureScreenshotSaveLocationButton() {
         screenshotSaveLocationButton.target = self
         screenshotSaveLocationButton.action = #selector(configureScreenshotSaveLocation)
         screenshotSaveLocationButton.bezelStyle = .rounded
@@ -1139,12 +1139,12 @@ final class MainViewController: NSViewController {
         refreshScreenshotSaveLocationButton()
     }
 
-    private func refreshScreenshotSaveLocationButton() {
+    func refreshScreenshotSaveLocationButton() {
         screenshotSaveLocationButton.title = ScreenshotSaveLocationStore.displayName
         screenshotSaveLocationButton.toolTip = "当前保存到：\(ScreenshotSaveLocationStore.directory.path)"
     }
 
-    private func refreshDeepSeekKeyButton() {
+    func refreshDeepSeekKeyButton() {
         let hasKey = DeepSeekAPIKeyStore.hasAPIKey()
         deepSeekKeyButton.title = "Key"
         deepSeekKeyButton.contentTintColor = hasKey ? UITheme.brandYellow : .secondaryLabelColor
@@ -1168,7 +1168,7 @@ final class MainViewController: NSViewController {
         detail.stringValue = "自动翻译\(stateText) · Shift + \\"
     }
 
-    private func configureTranslationDirectionMenu(_ direction: SmartTranslationDirection) {
+    func configureTranslationDirectionMenu(_ direction: SmartTranslationDirection) {
         translationDirectionMode.removeAllItems()
         for item in SmartTranslationDirection.allCases {
             translationDirectionMode.addItem(withTitle: item.displayName)
@@ -1181,14 +1181,14 @@ final class MainViewController: NSViewController {
         translationDirectionMode.font = .systemFont(ofSize: 12)
     }
 
-    private func versionText() -> String {
+    func versionText() -> String {
         let info = Bundle.main.infoDictionary
         let version = info?["CFBundleShortVersionString"] as? String ?? "1.2.42"
         let build = info?["CFBundleVersion"] as? String ?? "199"
         return "Version \(version) (\(build))"
     }
 
-    private func loadBrandIcon() -> NSImage? {
+    func loadBrandIcon() -> NSImage? {
         guard let image = loadAppIcon() else { return nil }
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return image
@@ -1204,7 +1204,7 @@ final class MainViewController: NSViewController {
         return NSImage(cgImage: cropped, size: NSSize(width: brandIconVisibleSize, height: brandIconVisibleSize))
     }
 
-    private func loadAppIcon() -> NSImage? {
+    func loadAppIcon() -> NSImage? {
         if let image = NSImage(named: "TypeWhale") {
             return image
         }
@@ -1214,7 +1214,7 @@ final class MainViewController: NSViewController {
         return NSImage(named: NSImage.applicationIconName)
     }
 
-    @objc private func showUsageGuide(_ sender: NSButton) {
+    @objc func showUsageGuide(_ sender: NSButton) {
         if let popover = usageGuidePopover, popover.isShown {
             popover.performClose(nil)
             return
@@ -1228,7 +1228,7 @@ final class MainViewController: NSViewController {
         popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxY)
     }
 
-    private func makeUsageGuideController() -> NSViewController {
+    func makeUsageGuideController() -> NSViewController {
         let title = label("使用方法", size: 14, weight: .semibold)
         let body = label(
             """
@@ -1263,7 +1263,7 @@ final class MainViewController: NSViewController {
         return controller
     }
 
-    @objc private func showVersionHistory(_ sender: NSButton) {
+    @objc func showVersionHistory(_ sender: NSButton) {
         if let popover = versionHistoryPopover, popover.isShown {
             popover.performClose(nil)
             return
@@ -1277,7 +1277,7 @@ final class MainViewController: NSViewController {
         popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxX)
     }
 
-    @objc private func showTestLogs(_ sender: NSButton) {
+    @objc func showTestLogs(_ sender: NSButton) {
         if let popover = testLogsPopover, popover.isShown {
             popover.performClose(nil)
             return
@@ -1292,7 +1292,7 @@ final class MainViewController: NSViewController {
         popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxX)
     }
 
-    @objc private func showPreferencesPopover(_ sender: NSButton) {
+    @objc func showPreferencesPopover(_ sender: NSButton) {
         showPreferencesPopover(relativeTo: sender.bounds, of: sender)
     }
 
@@ -1301,7 +1301,7 @@ final class MainViewController: NSViewController {
         showPreferencesPopover(relativeTo: anchor, of: view)
     }
 
-    private func showPreferencesPopover(relativeTo rect: NSRect, of anchorView: NSView) {
+    func showPreferencesPopover(relativeTo rect: NSRect, of anchorView: NSView) {
         if let popover = preferencesPopover, popover.isShown {
             popover.performClose(nil)
             return
@@ -1317,7 +1317,7 @@ final class MainViewController: NSViewController {
         popover.show(relativeTo: rect, of: anchorView, preferredEdge: .maxX)
     }
 
-    @objc private func showModelDetail(_ sender: NSGestureRecognizer) {
+    @objc func showModelDetail(_ sender: NSGestureRecognizer) {
         guard let anchor = sender.view else { return }
         if let popover = modelDetailPopover, popover.isShown {
             popover.performClose(nil)
@@ -1334,7 +1334,7 @@ final class MainViewController: NSViewController {
         popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .maxX)
     }
 
-    private func makeModelDetailController() -> NSViewController {
+    func makeModelDetailController() -> NSViewController {
         let icon = symbolIcon("cpu", size: 18, color: UITheme.brandYellow)
         let title = label("本地 ASR 模型", size: 14, weight: .semibold)
         let titleRow = NSStackView(views: [icon, title])
@@ -1403,7 +1403,7 @@ final class MainViewController: NSViewController {
         return controller
     }
 
-    @objc private func saveSettings() {
+    @objc func saveSettings() {
         if autoFinish.state == .on {
             realtime.state = .on
             realtime.needsDisplay = true
@@ -1424,7 +1424,7 @@ final class MainViewController: NSViewController {
         refreshDisplayedModelState()
     }
 
-    @objc private func configureSmartRewritePrompts() {
+    @objc func configureSmartRewritePrompts() {
         let dialog = SmartRewritePromptDialog(initialMode: smartRewritePreference.manualMode ?? .developerRequirement)
         switch dialog.runModal() {
         case .save(let mode, let template):
@@ -1438,7 +1438,7 @@ final class MainViewController: NSViewController {
         }
     }
 
-    @objc private func configureSmartRewriteAutoRules() {
+    @objc func configureSmartRewriteAutoRules() {
         let dialog = SmartRewriteAutoRuleDialog(configuration: SmartRewriteAutoRuleStore.load())
         switch dialog.runModal() {
         case .save(let configuration):
@@ -1452,7 +1452,7 @@ final class MainViewController: NSViewController {
         }
     }
 
-    @objc private func configureTranslationPrompts() {
+    @objc func configureTranslationPrompts() {
         let dialog = SmartTranslationPromptDialog(initialDirection: translationDirection)
         switch dialog.runModal() {
         case .save(let direction, let template):
@@ -1466,7 +1466,7 @@ final class MainViewController: NSViewController {
         }
     }
 
-    @objc private func configureDeveloperTerms() {
+    @objc func configureDeveloperTerms() {
         switch DeveloperLexiconDialog().runModal() {
         case .save(let terms):
             DeveloperLexiconStore.save(terms)
@@ -1479,7 +1479,7 @@ final class MainViewController: NSViewController {
         }
     }
 
-    @objc private func configureScreenshotSaveLocation() {
+    @objc func configureScreenshotSaveLocation() {
         let panel = NSOpenPanel()
         panel.title = "选择截图保存位置"
         panel.message = "截图会直接保存到这个文件夹；如果位置不可用，会自动回到下载文件夹。"
@@ -1499,7 +1499,7 @@ final class MainViewController: NSViewController {
         detail.stringValue = "截图保存位置已更新：\(ScreenshotSaveLocationStore.displayName)"
     }
 
-    @objc private func configureDeepSeekAPIKey() {
+    @objc func configureDeepSeekAPIKey() {
         let alert = NSAlert()
         alert.messageText = "DeepSeek API Key"
         alert.informativeText = "用于智能整理和自动翻译，保存到 macOS Keychain。TypeWhale 使用 deepseek-v4-flash，并关闭 thinking。"
@@ -1532,13 +1532,13 @@ final class MainViewController: NSViewController {
         }
     }
 
-    private func showDeepSeekKeyError(_ error: Error) {
+    func showDeepSeekKeyError(_ error: Error) {
         let alert = NSAlert(error: error)
         alert.messageText = "DeepSeek Key 保存失败"
         alert.runModal()
     }
 
-    @objc private func showDeepSeekBalance(_ sender: NSButton) {
+    @objc func showDeepSeekBalance(_ sender: NSButton) {
         if let popover = deepSeekBalancePopover, popover.isShown {
             popover.close()
             return
@@ -1569,7 +1569,7 @@ final class MainViewController: NSViewController {
         }
     }
 
-    @objc private func toggleLaunchAtLogin() {
+    @objc func toggleLaunchAtLogin() {
         do {
             try LoginItemManager.setEnabled(launchAtLogin.state == .on)
             refreshLaunchAtLoginState()
@@ -1582,7 +1582,7 @@ final class MainViewController: NSViewController {
         }
     }
 
-    private func refreshLaunchAtLoginState() {
+    func refreshLaunchAtLoginState() {
         launchAtLogin.isEnabled = true
         launchAtLogin.state = (LoginItemManager.isEnabled || LoginItemManager.isPendingApproval) ? .on : .off
         launchAtLogin.needsDisplay = true
@@ -1591,444 +1591,7 @@ final class MainViewController: NSViewController {
             : "登录 macOS 后自动启动 TypeWhale"
     }
 
-    @objc private func beginHotkeyCapture() {
-        beginHotkeyCaptureForSlot(.primary)
-    }
-
-    @objc private func beginSecondaryHotkeyCapture() {
-        beginHotkeyCaptureForSlot(.secondary)
-    }
-
-    @objc private func beginScreenshotHotkeyCapture() {
-        beginHotkeyCaptureForSlot(.screenshot)
-    }
-
-    @objc private func beginSecondaryScreenshotHotkeyCapture() {
-        beginHotkeyCaptureForSlot(.screenshotSecondary)
-    }
-
-    @objc private func beginScreenshotTranslationHotkeyCapture() {
-        beginHotkeyCaptureForSlot(.screenshotTranslation)
-    }
-
-    @objc private func beginAutoTranslateHotkeyCapture() {
-        beginHotkeyCaptureForSlot(.autoTranslate)
-    }
-
-    @objc private func beginMainWindowHotkeyCapture() {
-        beginHotkeyCaptureForSlot(.mainWindow)
-    }
-
-    private func beginHotkeyCaptureForSlot(_ slot: HotkeySlot) {
-        guard !isCapturingHotkey else { return }
-        isCapturingHotkey = true
-        capturingChannel = .chinese
-        capturingHotkeySlot = slot
-        captureModifierKeyCodes.removeAll()
-        activeHotkeyButton?.title = "请按快捷键或耳机播放键…"
-        hotkeyCaptureButton.isEnabled = false
-        secondaryHotkeyCaptureButton.isEnabled = false
-        screenshotHotkeyCaptureButton.isEnabled = false
-        secondaryScreenshotHotkeyCaptureButton.isEnabled = false
-        screenshotTranslationHotkeyCaptureButton.isEnabled = false
-        autoTranslateHotkeyCaptureButton.isEnabled = false
-        mainWindowHotkeyCaptureButton.isEnabled = false
-        startHotkeyCaptureTap()
-        hotkeyCaptureMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged, .systemDefined]) { [weak self] event in
-            guard let self else { return event }
-            self.capture(event: event)
-            return nil
-        }
-    }
-
-    @objc private func resetHotkey() {
-        applyHotkey(.defaultBinding, slot: .primary, channel: .chinese)
-    }
-
-    @objc private func resetScreenshotHotkey() {
-        applyHotkey(.screenshotDefaultBinding, slot: .screenshot, channel: .chinese)
-    }
-
-    @objc private func resetScreenshotTranslationHotkey() {
-        applyHotkey(.screenshotTranslationDefaultBinding, slot: .screenshotTranslation, channel: .chinese)
-    }
-
-    @objc private func clearSecondaryScreenshotHotkey() {
-        endHotkeyCapture()
-        HotkeyBinding.clear(storageKey: HotkeyBinding.secondaryScreenshotStorageKey)
-        refreshHotkeyLabels()
-        emitHotkeysChange()
-    }
-
-    @objc private func clearMainWindowHotkey() {
-        endHotkeyCapture()
-        HotkeyBinding.clear(storageKey: HotkeyBinding.mainWindowStorageKey)
-        refreshHotkeyLabels()
-        emitHotkeysChange()
-    }
-
-    @objc private func clearAutoTranslateHotkey() {
-        endHotkeyCapture()
-        HotkeyBinding.clear(storageKey: HotkeyBinding.autoTranslateStorageKey)
-        refreshHotkeyLabels()
-        emitHotkeysChange()
-    }
-
-    @objc private func clearSecondaryHotkey() {
-        endHotkeyCapture()
-        HotkeyBinding.clear(storageKey: HotkeyBinding.secondaryChineseStorageKey)
-        updateHotkeys(
-            primary: HotkeyBinding.load(storageKey: HotkeyBinding.chineseStorageKey, fallback: .defaultBinding),
-            secondary: nil,
-            screenshot: HotkeyBinding.load(storageKey: HotkeyBinding.screenshotStorageKey, fallback: .screenshotDefaultBinding),
-            secondaryScreenshot: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryScreenshotStorageKey),
-            screenshotTranslation: HotkeyBinding.load(
-                storageKey: HotkeyBinding.screenshotTranslationStorageKey,
-                fallback: .screenshotTranslationDefaultBinding
-            ),
-            autoTranslate: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.autoTranslateStorageKey),
-            mainWindow: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey)
-        )
-        emitHotkeysChange()
-    }
-
-    func updateHotkeys(
-        primary: HotkeyBinding,
-        secondary: HotkeyBinding?,
-        screenshot: HotkeyBinding,
-        secondaryScreenshot: HotkeyBinding?,
-        screenshotTranslation: HotkeyBinding,
-        autoTranslate: HotkeyBinding?,
-        mainWindow: HotkeyBinding?
-    ) {
-        hotkeyValue.stringValue = primary.displayName
-        hotkeyValue.textColor = NSColor(calibratedWhite: 1, alpha: 0.92)
-        hotkeyCaptureButton.title = primary.displayName
-        hotkeyCaptureButton.toolTip = "点击录入主快捷键"
-        secondaryHotkeyValue.stringValue = secondary?.displayName ?? "未设置"
-        secondaryHotkeyValue.textColor = secondary == nil ? .tertiaryLabelColor : NSColor(calibratedWhite: 1, alpha: 0.92)
-        secondaryHotkeyCaptureButton.title = secondary?.displayName ?? "未设置"
-        secondaryHotkeyCaptureButton.toolTip = "点击录入备用快捷键"
-        screenshotHotkeyValue.stringValue = screenshot.screenshotDisplayName
-        screenshotHotkeyValue.textColor = NSColor(calibratedWhite: 1, alpha: 0.92)
-        screenshotHotkeyCaptureButton.title = screenshot.screenshotDisplayName
-        screenshotHotkeyCaptureButton.toolTip = "点击录入截图快捷键：双击修饰键、修饰键+按键组合，或耳机播放键"
-        secondaryScreenshotHotkeyValue.stringValue = secondaryScreenshot?.screenshotDisplayName ?? "未设置"
-        secondaryScreenshotHotkeyValue.textColor = secondaryScreenshot == nil ? .tertiaryLabelColor : NSColor(calibratedWhite: 1, alpha: 0.92)
-        secondaryScreenshotHotkeyCaptureButton.title = secondaryScreenshot?.screenshotDisplayName ?? "未设置"
-        secondaryScreenshotHotkeyCaptureButton.toolTip = "点击录入截图备用快捷键"
-        screenshotTranslationHotkeyValue.stringValue = screenshotTranslation.screenshotDisplayName
-        screenshotTranslationHotkeyValue.textColor = NSColor(calibratedWhite: 1, alpha: 0.92)
-        screenshotTranslationHotkeyCaptureButton.title = screenshotTranslation.screenshotDisplayName
-        screenshotTranslationHotkeyCaptureButton.toolTip = "点击录入翻译截图快捷键：双击修饰键、修饰键+按键组合，或耳机播放键"
-        autoTranslateHotkeyValue.stringValue = autoTranslate?.actionDisplayName ?? "未设置"
-        autoTranslateHotkeyValue.textColor = autoTranslate == nil ? .tertiaryLabelColor : NSColor(calibratedWhite: 1, alpha: 0.92)
-        autoTranslateHotkeyCaptureButton.title = autoTranslate?.actionDisplayName ?? "未设置"
-        autoTranslateHotkeyCaptureButton.toolTip = "点击录入自动翻译开关快捷键，可使用耳机播放键"
-        mainWindowHotkeyValue.stringValue = mainWindow?.actionDisplayName ?? "未设置"
-        mainWindowHotkeyValue.textColor = mainWindow == nil ? .tertiaryLabelColor : NSColor(calibratedWhite: 1, alpha: 0.92)
-        mainWindowHotkeyCaptureButton.title = mainWindow?.actionDisplayName ?? "未设置"
-        mainWindowHotkeyCaptureButton.toolTip = "点击录入唤起主页快捷键，可使用耳机播放键"
-        detail.stringValue = "\(primary.displayName) 录音"
-    }
-
-    func updateHotkey(_ binding: HotkeyBinding) {
-        updateHotkeys(
-            primary: binding,
-            secondary: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryChineseStorageKey),
-            screenshot: HotkeyBinding.load(storageKey: HotkeyBinding.screenshotStorageKey, fallback: .screenshotDefaultBinding),
-            secondaryScreenshot: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryScreenshotStorageKey),
-            screenshotTranslation: HotkeyBinding.load(
-                storageKey: HotkeyBinding.screenshotTranslationStorageKey,
-                fallback: .screenshotTranslationDefaultBinding
-            ),
-            autoTranslate: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.autoTranslateStorageKey),
-            mainWindow: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey)
-        )
-    }
-
-    private func startHotkeyCaptureTap() {
-        stopHotkeyCaptureTap()
-        let mask = CGEventMask(
-            (1 << CGEventType.flagsChanged.rawValue) |
-            (1 << CGEventType.keyDown.rawValue) |
-            (1 << MediaKeyCapture.systemDefinedEventType.rawValue)
-        )
-        let context = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
-        hotkeyCaptureTap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
-            eventsOfInterest: mask,
-            callback: { _, type, event, context in
-                guard let context else { return Unmanaged.passUnretained(event) }
-                let controller = Unmanaged<MainViewController>.fromOpaque(context).takeUnretainedValue()
-                if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-                    if let tap = controller.hotkeyCaptureTap {
-                        CGEvent.tapEnable(tap: tap, enable: true)
-                    }
-                    return Unmanaged.passUnretained(event)
-                }
-                if controller.capture(event: event, type: type) {
-                    return nil
-                }
-                return Unmanaged.passUnretained(event)
-            },
-            userInfo: context
-        )
-        guard let hotkeyCaptureTap else { return }
-        hotkeyCaptureSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, hotkeyCaptureTap, 0)
-        CFRunLoopAddSource(CFRunLoopGetMain(), hotkeyCaptureSource, .commonModes)
-        CGEvent.tapEnable(tap: hotkeyCaptureTap, enable: true)
-    }
-
-    private func stopHotkeyCaptureTap() {
-        if let hotkeyCaptureSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), hotkeyCaptureSource, .commonModes)
-        }
-        hotkeyCaptureSource = nil
-        hotkeyCaptureTap = nil
-    }
-
-    private func capture(event: CGEvent, type: CGEventType) -> Bool {
-        guard isCapturingHotkey else { return false }
-        let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
-        if type == .flagsChanged {
-            if keyCode == HotkeyKeyCodes.function || event.flags.contains(.maskSecondaryFn) {
-                captureFunctionKey()
-                return true
-            }
-            captureModifier(keyCode: keyCode, cgFlags: event.flags)
-            return true
-        }
-        if type == MediaKeyCapture.systemDefinedEventType, captureMediaPlay(event: event) {
-            return true
-        }
-        guard type == .keyDown else { return false }
-        if keyCode == 53 {
-            captureConfirmWorkItem?.cancel()
-            endHotkeyCapture()
-            refreshHotkeyLabels()
-            return true
-        }
-        captureConfirmWorkItem?.cancel()
-        if captureModifierKeyCodes.isEmpty {
-            captureModifierKeyCodes = HotkeyKeyCodes.fallbackModifierKeyCodes(from: event.flags)
-        }
-        commitCapturedHotkey(keyCode: keyCode)
-        return true
-    }
-
-    private func capture(event: NSEvent) {
-        let keyCode = Int(event.keyCode)
-        if event.type == .systemDefined, captureMediaPlay(event: event) {
-            return
-        }
-        if event.type == .flagsChanged {
-            if keyCode == HotkeyKeyCodes.function || event.modifierFlags.contains(.function) {
-                captureFunctionKey()
-                return
-            }
-            captureModifier(keyCode: keyCode, modifierFlags: event.modifierFlags)
-            return
-        }
-
-        if keyCode == 53 {
-            captureConfirmWorkItem?.cancel()
-            endHotkeyCapture()
-            refreshHotkeyLabels()
-            return
-        }
-        captureConfirmWorkItem?.cancel()
-        if captureModifierKeyCodes.isEmpty {
-            captureModifierKeyCodes = HotkeyKeyCodes.fallbackModifierKeyCodes(from: event.modifierFlags)
-        }
-        commitCapturedHotkey(keyCode: keyCode)
-    }
-
-    private func captureModifier(keyCode: Int, modifierFlags: NSEvent.ModifierFlags) {
-        guard HotkeyKeyCodes.modifierKeyCodes.contains(keyCode) else { return }
-        let modifierFlag = HotkeyKeyCodes.modifierFlags(for: keyCode)
-        let isPressed = !modifierFlag.isEmpty && modifierFlags.contains(modifierFlag)
-        captureModifier(keyCode: keyCode, isPressed: isPressed)
-    }
-
-    private func captureModifier(keyCode: Int, cgFlags: CGEventFlags) {
-        guard HotkeyKeyCodes.modifierKeyCodes.contains(keyCode) else { return }
-        let modifierFlag = HotkeyKeyCodes.cgModifierFlags(for: keyCode)
-        let isPressed = !modifierFlag.isEmpty && cgFlags.contains(modifierFlag)
-        captureModifier(keyCode: keyCode, isPressed: isPressed)
-    }
-
-    private func captureModifier(keyCode: Int, isPressed: Bool) {
-        if isPressed {
-            captureModifierKeyCodes.insert(keyCode)
-            if capturingChannel != nil {
-                activeHotkeyButton?.title = "\(HotkeyKeyCodes.displayName(for: keyCode)) …"
-            }
-            scheduleModifierCaptureConfirmation(keyCode: keyCode)
-        } else {
-            captureConfirmWorkItem?.cancel()
-            commitCapturedHotkey(keyCode: keyCode)
-        }
-    }
-
-    private func captureFunctionKey() {
-        guard capturingChannel != nil else { return }
-        activeHotkeyButton?.title = "Fn …"
-        captureModifierKeyCodes = []
-        commitCapturedHotkey(keyCode: HotkeyKeyCodes.function)
-    }
-
-    private func captureMediaPlay(event: CGEvent) -> Bool {
-        guard let nsEvent = NSEvent(cgEvent: event) else { return false }
-        return captureMediaPlay(event: nsEvent)
-    }
-
-    private func captureMediaPlay(event: NSEvent) -> Bool {
-        guard isMediaPlayDown(event) else { return false }
-        captureConfirmWorkItem?.cancel()
-        activeHotkeyButton?.title = "耳机播放键 …"
-        captureModifierKeyCodes = []
-        applyCapturedHotkey(.mediaPlayBinding)
-        return true
-    }
-
-    private func isMediaPlayDown(_ event: NSEvent) -> Bool {
-        guard event.type == .systemDefined,
-              event.subtype.rawValue == MediaKeyCapture.auxControlButtonSubtype else {
-            return false
-        }
-        let data = event.data1
-        let keyCode = (data & 0xFFFF0000) >> 16
-        let keyState = (data & 0x0000FF00) >> 8
-        return keyCode == MediaKeyCapture.play && keyState == MediaKeyCapture.keyDownState
-    }
-
-    private func scheduleModifierCaptureConfirmation(keyCode: Int, delay: TimeInterval = 0.45) {
-        captureConfirmWorkItem?.cancel()
-        let workItem = DispatchWorkItem { [weak self] in
-            guard let self, self.isCapturingHotkey else { return }
-            self.commitCapturedHotkey(keyCode: keyCode)
-        }
-        captureConfirmWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
-    }
-
-    private func commitCapturedHotkey(keyCode: Int) {
-        guard let capturingChannel else { return }
-        guard let binding = HotkeyBinding.fromCapture(keyCode: keyCode, modifierKeyCodes: captureModifierKeyCodes) else {
-            showCaptureError("请加 Cmd/Option/Control", channel: capturingChannel)
-            return
-        }
-        applyCapturedHotkey(binding)
-    }
-
-    private func showCaptureError(_ message: String, channel: SpeechInputChannel) {
-        captureConfirmWorkItem?.cancel()
-        activeHotkeyButton?.title = message
-    }
-
-    private func applyCapturedHotkey(_ binding: HotkeyBinding) {
-        guard let capturingChannel, let capturingHotkeySlot else { return }
-        applyHotkey(binding, slot: capturingHotkeySlot, channel: capturingChannel)
-    }
-
-    private func applyHotkey(_ binding: HotkeyBinding, slot: HotkeySlot, channel: SpeechInputChannel) {
-        endHotkeyCapture()
-        switch slot {
-        case .primary:
-            binding.save(storageKey: HotkeyBinding.chineseStorageKey)
-        case .secondary:
-            binding.save(storageKey: HotkeyBinding.secondaryChineseStorageKey)
-        case .screenshot:
-            binding.save(storageKey: HotkeyBinding.screenshotStorageKey)
-        case .screenshotSecondary:
-            binding.save(storageKey: HotkeyBinding.secondaryScreenshotStorageKey)
-        case .screenshotTranslation:
-            binding.save(storageKey: HotkeyBinding.screenshotTranslationStorageKey)
-        case .autoTranslate:
-            binding.save(storageKey: HotkeyBinding.autoTranslateStorageKey)
-        case .mainWindow:
-            binding.save(storageKey: HotkeyBinding.mainWindowStorageKey)
-        }
-        refreshHotkeyLabels()
-        emitHotkeysChange()
-    }
-
-    private func endHotkeyCapture() {
-        captureConfirmWorkItem?.cancel()
-        captureConfirmWorkItem = nil
-        if let hotkeyCaptureMonitor {
-            NSEvent.removeMonitor(hotkeyCaptureMonitor)
-        }
-        hotkeyCaptureMonitor = nil
-        stopHotkeyCaptureTap()
-        isCapturingHotkey = false
-        capturingChannel = nil
-        capturingHotkeySlot = nil
-        hotkeyCaptureButton.isEnabled = true
-        secondaryHotkeyCaptureButton.isEnabled = true
-        screenshotHotkeyCaptureButton.isEnabled = true
-        secondaryScreenshotHotkeyCaptureButton.isEnabled = true
-        screenshotTranslationHotkeyCaptureButton.isEnabled = true
-        autoTranslateHotkeyCaptureButton.isEnabled = true
-        mainWindowHotkeyCaptureButton.isEnabled = true
-        captureModifierKeyCodes.removeAll()
-    }
-
-    private func refreshHotkeyLabels() {
-        updateHotkeys(
-            primary: HotkeyBinding.load(storageKey: HotkeyBinding.chineseStorageKey, fallback: .defaultBinding),
-            secondary: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryChineseStorageKey),
-            screenshot: HotkeyBinding.load(storageKey: HotkeyBinding.screenshotStorageKey, fallback: .screenshotDefaultBinding),
-            secondaryScreenshot: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryScreenshotStorageKey),
-            screenshotTranslation: HotkeyBinding.load(
-                storageKey: HotkeyBinding.screenshotTranslationStorageKey,
-                fallback: .screenshotTranslationDefaultBinding
-            ),
-            autoTranslate: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.autoTranslateStorageKey),
-            mainWindow: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey)
-        )
-    }
-
-    private func emitHotkeysChange() {
-        onHotkeysChange?(
-            HotkeyBinding.load(storageKey: HotkeyBinding.chineseStorageKey, fallback: .defaultBinding),
-            HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryChineseStorageKey),
-            HotkeyBinding.load(storageKey: HotkeyBinding.screenshotStorageKey, fallback: .screenshotDefaultBinding),
-            HotkeyBinding.loadOptional(storageKey: HotkeyBinding.secondaryScreenshotStorageKey),
-            HotkeyBinding.load(
-                storageKey: HotkeyBinding.screenshotTranslationStorageKey,
-                fallback: .screenshotTranslationDefaultBinding
-            ),
-            HotkeyBinding.loadOptional(storageKey: HotkeyBinding.autoTranslateStorageKey),
-            HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey)
-        )
-    }
-
-    private var activeHotkeyButton: NSButton? {
-        switch capturingHotkeySlot {
-        case .primary:
-            return hotkeyCaptureButton
-        case .secondary:
-            return secondaryHotkeyCaptureButton
-        case .screenshot:
-            return screenshotHotkeyCaptureButton
-        case .screenshotSecondary:
-            return secondaryScreenshotHotkeyCaptureButton
-        case .screenshotTranslation:
-            return screenshotTranslationHotkeyCaptureButton
-        case .autoTranslate:
-            return autoTranslateHotkeyCaptureButton
-        case .mainWindow:
-            return mainWindowHotkeyCaptureButton
-        case nil:
-            return nil
-        }
-    }
-
-    @objc private func installModel() {
+    @objc func installModel() {
         onInstallModel?()
     }
 
@@ -2036,7 +1599,7 @@ final class MainViewController: NSViewController {
         refreshDisplayedModelState(installerState: state)
     }
 
-    private func refreshDisplayedModelState(installerState state: SenseVoiceModelInstaller.State? = nil) {
+    func refreshDisplayedModelState(installerState state: SenseVoiceModelInstaller.State? = nil) {
         let selectedBackend = asrBackend.resolvedBackend
         modelEntryName.stringValue = asrBackend == .automatic
             ? "\(selectedBackend.displayName) · 自动"
@@ -2149,7 +1712,7 @@ final class MainViewController: NSViewController {
         }
     }
 
-    private func statusColor(for tone: PrimaryStatusTone) -> NSColor {
+    func statusColor(for tone: PrimaryStatusTone) -> NSColor {
         switch tone {
         case .idle, .success:
             return .systemGreen
@@ -2162,21 +1725,21 @@ final class MainViewController: NSViewController {
         }
     }
 
-    @objc private func openMicrophone() {
+    @objc func openMicrophone() {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")!)
     }
 
-    @objc private func openAccessibility() {
+    @objc func openAccessibility() {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         AXIsProcessTrustedWithOptions(options)
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
     }
 
-    @objc private func openScreenRecording() {
+    @objc func openScreenRecording() {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
     }
 
-    @objc private func openKeyboard() {
+    @objc func openKeyboard() {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension")!)
     }
 
@@ -2219,160 +1782,4 @@ final class MainViewController: NSViewController {
         SmartTranslationDirection.fromMenuTag(translationDirectionMode.selectedItem?.tag ?? 0)
     }
 
-    func addRecentTranscription(
-        _ text: String,
-        recognitionSeconds: Double,
-        sourceText: String? = nil,
-        translatedText: String? = nil,
-        translationDirection: SmartTranslationDirection? = nil,
-        usage: SmartUsage? = nil
-    ) {
-        guard !text.isEmpty else { return }
-        let record = RecentTranscription(
-            text: text,
-            recognitionSeconds: recognitionSeconds,
-            sourceText: sourceText,
-            translatedText: translatedText,
-            translationDirection: translationDirection,
-            usage: usage
-        )
-        recentRecords.insert(record, at: 0)
-        recentRecords = Array(recentRecords.prefix(maxRecentTranscriptions))
-        saveRecentTranscriptions()
-        rebuildRecentRows()
-    }
-
-    private func loadRecentTranscriptions() -> [RecentTranscription] {
-        if let data = UserDefaults.standard.data(forKey: "recentTranscriptionRecords"),
-           let records = try? JSONDecoder().decode([RecentTranscription].self, from: data) {
-            return Array(records.prefix(maxRecentTranscriptions))
-        }
-        let legacy = UserDefaults.standard.stringArray(forKey: "recentTranscriptions") ?? []
-        return Array(legacy.prefix(maxRecentTranscriptions)).map { RecentTranscription(text: $0, recognitionSeconds: nil) }
-    }
-
-    private func saveRecentTranscriptions() {
-        recentRecords = Array(recentRecords.prefix(maxRecentTranscriptions))
-        if let data = try? JSONEncoder().encode(recentRecords) {
-            UserDefaults.standard.set(data, forKey: "recentTranscriptionRecords")
-        }
-        UserDefaults.standard.set(recentRecords.map(\.text), forKey: "recentTranscriptions")
-    }
-
-    private func rebuildRecentRows() {
-        recentStack.arrangedSubviews.forEach {
-            recentStack.removeArrangedSubview($0)
-            $0.removeFromSuperview()
-        }
-        if recentRecords.isEmpty {
-            let empty = label("尚无转录结果", size: 13)
-            empty.textColor = .secondaryLabelColor
-            let wrapper = NSView()
-            wrapper.translatesAutoresizingMaskIntoConstraints = false
-            wrapper.addSubview(empty)
-            empty.translatesAutoresizingMaskIntoConstraints = false
-            NSLayoutConstraint.activate([
-                wrapper.heightAnchor.constraint(greaterThanOrEqualToConstant: 56),
-                empty.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 10),
-                empty.centerYAnchor.constraint(equalTo: wrapper.centerYAnchor),
-            ])
-            recentStack.addArrangedSubview(wrapper)
-            return
-        }
-        for (index, record) in recentRecords.enumerated() {
-            let metaLabel = label(record.timeText, size: 9, weight: .medium)
-            metaLabel.textColor = .secondaryLabelColor
-            metaLabel.maximumNumberOfLines = 1
-            metaLabel.lineBreakMode = .byTruncatingTail
-            metaLabel.translatesAutoresizingMaskIntoConstraints = false
-            let usageLabel = label(record.usage?.compactText ?? "", size: 9, weight: .medium)
-            usageLabel.textColor = UITheme.sectionTitle
-            usageLabel.alignment = .right
-            usageLabel.maximumNumberOfLines = 1
-            usageLabel.lineBreakMode = .byTruncatingTail
-            usageLabel.translatesAutoresizingMaskIntoConstraints = false
-            usageLabel.isHidden = record.usage == nil
-            usageLabel.toolTip = record.usage?.detailText
-
-            let textLabel = label(displayText(for: record), size: 11)
-            textLabel.textColor = NSColor(calibratedWhite: 1, alpha: 0.86)
-            textLabel.maximumNumberOfLines = record.hasTranslation ? 5 : 3
-            textLabel.lineBreakMode = .byWordWrapping
-            (textLabel.cell as? NSTextFieldCell)?.truncatesLastVisibleLine = true
-            textLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-            textLabel.translatesAutoresizingMaskIntoConstraints = false
-
-            let copyButton = NSButton()
-            copyButton.image = NSImage(systemSymbolName: "doc.on.doc", accessibilityDescription: "复制")
-            copyButton.bezelStyle = .inline
-            copyButton.isBordered = false
-            copyButton.contentTintColor = NSColor(calibratedWhite: 1, alpha: 0.42)
-            copyButton.toolTip = "复制"
-            copyButton.tag = index
-            copyButton.target = self
-            copyButton.action = #selector(copyRecent(_:))
-            copyButton.translatesAutoresizingMaskIntoConstraints = false
-
-            let row = RecentTranscriptionRowView(index: index) { [weak self] index in
-                self?.copyRecent(at: index)
-            }
-            row.translatesAutoresizingMaskIntoConstraints = false
-            row.addSubview(metaLabel)
-            row.addSubview(usageLabel)
-            row.addSubview(textLabel)
-            row.addSubview(copyButton)
-            recentStack.addArrangedSubview(row)
-            NSLayoutConstraint.activate([
-                row.widthAnchor.constraint(equalTo: recentStack.widthAnchor),
-                row.heightAnchor.constraint(greaterThanOrEqualToConstant: record.hasTranslation ? 78 : 58),
-                metaLabel.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 10),
-                metaLabel.topAnchor.constraint(equalTo: row.topAnchor, constant: 7),
-                metaLabel.trailingAnchor.constraint(lessThanOrEqualTo: usageLabel.leadingAnchor, constant: -8),
-                usageLabel.trailingAnchor.constraint(equalTo: copyButton.leadingAnchor, constant: -10),
-                usageLabel.centerYAnchor.constraint(equalTo: metaLabel.centerYAnchor),
-                usageLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 112),
-                textLabel.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 10),
-                textLabel.topAnchor.constraint(equalTo: metaLabel.bottomAnchor, constant: 4),
-                textLabel.bottomAnchor.constraint(lessThanOrEqualTo: row.bottomAnchor, constant: -8),
-                textLabel.trailingAnchor.constraint(equalTo: copyButton.leadingAnchor, constant: -10),
-                copyButton.trailingAnchor.constraint(equalTo: row.trailingAnchor, constant: -8),
-                copyButton.centerYAnchor.constraint(equalTo: row.centerYAnchor),
-                copyButton.widthAnchor.constraint(equalToConstant: 24),
-                copyButton.heightAnchor.constraint(equalToConstant: 24),
-            ])
-            if index < recentRecords.count - 1 {
-                let divider = NSBox()
-                divider.boxType = .separator
-                divider.translatesAutoresizingMaskIntoConstraints = false
-                row.addSubview(divider)
-                NSLayoutConstraint.activate([
-                    divider.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 10),
-                    divider.trailingAnchor.constraint(equalTo: row.trailingAnchor, constant: -8),
-                    divider.bottomAnchor.constraint(equalTo: row.bottomAnchor),
-                ])
-            }
-        }
-    }
-
-    @objc private func copyRecent(_ sender: NSButton) {
-        copyRecent(at: sender.tag)
-    }
-
-    private func copyRecent(at index: Int) {
-        guard recentRecords.indices.contains(index) else { return }
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(displayText(for: recentRecords[index]), forType: .string)
-        setPrimaryStatus("已复制最近转录", detail: "最近转录内容已复制到剪贴板。", tone: .success)
-    }
-
-    private func displayText(for record: RecentTranscription) -> String {
-        guard record.hasTranslation,
-              let sourceText = record.sourceText,
-              let translatedText = record.translatedText,
-              let direction = record.translationDirection else {
-            return record.text
-        }
-        return "\(direction.sourceLabel)：\(sourceText)\n\(direction.targetLabel)：\(translatedText)"
-    }
 }
