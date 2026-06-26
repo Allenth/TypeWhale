@@ -14,6 +14,7 @@ extension MainViewController {
         translationDirectionMode.setAccessibilityLabel("翻译方向")
         translationPromptButton.setAccessibilityLabel("翻译提示词")
         screenshotSaveLocationButton.setAccessibilityLabel("截图保存位置")
+        backlogDirectoryButton.setAccessibilityLabel("需求池目录")
         realtime.setAccessibilityLabel("胶囊实时预览")
         autoFinish.setAccessibilityLabel("停顿自动完成")
         duckSystemAudio.setAccessibilityLabel("录音时降低电脑声音")
@@ -107,9 +108,23 @@ extension MainViewController {
         refreshScreenshotSaveLocationButton()
     }
 
+    func configureBacklogDirectoryButton() {
+        backlogDirectoryButton.target = self
+        backlogDirectoryButton.action = #selector(configureBacklogDirectory)
+        backlogDirectoryButton.bezelStyle = .rounded
+        backlogDirectoryButton.controlSize = .small
+        backlogDirectoryButton.font = .systemFont(ofSize: 11, weight: .medium)
+        refreshBacklogDirectoryButton()
+    }
+
     func refreshScreenshotSaveLocationButton() {
         screenshotSaveLocationButton.title = ScreenshotSaveLocationStore.displayName
         screenshotSaveLocationButton.toolTip = "当前保存到：\(ScreenshotSaveLocationStore.directory.path)"
+    }
+
+    func refreshBacklogDirectoryButton() {
+        backlogDirectoryButton.title = BacklogDirectoryStore.displayName
+        backlogDirectoryButton.toolTip = "当前需求池目录：\(BacklogDirectoryStore.directory.path)"
     }
 
     func refreshDeepSeekKeyButton() {

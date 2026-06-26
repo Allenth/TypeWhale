@@ -97,6 +97,26 @@ extension MainViewController {
         detail.stringValue = "截图保存位置已更新：\(ScreenshotSaveLocationStore.displayName)"
     }
 
+    @objc func configureBacklogDirectory() {
+        let panel = NSOpenPanel()
+        panel.title = "选择需求池"
+        panel.message = "说出“存入需求池”“保存需求”等语音后，TypeWhale 会把整理后的需求 Markdown 保存到这个文件夹。"
+        panel.prompt = "选择"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = BacklogDirectoryStore.directory
+
+        guard panel.runModal() == .OK, let url = panel.url else {
+            refreshBacklogDirectoryButton()
+            return
+        }
+        BacklogDirectoryStore.save(url)
+        refreshBacklogDirectoryButton()
+        detail.stringValue = "需求池已更新：\(BacklogDirectoryStore.displayName)"
+    }
+
     @objc func configureDeepSeekAPIKey() {
         let alert = NSAlert()
         alert.messageText = "DeepSeek API Key"

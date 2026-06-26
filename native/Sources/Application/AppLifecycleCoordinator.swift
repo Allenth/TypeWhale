@@ -9,7 +9,11 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
     private var window: NSWindow?
     private var thirdPartyNoticesWindow: NSWindow?
     private var allowsTermination = false
-    private var workspaceObserver: NSObjectProtocol?
+    private var workspaceObservers: [NSObjectProtocol] = []
+    var onSystemWillSleep: (() -> Void)?
+    var onSystemDidWake: (() -> Void)?
+    var onSystemWillPowerOff: (() -> Void)?
+    var onMainInterfaceOpened: (() -> Void)?
     // 尺寸唯一真值在 MainViewController；窗口实际高度由其必需约束决定，这里跟随它即可。
     private let windowSize = MainViewController.windowContentSize
 
@@ -26,27 +30,54 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
         setupStatusItem()
         LaunchDiagnostics.mark("setupMainWindow begin")
         setupMainWindow()
-        LaunchDiagnostics.mark("showMainWindow begin")
-        showMainWindow()
+        LaunchDiagnostics.mark("main_window_ready hidden")
         LaunchDiagnostics.mark("AppLifecycleCoordinator setup done")
     }
 
     deinit {
-        if let workspaceObserver {
-            NSWorkspace.shared.notificationCenter.removeObserver(workspaceObserver)
+        for observer in workspaceObservers {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
         }
     }
 
     private func observeSystemPowerOff() {
-        workspaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
+        let center = NSWorkspace.shared.notificationCenter
+        let powerOffObserver = center.addObserver(
             forName: NSWorkspace.willPowerOffNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
+                LaunchDiagnostics.mark("system_will_power_off")
+                self?.onSystemWillPowerOff?()
                 self?.allowsTermination = true
             }
         }
+        workspaceObservers.append(powerOffObserver)
+
+        let sleepObserver = center.addObserver(
+            forName: NSWorkspace.willSleepNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                LaunchDiagnostics.mark("system_will_sleep")
+                self?.onSystemWillSleep?()
+            }
+        }
+        workspaceObservers.append(sleepObserver)
+
+        let wakeObserver = center.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                LaunchDiagnostics.mark("system_did_wake")
+                self?.onSystemDidWake?()
+            }
+        }
+        workspaceObservers.append(wakeObserver)
     }
 
     private func setupMainMenu() {
@@ -152,6 +183,7 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
     }
 
     func menuWillOpen(_ menu: NSMenu) {
+        onMainInterfaceOpened?()
         updateMemoryStatusItem()
         updateVersionStatusItem()
         controller.updateMemoryReadout()
@@ -279,11 +311,12 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
         }
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        onMainInterfaceOpened?()
     }
 
     func shouldHandleReopen() -> Bool {
-        showMainWindow()
-        return true
+        LaunchDiagnostics.mark("application_reopen_ignored")
+        return false
     }
 
     func shouldTerminate() -> NSApplication.TerminateReply {

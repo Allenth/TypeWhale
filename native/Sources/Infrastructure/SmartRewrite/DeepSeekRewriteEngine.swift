@@ -73,6 +73,7 @@ final class DeepSeekRewriteEngine: SmartRewriteEngine {
         - 语气自然，适合直接粘贴到当前输入框。
 
         \(direction.toneInstruction)
+        \(translationLayoutInstruction(triggeredBy: triggeredBy))
 
         目标应用：\(context.targetAppName ?? "未知")
 
@@ -108,6 +109,19 @@ final class DeepSeekRewriteEngine: SmartRewriteEngine {
             modelName: displayName,
             usage: translated.usage
         )
+    }
+
+    private func translationLayoutInstruction(triggeredBy: String) -> String {
+        guard triggeredBy == "screenshot_translation" else { return "" }
+        return """
+
+        截图翻译版面规则：
+        - 原始文本来自 OCR 行，每行格式为 [[TW_LINE_n]] 原文。
+        - 必须逐行返回同样的 [[TW_LINE_n]]，并在其后输出该行对应的中文译文。
+        - 不要丢失、合并、重排或改写 line id。
+        - 不要额外添加标题、列表符号、解释或没有 line id 的文本。
+        - 输出示例：[[TW_LINE_1]] 这是第一行译文
+        """
     }
 
     private var rewriteSystemPrompt: String {

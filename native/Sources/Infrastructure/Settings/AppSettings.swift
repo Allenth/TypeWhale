@@ -98,3 +98,38 @@ enum ScreenshotSaveLocationStore {
         return FileManager.default.isWritableFile(atPath: url.path)
     }
 }
+
+enum BacklogDirectoryStore {
+    private static let directoryKey = "backlogDirectory"
+
+    static var defaultDirectory: URL {
+        URL(fileURLWithPath: "/Users/waykingah/Movies/github/Obsidian/0.1 backlog需求池", isDirectory: true)
+    }
+
+    static var directory: URL {
+        guard let savedPath = UserDefaults.standard.string(forKey: directoryKey), !savedPath.isEmpty else {
+            return ensureDirectory(defaultDirectory)
+        }
+        return ensureDirectory(URL(fileURLWithPath: savedPath, isDirectory: true))
+    }
+
+    static var displayName: String {
+        let url = directory
+        return url.lastPathComponent.isEmpty ? url.path : url.lastPathComponent
+    }
+
+    static func save(_ url: URL) {
+        let directoryURL = ensureDirectory(url.standardizedFileURL)
+        UserDefaults.standard.set(directoryURL.path, forKey: directoryKey)
+    }
+
+    static func resetToDefault() {
+        UserDefaults.standard.removeObject(forKey: directoryKey)
+        _ = ensureDirectory(defaultDirectory)
+    }
+
+    static func ensureDirectory(_ url: URL) -> URL {
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+}

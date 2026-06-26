@@ -30,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var controller: MainViewController { lifecycle.controller }
     private lazy var speechInput = SpeechInputCoordinator(
         controller: controller,
+        showMainWindow: { [weak self] in self?.lifecycle.showMainWindow() },
         hideMainWindow: { [weak self] in self?.lifecycle.hideMainWindow() },
         shouldKeepMainWindowVisibleForScreenshot: { [weak self] in
             self?.lifecycle.shouldKeepMainWindowVisibleForScreenshot() ?? false
@@ -46,6 +47,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         TypeWhaleApplication.terminateStaleInstances()
         LaunchDiagnostics.mark("lifecycle.setup begin")
         lifecycle.setup()
+        lifecycle.onSystemWillSleep = { [weak self] in
+            self?.speechInput.handleSystemWillSleep()
+        }
+        lifecycle.onSystemDidWake = { [weak self] in
+            self?.speechInput.handleSystemDidWake()
+        }
+        lifecycle.onSystemWillPowerOff = { [weak self] in
+            self?.speechInput.handleSystemWillPowerOff()
+        }
+        lifecycle.onMainInterfaceOpened = { [weak self] in
+            self?.speechInput.refreshUserVisibleDiagnostics()
+        }
         LaunchDiagnostics.mark("lifecycle.setup done")
         do {
             LaunchDiagnostics.mark("AppPaths.prepare begin")

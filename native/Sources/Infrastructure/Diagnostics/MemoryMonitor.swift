@@ -2,13 +2,29 @@ import Foundation
 
 /// 读取本进程真实物理内存占用（macOS 的 phys_footprint，与活动监视器“内存”列一致），
 /// 用于主界面与状态栏的内存监测显示与超限提醒。
-/// 说明：模型在不录音时会被卸载，空闲态约 100MB；录音时模型载入会涨到数百 MB，
-/// 因此同时记录并展示“当前 · 峰值”，避免只看当前值时误以为占用很低。
+/// 说明：ASR / VAD 模型平时保持热加载，保证下一句语音输入不承担重载延迟。
+/// 这里记录并展示“当前 · 峰值”，避免只看当前值时误判长期运行状态。
 enum MemoryMonitor {
-    /// 预警阈值（MB）：超过即在界面上标橙并提醒。按用户要求设为 1GB。
-    static let warnThresholdMB = 1024
-    /// 高占用阈值（MB）：超过即标红。
-    static let highThresholdMB = 1536
+    /// 动态预警阈值下限：低内存机器至少到 2GB 才触发，避免回到 1GB 附近反复 flush/reload。
+    static let minimumWarnThresholdMB = 2 * 1024
+    /// 动态预警阈值上限：高内存机器最多按 20GB 触发，作为异常兜底硬上限。
+    static let maximumWarnThresholdMB = 20 * 1024
+    private static let maximumHighThresholdMB = 24 * 1024
+
+    /// 本机物理内存（MB）。
+    static var totalPhysicalMemoryMB: Int {
+        Int(ProcessInfo.processInfo.physicalMemory / UInt64(1024 * 1024))
+    }
+
+    /// 预警阈值（MB）：min(20GB, max(2GB, 本机物理内存 * 25%))。
+    static var warnThresholdMB: Int {
+        min(maximumWarnThresholdMB, max(minimumWarnThresholdMB, totalPhysicalMemoryMB / 4))
+    }
+
+    /// 高占用阈值（MB）：跟随动态预警阈值上浮约 20%，最高不超过 24GB。
+    static var highThresholdMB: Int {
+        min(maximumHighThresholdMB, max(warnThresholdMB + 512, Int(Double(warnThresholdMB) * 1.2)))
+    }
 
     enum Level {
         case normal

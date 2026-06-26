@@ -25,6 +25,7 @@ struct RealtimeSnapshotRequest {
 struct PendingPasteResult {
     let task: RecordingTask
     let text: String
+    let rawText: String
     let sourceText: String?
     let translatedText: String?
     let translationDirection: SmartTranslationDirection?
@@ -37,4 +38,19 @@ enum SpeechInputState {
     case finalizing(RecordingTask)
     case pasting(RecordingTask)
     case failed(String)
+
+    var logName: String {
+        switch self {
+        case .idle:
+            return "idle"
+        case .recording:
+            return "recording"
+        case .finalizing:
+            return "finalizing"
+        case .pasting:
+            return "pasting"
+        case .failed:
+            return "failed"
+        }
+    }
 }

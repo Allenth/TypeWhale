@@ -7,10 +7,17 @@ final class SpeechInputCoordinator {
         static let autoFinishPauseSeconds: TimeInterval = 1.5
         static let initialSilenceAutoFinishSeconds: TimeInterval = 3.0
         static let holdToRecordSeconds: TimeInterval = 0.28
-        /// 单次录音硬上限：超过即自动结束并识别，封住 ASR 识别时的内存峰值（识别内存随时长增长且不自动回落）。
+        /// 单次录音硬上限：超过即自动结束并识别，封住异常长录音的能耗和内存峰值。
+        /// 历史 1.2 版本已验证一两分钟口述可用，不应把 45 秒后的当前回归误判为模型时长上限。
         static let maxRecordingSeconds: TimeInterval = 360
-        /// 录音中持续无语音/文字产出的上限：超过即强制取消，避免话筒空开持续耗电发热。
+        /// 录音中持续无语音/文字产出的上限：已说过话则自动收尾保存，从未说话则取消空录音。
         static let noTextTimeoutSeconds: TimeInterval = 300
+        static let backgroundHealthSeconds: TimeInterval = 30
+        static let recordingSafetySeconds: TimeInterval = 1
+        static let capsuleStatusSeconds: TimeInterval = 1
+        static let memorySafetyCheckSeconds: TimeInterval = 30
+        static let wakeRecoveryGraceSeconds: TimeInterval = 3
+        static let realtimeSnapshotTimeoutSeconds: TimeInterval = 3
     }
 
     /// 基于音频能量的语音活动检测（VAD）阈值，与 ASR 解耦，保证静音/人离判定每次稳定一致。
@@ -25,6 +32,7 @@ final class SpeechInputCoordinator {
     private var voiceEverDetected = false
 
     private let controller: MainViewController
+    private let showMainWindow: () -> Void
     private let hideMainWindow: () -> Void
     private let shouldKeepMainWindowVisibleForScreenshot: () -> Bool
     private let recorder = AudioRecorder()
@@ -48,6 +56,8 @@ final class SpeechInputCoordinator {
     private var completedFinalTaskIDs: Set<UUID> = []
     private var realtimeBusy = false
     private var pendingRealtimeSnapshot: RealtimeSnapshotRequest?
+    private var activeRealtimeSnapshotID: UUID?
+    private var realtimeSnapshotTimeoutWorkItem: DispatchWorkItem?
     private var workspaceActivationObserver: NSObjectProtocol?
     private var trackedTargetTaskID: UUID?
     private var trackedTargetApp: NSRunningApplication?
@@ -56,8 +66,16 @@ final class SpeechInputCoordinator {
     private var autoFinishWorkItem: DispatchWorkItem?
     private var initialSilenceWorkItem: DispatchWorkItem?
     private var idleASRUnloadWorkItem: DispatchWorkItem?
+    private var backgroundHealthTimer: Timer?
+    private var recordingSafetyTimer: Timer?
+    private var capsuleStatusTimer: Timer?
+    private var lastMemorySafetyCheckAt = Date.distantPast
     private var lastASRArenaFlushAt: Date?
+    private var wakeRecoveryUntil: Date?
+    private var isSystemSleeping = false
+    private var didLogWakeRecoveryReloadSkip = false
     private let asrArenaFlushCooldownSeconds: TimeInterval = 30
+    private var didFlushASRArenaForElevatedMemory = false
     private var suppressNextHotkeyUp = false
     private var primaryHotkeyBinding = HotkeyBinding.load(
         storageKey: HotkeyBinding.chineseStorageKey,
@@ -86,10 +104,12 @@ final class SpeechInputCoordinator {
 
     init(
         controller: MainViewController,
+        showMainWindow: @escaping () -> Void,
         hideMainWindow: @escaping () -> Void,
         shouldKeepMainWindowVisibleForScreenshot: @escaping () -> Bool
     ) {
         self.controller = controller
+        self.showMainWindow = showMainWindow
         self.hideMainWindow = hideMainWindow
         self.shouldKeepMainWindowVisibleForScreenshot = shouldKeepMainWindowVisibleForScreenshot
     }
@@ -165,9 +185,12 @@ final class SpeechInputCoordinator {
                 autoTranslate: autoTranslate,
                 mainWindow: mainWindow
             )
+            LaunchDiagnostics.mark("hotkey_update")
+            self?.hotkey.start()
             self?.refreshPermissions()
         }
         modelInstaller.refresh()
+        LaunchDiagnostics.mark("hotkey_start reason=app_start")
         hotkey.start()
         asr.start()
         realtimeASR.start()
@@ -175,19 +198,13 @@ final class SpeechInputCoordinator {
         startObservingTargetApplicationChanges()
         refreshPermissions()
         PermissionDiagnosticsProvider.requestAccessibilityIfNeeded()
-        Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.refreshPermissions()
-                self?.hotkey.start()
-                self?.controller.updateMemoryReadout()
-                self?.updateCapsuleStatus()
-                self?.releaseASRResourcesIfMemoryElevated()
-            }
-        }
+        startBackgroundHealthTimer()
         PermissionDiagnosticsProvider.requestMicrophone { [weak self] in self?.refreshPermissions() }
     }
 
     func stop() {
+        stopBackgroundHealthTimer()
+        stopRecordingSafetyTimer()
         longPressWorkItem?.cancel()
         cancelAutoFinishTimer()
         cancelInitialSilenceTimer()
@@ -199,6 +216,158 @@ final class SpeechInputCoordinator {
         stopObservingTargetApplicationChanges()
         asr.stop()
         realtimeASR.stop()
+    }
+
+    func handleSystemWillPowerOff() {
+        LaunchDiagnostics.mark(backgroundStateLogLine(event: "system_will_power_off"))
+        cancelRecordingForSystemSleep(reason: "power_off")
+    }
+
+    func handleSystemWillSleep() {
+        isSystemSleeping = true
+        wakeRecoveryUntil = nil
+        stopBackgroundHealthTimer()
+        stopRecordingSafetyTimer()
+        stopCapsuleStatusTimer()
+        LaunchDiagnostics.mark(backgroundStateLogLine(event: "system_will_sleep"))
+        cancelRecordingForSystemSleep(reason: "sleep")
+    }
+
+    func handleSystemDidWake() {
+        isSystemSleeping = false
+        wakeRecoveryUntil = Date().addingTimeInterval(Timing.wakeRecoveryGraceSeconds)
+        didFlushASRArenaForElevatedMemory = false
+        didLogWakeRecoveryReloadSkip = false
+        LaunchDiagnostics.mark(backgroundStateLogLine(event: "system_did_wake"))
+        DispatchQueue.main.asyncAfter(deadline: .now() + Timing.wakeRecoveryGraceSeconds) { [weak self] in
+            guard let self, !self.isSystemSleeping else { return }
+            self.wakeRecoveryUntil = nil
+            LaunchDiagnostics.mark(self.backgroundStateLogLine(event: "wake_recovery_check"))
+            self.refreshPermissions()
+            if !self.hotkey.isGlobalListening {
+                LaunchDiagnostics.mark("hotkey_start reason=wake_recovery")
+                self.hotkey.start()
+            }
+            self.controller.updateMemoryReadout()
+            self.startBackgroundHealthTimer()
+        }
+    }
+
+    func refreshUserVisibleDiagnostics() {
+        refreshPermissions()
+        controller.updateMemoryReadout()
+    }
+
+    private func startBackgroundHealthTimer() {
+        guard backgroundHealthTimer == nil else { return }
+        let timer = Timer.scheduledTimer(withTimeInterval: Timing.backgroundHealthSeconds, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.performBackgroundHealthCheck()
+            }
+        }
+        timer.tolerance = 5
+        backgroundHealthTimer = timer
+        LaunchDiagnostics.mark("background_health_timer_start interval=\(Int(Timing.backgroundHealthSeconds))")
+    }
+
+    private func stopBackgroundHealthTimer() {
+        backgroundHealthTimer?.invalidate()
+        backgroundHealthTimer = nil
+    }
+
+    private func performBackgroundHealthCheck() {
+        guard !isSystemSleeping else { return }
+        let now = Date()
+        if now.timeIntervalSince(lastMemorySafetyCheckAt) >= Timing.memorySafetyCheckSeconds {
+            lastMemorySafetyCheckAt = now
+            releaseASRResourcesIfMemoryElevated()
+        }
+    }
+
+    private func startRecordingSafetyTimer() {
+        guard recordingSafetyTimer == nil else { return }
+        let timer = Timer.scheduledTimer(withTimeInterval: Timing.recordingSafetySeconds, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.recorder.isRecording || self.activeSession != nil else {
+                    self?.stopRecordingSafetyTimer()
+                    return
+                }
+                self.enforceRecordingTimeoutsIfNeeded()
+            }
+        }
+        timer.tolerance = 0.1
+        recordingSafetyTimer = timer
+    }
+
+    private func stopRecordingSafetyTimer() {
+        recordingSafetyTimer?.invalidate()
+        recordingSafetyTimer = nil
+    }
+
+    private var isInWakeRecoveryGrace: Bool {
+        guard let wakeRecoveryUntil else { return false }
+        return Date() < wakeRecoveryUntil
+    }
+
+    private func cancelRecordingForSystemSleep(reason: String) {
+        longPressWorkItem?.cancel()
+        longPressWorkItem = nil
+        hotkeyIsPressed = false
+        suppressNextHotkeyUp = true
+        if recorder.isRecording || activeSession != nil {
+            LaunchDiagnostics.mark("recording_safety_cancel reason=\(reason)")
+            recorder.cancel()
+            clearActiveRecording()
+            trackedTargetTaskID = nil
+            trackedTargetApp = nil
+            inputState = .idle
+            drainPendingPasteResultsIfPossible()
+            controller.setPrimaryStatus(
+                "录音已停止",
+                detail: "系统即将\(reason == "sleep" ? "睡眠" : "关机")，已停止本次录音。",
+                tone: .warning,
+                resetWaveform: true
+            )
+            popup.hideAnimated()
+        }
+        discardPendingRealtimeSnapshot()
+        realtimeBusy = false
+        activeRealtimeSnapshotID = nil
+        realtimeSnapshotTimeoutWorkItem?.cancel()
+        realtimeSnapshotTimeoutWorkItem = nil
+    }
+
+    private func backgroundStateLogLine(event: String) -> String {
+        [
+            "background_state event=\(event)",
+            "recording=\(recorder.isRecording)",
+            "active_session=\(activeSession != nil)",
+            "input_state=\(inputState.logName)",
+            "realtime_busy=\(realtimeBusy)",
+            "pending_paste=\(pendingPasteResults.count)",
+            "wake_grace=\(isInWakeRecoveryGrace)",
+            "memory_mb=\(MemoryMonitor.currentFootprintMB)",
+        ].joined(separator: " ")
+    }
+
+    private func startCapsuleStatusTimer() {
+        guard capsuleStatusTimer == nil else { return }
+        let timer = Timer.scheduledTimer(withTimeInterval: Timing.capsuleStatusSeconds, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.recorder.isRecording || self.activeSession != nil else {
+                    self?.stopCapsuleStatusTimer()
+                    return
+                }
+                self.updateCapsuleStatus()
+            }
+        }
+        timer.tolerance = 0.1
+        capsuleStatusTimer = timer
+    }
+
+    private func stopCapsuleStatusTimer() {
+        capsuleStatusTimer?.invalidate()
+        capsuleStatusTimer = nil
     }
 
     private func refreshPermissions() {
@@ -386,11 +555,7 @@ final class SpeechInputCoordinator {
     }
 
     private func showMainWindowFromHotkey() {
-        if controller.view.window?.isMiniaturized == true {
-            controller.view.window?.deminiaturize(nil)
-        }
-        NSApp.activate(ignoringOtherApps: true)
-        controller.view.window?.makeKeyAndOrderFront(nil)
+        showMainWindow()
     }
 
     private func cycleSmartRewriteModeFromCapsule() {
@@ -449,6 +614,10 @@ final class SpeechInputCoordinator {
     ) {
         guard !recorder.isRecording else { return }
         cancelIdleASRUnload()
+        discardPendingRealtimeSnapshot()
+        didFlushASRArenaForElevatedMemory = false
+        startRecordingSafetyTimer()
+        startCapsuleStatusTimer()
         let selectedBackend = controller.asrBackend
         let resolvedBackend = selectedBackend.resolvedBackend
         let realtimeEnabled = controller.realtimePreviewEnabled && resolvedBackend == .senseVoice
@@ -490,7 +659,11 @@ final class SpeechInputCoordinator {
             updateCapsuleStatus()
             lastVoiceAt = nil
             voiceEverDetected = false
+            LaunchDiagnostics.mark(
+                "recording_start task_id=\(taskID.uuidString) activation=\(activation) realtime=\(realtimeEnabled)"
+            )
         } catch {
+            LaunchDiagnostics.mark("recording_start_failed error=\(error.localizedDescription)")
             cancelAutoFinishTimer()
             clearActiveRecording()
             controller.setPrimaryStatus("无法开始录音", detail: error.localizedDescription, tone: .error, resetWaveform: true)
@@ -507,8 +680,10 @@ final class SpeechInputCoordinator {
         let targetApp = currentTargetApp(taskID: taskID, fallback: session.targetApp)
         let result: (URL, TimeInterval)?
         do {
+            LaunchDiagnostics.mark("recording_finish_requested task_id=\(taskID.uuidString)")
             result = try recorder.stop()
         } catch {
+            LaunchDiagnostics.mark("recording_stop_failed task_id=\(taskID.uuidString) error=\(error.localizedDescription)")
             clearActiveRecording()
             controller.setPrimaryStatus("保存录音失败", detail: error.localizedDescription, tone: .error, resetWaveform: true)
             popup.show(state: "保存失败", draft: "")
@@ -516,12 +691,16 @@ final class SpeechInputCoordinator {
         }
         clearActiveRecording()
         guard let (url, duration) = result else {
+            LaunchDiagnostics.mark("recording_finish_empty task_id=\(taskID.uuidString)")
             inputState = .idle
             drainPendingPasteResultsIfPossible()
             showEmptyRecording()
             releaseASRResourcesIfMemoryElevated()
             return
         }
+        LaunchDiagnostics.mark(
+            "recording_finish_saved task_id=\(taskID.uuidString) duration_ms=\(Int(duration * 1000)) url=\(url.lastPathComponent)"
+        )
         discardPendingRealtimeSnapshot()
         let task = RecordingTask(
             id: taskID,
@@ -587,12 +766,17 @@ final class SpeechInputCoordinator {
         cancelAutoFinishTimer()
         cancelInitialSilenceTimer()
         outputAudioDucker.restore()
+        stopRecordingSafetyTimer()
+        stopCapsuleStatusTimer()
         activeSession = nil
         recordingStartedAt = nil
         lastCapsuleStatusUpdateAt = nil
         updateCapsuleStatus()
         controller.resetInputBands()
         discardPendingRealtimeSnapshot()
+        if !isSystemSleeping {
+            startBackgroundHealthTimer()
+        }
     }
 
     private func handleAudioInputRouteChanged(_ message: String) {
@@ -601,6 +785,7 @@ final class SpeechInputCoordinator {
         hotkeyIsPressed = false
         longPressWorkItem?.cancel()
         longPressWorkItem = nil
+        LaunchDiagnostics.mark("recording_safety_cancel reason=input_route_changed message=\(message)")
         recorder.cancel()
         clearActiveRecording()
         trackedTargetTaskID = nil
@@ -625,6 +810,10 @@ final class SpeechInputCoordinator {
             try? FileManager.default.removeItem(at: pendingRealtimeSnapshot.audioURL)
         }
         pendingRealtimeSnapshot = nil
+        realtimeBusy = false
+        activeRealtimeSnapshotID = nil
+        realtimeSnapshotTimeoutWorkItem?.cancel()
+        realtimeSnapshotTimeoutWorkItem = nil
     }
 
     private func receiveRealtimeSnapshot(taskID: UUID, url: URL) {
@@ -647,49 +836,58 @@ final class SpeechInputCoordinator {
     }
 
     private func transcribeRealtime(taskID: UUID, url: URL, configuration: ASRConfiguration) {
+        let snapshotID = UUID()
+        activeRealtimeSnapshotID = snapshotID
         realtimeBusy = true
-        realtimeASR.containsSpeech(audio: url) { [weak self] vadResponse in
+        scheduleRealtimeSnapshotTimeout(snapshotID: snapshotID, taskID: taskID, url: url)
+        realtimeASR.transcribe(
+            audio: url,
+            configuration: configuration
+        ) { [weak self] response in
             DispatchQueue.main.async {
+                try? FileManager.default.removeItem(at: url)
                 guard let self else { return }
-                guard taskID == self.activeSession?.id else {
-                    try? FileManager.default.removeItem(at: url)
-                    self.finishRealtimeSnapshot()
+                guard self.activeRealtimeSnapshotID == snapshotID else {
                     return
                 }
-                switch vadResponse {
-                case .failure:
-                    try? FileManager.default.removeItem(at: url)
-                    self.finishRealtimeSnapshot()
-                case .success(false):
-                    try? FileManager.default.removeItem(at: url)
-                    self.finishRealtimeSnapshot()
-                case .success(true):
-                    self.realtimeASR.transcribe(
-                        audio: url,
-                        configuration: configuration
-                    ) { [weak self] response in
-                        DispatchQueue.main.async {
-                            try? FileManager.default.removeItem(at: url)
-                            guard let self else { return }
-                            if taskID == self.activeSession?.id,
-                               case .success(let value) = response,
-                                (value["error"] as? String ?? "").isEmpty {
-                                let text = cleanRecognitionText(value["text"] as? String ?? "", languageMode: configuration.languageMode)
-                                if isMeaningfulRealtimePreviewText(text, previousPreview: self.activeSession?.latestPreviewText ?? "") {
-                                    self.activeSession?.latestPreviewText = text
-                                    self.controller.updateRealtimeDraft(text)
-                                    self.popup.updateDraft(text)
-                                }
-                            }
-                            self.finishRealtimeSnapshot()
-                        }
+                if taskID == self.activeSession?.id,
+                   case .success(let value) = response,
+                    (value["error"] as? String ?? "").isEmpty {
+                    let text = cleanRecognitionText(value["text"] as? String ?? "", languageMode: configuration.languageMode)
+                    if isMeaningfulRealtimePreviewText(text, previousPreview: self.activeSession?.latestPreviewText ?? "") {
+                        self.activeSession?.latestPreviewText = text
+                        self.controller.updateRealtimeDraft(text)
+                        self.popup.updateDraft(text)
+                        let elapsedMs = self.recordingStartedAt.map { Int(Date().timeIntervalSince($0) * 1000) } ?? -1
+                        LaunchDiagnostics.mark(
+                            "realtime_preview_update task_id=\(taskID.uuidString) elapsed_ms=\(elapsedMs) chars=\(text.count)"
+                        )
                     }
                 }
+                self.finishRealtimeSnapshot(snapshotID: snapshotID)
             }
         }
     }
 
-    private func finishRealtimeSnapshot() {
+    private func scheduleRealtimeSnapshotTimeout(snapshotID: UUID, taskID: UUID, url: URL) {
+        realtimeSnapshotTimeoutWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self, self.activeRealtimeSnapshotID == snapshotID else { return }
+            LaunchDiagnostics.mark(
+                "realtime_snapshot_timeout task_id=\(taskID.uuidString) seconds=\(Int(Timing.realtimeSnapshotTimeoutSeconds))"
+            )
+            try? FileManager.default.removeItem(at: url)
+            self.finishRealtimeSnapshot(snapshotID: snapshotID)
+        }
+        realtimeSnapshotTimeoutWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + Timing.realtimeSnapshotTimeoutSeconds, execute: workItem)
+    }
+
+    private func finishRealtimeSnapshot(snapshotID: UUID? = nil) {
+        if let snapshotID, activeRealtimeSnapshotID != snapshotID { return }
+        realtimeSnapshotTimeoutWorkItem?.cancel()
+        realtimeSnapshotTimeoutWorkItem = nil
+        activeRealtimeSnapshotID = nil
         realtimeBusy = false
         if let pending = pendingRealtimeSnapshot {
             pendingRealtimeSnapshot = nil
@@ -725,6 +923,10 @@ final class SpeechInputCoordinator {
             }
             let text = cleanRecognitionText(value["text"] as? String ?? "", languageMode: task.configuration.languageMode)
             let elapsed = value["duration_sec"] as? Double ?? 0
+            let engine = value["engine"] as? String ?? "--"
+            LaunchDiagnostics.mark(
+                "final_asr_result task_id=\(task.id.uuidString) audio_duration_ms=\(Int(task.duration * 1000)) recognition_ms=\(Int(elapsed * 1000)) chars=\(text.count) engine=\(engine)"
+            )
             if isMeaningfulRecognitionText(text) {
                 guard markFinalTaskForSubmission(task.id) else {
                     finishFinalTask(task)
@@ -879,6 +1081,7 @@ final class SpeechInputCoordinator {
                 self.submitPasteResult(PendingPasteResult(
                     task: task,
                     text: finalText,
+                    rawText: rawText,
                     sourceText: translation == nil ? nil : sourceForTranslation,
                     translatedText: translation?.translatedText,
                     translationDirection: translation?.direction,
@@ -916,6 +1119,7 @@ final class SpeechInputCoordinator {
                 self.submitPasteResult(PendingPasteResult(
                     task: task,
                     text: finalText,
+                    rawText: rawText,
                     sourceText: nil,
                     translatedText: nil,
                     translationDirection: nil,
@@ -997,9 +1201,35 @@ final class SpeechInputCoordinator {
 
     private func submitPasteResult(_ result: PendingPasteResult) {
         addRecentTranscription(for: result, completedAt: Date())
+        saveBacklogIfRequested(result)
         SmartUsageLedgerStore.record(result.usage)
         pendingPasteResults.append(result)
         drainPendingPasteResultsIfPossible()
+    }
+
+    private func saveBacklogIfRequested(_ result: PendingPasteResult) {
+        guard BacklogWriter.shouldSave(rawText: result.rawText) else { return }
+        do {
+            let content = result.sourceText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                ? result.sourceText ?? result.text
+                : result.text
+            let url = try BacklogWriter.save(BacklogSaveContext(
+                rawText: result.rawText,
+                finalText: content,
+                modeName: controller.smartRewritePreference.displayName,
+                targetAppName: currentTargetApp(for: result.task)?.localizedName,
+                recordingSessionID: result.task.id
+            ))
+            LaunchDiagnostics.mark("backlog_saved task_id=\(result.task.id.uuidString) path=\(url.path)")
+            if shouldUpdateInterface(for: result.task.id) {
+                controller.detail.stringValue = "已存入 Backlog：\(url.lastPathComponent)"
+            }
+        } catch {
+            LaunchDiagnostics.mark("backlog_save_failed task_id=\(result.task.id.uuidString) error=\(error.localizedDescription)")
+            if shouldUpdateInterface(for: result.task.id) {
+                controller.detail.stringValue = "Backlog 保存失败：\(error.localizedDescription)"
+            }
+        }
     }
 
     private func drainPendingPasteResultsIfPossible() {
@@ -1122,22 +1352,43 @@ final class SpeechInputCoordinator {
         // 内存治理只保留“高内存时释放”这条安全网。
         idleASRUnloadWorkItem?.cancel()
         idleASRUnloadWorkItem = nil
-        guard isIdleForASRResourceRelease,
-              MemoryMonitor.currentFootprintMB >= MemoryMonitor.warnThresholdMB else { return }
+        guard !isSystemSleeping else { return }
+        guard !isInWakeRecoveryGrace else {
+            if !didLogWakeRecoveryReloadSkip {
+                LaunchDiagnostics.mark("release_asr_resources skipped=wake_recovery")
+                didLogWakeRecoveryReloadSkip = true
+            }
+            return
+        }
+        guard isIdleForASRResourceRelease else { return }
+        let currentMemoryMB = MemoryMonitor.currentFootprintMB
+        let thresholdMB = MemoryMonitor.warnThresholdMB
+        guard currentMemoryMB >= thresholdMB else {
+            if didFlushASRArenaForElevatedMemory {
+                LaunchDiagnostics.mark("asr_memory_guard_reset memory_mb=\(currentMemoryMB) threshold_mb=\(thresholdMB)")
+            }
+            didFlushASRArenaForElevatedMemory = false
+            return
+        }
+        guard !didFlushASRArenaForElevatedMemory else { return }
         // 冷却期内不重复释放，避免 flush→reload→flush 抖动。
         if let lastFlush = lastASRArenaFlushAt,
            Date().timeIntervalSince(lastFlush) < asrArenaFlushCooldownSeconds {
             return
         }
-        releaseASRResourcesIfIdle(reason: "memory_warn")
+        didFlushASRArenaForElevatedMemory = true
+        releaseASRResourcesIfIdle(reason: "memory_warn", memoryMB: currentMemoryMB)
     }
 
-    private func releaseASRResourcesIfIdle(reason: String) {
+    private func releaseASRResourcesIfIdle(reason: String, memoryMB: Int? = nil) {
         guard isIdleForASRResourceRelease else { return }
         idleASRUnloadWorkItem?.cancel()
         idleASRUnloadWorkItem = nil
         lastASRArenaFlushAt = Date()
-        LaunchDiagnostics.mark("release_asr_resources reason=\(reason) memory_mb=\(MemoryMonitor.currentFootprintMB)")
+        let currentMemoryMB = memoryMB ?? MemoryMonitor.currentFootprintMB
+        LaunchDiagnostics.mark(
+            "release_asr_resources reason=\(reason) memory_mb=\(currentMemoryMB) threshold_mb=\(MemoryMonitor.warnThresholdMB) total_memory_mb=\(MemoryMonitor.totalPhysicalMemoryMB)"
+        )
         // 释放被高水位撑大的 onnxruntime 内存池，并立刻用全新内存池热加载回来：
         // 清掉膨胀，但不让下一句录音承担重载延迟（reload = flush + warmUp）。
         nativeASR.reload()
@@ -1216,13 +1467,31 @@ final class SpeechInputCoordinator {
     }
 
     /// 录音超过单次硬上限时自动结束并识别，封住 ASR 内存峰值。返回是否已触发结束。
+    private func enforceRecordingTimeoutsIfNeeded() {
+        guard recorder.isRecording || activeSession != nil else { return }
+        if recorder.isRecording, activeSession == nil {
+            LaunchDiagnostics.mark("recording_safety_cancel reason=missing_session")
+            recorder.cancel()
+            clearActiveRecording()
+            trackedTargetTaskID = nil
+            trackedTargetApp = nil
+            inputState = .idle
+            drainPendingPasteResultsIfPossible()
+            return
+        }
+        if enforceMaxRecordingDuration() { return }
+        if enforceNoTextTimeout() { return }
+    }
+
+    /// 录音超过单次硬上限时自动结束并识别，封住异常长录音的能耗和内存峰值。返回是否已触发结束。
     private func enforceMaxRecordingDuration() -> Bool {
         guard let startedAt = recordingStartedAt,
               Date().timeIntervalSince(startedAt) >= Timing.maxRecordingSeconds else { return false }
-        let minutes = Int(Timing.maxRecordingSeconds / 60)
+        let durationText = Self.formatMaxRecordingDuration(Timing.maxRecordingSeconds)
+        LaunchDiagnostics.mark("recording_auto_finish reason=max_duration seconds=\(Int(Timing.maxRecordingSeconds))")
         controller.setPrimaryStatus(
             "已达单次最长录音",
-            detail: "单次最长约 \(minutes) 分钟，已自动结束并开始识别",
+            detail: "单次最长约 \(durationText)，已自动结束并开始识别",
             tone: .warning,
             resetWaveform: false
         )
@@ -1232,18 +1501,40 @@ final class SpeechInputCoordinator {
         return true
     }
 
-    /// 录音中持续无语音/文字产出超过上限（默认 5 分钟）→ 强制取消，不做识别，避免话筒空开持续耗电。
-    /// 与硬上限（约 6 分钟）配合：说话有产出就一直续，只有真正卡住/静音才被这条提前收掉。
+    private static func formatMaxRecordingDuration(_ seconds: TimeInterval) -> String {
+        if seconds < 60 {
+            return "\(Int(seconds.rounded())) 秒"
+        }
+        let minutes = Int((seconds / 60).rounded())
+        return "\(minutes) 分钟"
+    }
+
+    /// 录音中持续无语音/文字产出超过上限（默认 5 分钟）→ 自动收尾。
+    /// 如果本轮已经说过话，正常结束并识别，保留历史；如果从未有人声，取消空录音以避免无意义识别。
     private func enforceNoTextTimeout() -> Bool {
         guard let startedAt = recordingStartedAt else { return false }
         // 说过话就从最后一次人声算起；从未出声则从开始录音算起。
         let reference = voiceEverDetected ? (lastVoiceAt ?? startedAt) : startedAt
         guard Date().timeIntervalSince(reference) >= Timing.noTextTimeoutSeconds else { return false }
         let minutes = Int(Timing.noTextTimeoutSeconds / 60)
+        LaunchDiagnostics.mark(
+            "recording_auto_finish reason=no_text_timeout seconds=\(Int(Timing.noTextTimeoutSeconds)) had_voice=\(voiceEverDetected)"
+        )
         suppressNextHotkeyUp = hotkeyIsPressed
         hotkeyIsPressed = false
         longPressWorkItem?.cancel()
         longPressWorkItem = nil
+        if voiceEverDetected {
+            controller.setPrimaryStatus(
+                "已自动结束录音",
+                detail: "连续约 \(minutes) 分钟无语音输入，正在识别并保留本次内容。",
+                tone: .warning,
+                resetWaveform: false
+            )
+            popup.show(state: "自动结束", draft: "正在识别")
+            finishRecording()
+            return true
+        }
         recorder.cancel()
         clearActiveRecording()
         trackedTargetTaskID = nil

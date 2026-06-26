@@ -74,8 +74,9 @@ extension MainViewController {
         updateMemoryReadout()
 
         let quickSettings = buildSidebarQuickSettings()
+        let backlogEntry = buildBacklogEntry()
 
-        let stack = NSStackView(views: [brandStack, modelEntry, permissionEntry, spacer, quickSettings, memoryLabel, footerButtons])
+        let stack = NSStackView(views: [brandStack, modelEntry, permissionEntry, spacer, quickSettings, backlogEntry, memoryLabel, footerButtons])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 8
@@ -95,6 +96,7 @@ extension MainViewController {
             modelEntry.widthAnchor.constraint(equalTo: stack.widthAnchor),
             permissionEntry.widthAnchor.constraint(equalTo: stack.widthAnchor),
             quickSettings.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            backlogEntry.widthAnchor.constraint(equalTo: stack.widthAnchor),
             footerButtons.widthAnchor.constraint(equalTo: stack.widthAnchor),
             brandIcon.widthAnchor.constraint(equalToConstant: brandIconVisibleSize),
             brandIcon.heightAnchor.constraint(equalToConstant: brandIconVisibleSize),
@@ -141,6 +143,13 @@ extension MainViewController {
         ]
         let card = listCard(rows, hPad: 10, vPad: 5)
         return section("快捷设置", card)
+    }
+
+    func buildBacklogEntry() -> NSView {
+        backlogDirectoryButton.widthAnchor.constraint(equalToConstant: 110).isActive = true
+        let row = compactOptionRow("需求池", backlogDirectoryButton)
+        let card = listCard([row], hPad: 10, vPad: 5)
+        return section("需求池", card)
     }
 
     func buildCenterColumn() -> NSView {

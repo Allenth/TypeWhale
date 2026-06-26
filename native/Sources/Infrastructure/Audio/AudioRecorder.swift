@@ -319,15 +319,25 @@ final class AudioRecorder: @unchecked Sendable {
         realtimeSequence += 1
         let sequence = realtimeSequence
         let buffers = realtimeBuffers
+        let sourceURL = currentPendingURL
         let directory = latestURL.deletingLastPathComponent()
         let url = directory.appendingPathComponent(".realtime-\(taskID.uuidString)-\(sequence).wav")
         snapshotQueue.async { [weak self] in
             guard let self else { return }
             do {
                 try? FileManager.default.removeItem(at: url)
-                let snapshot = try AVAudioFile(forWriting: url, settings: format.settings)
-                for buffer in buffers {
-                    try snapshot.write(from: buffer)
+                if let sourceURL, FileManager.default.fileExists(atPath: sourceURL.path) {
+                    do {
+                        try self.copyRealtimeSnapshot(from: sourceURL, to: url)
+                    } catch {
+                        do {
+                            try self.writeRealtimeSnapshot(from: sourceURL, to: url)
+                        } catch {
+                            try self.writeRealtimeSnapshot(from: buffers, format: format, to: url)
+                        }
+                    }
+                } else {
+                    try self.writeRealtimeSnapshot(from: buffers, format: format, to: url)
                 }
                 DispatchQueue.main.async { [weak self] in
                     self?.onRealtimeSnapshot?(taskID, url)
@@ -343,6 +353,54 @@ final class AudioRecorder: @unchecked Sendable {
                     self.scheduleRealtimeSnapshot(taskID: taskID, format: format)
                 }
             }
+        }
+    }
+
+    private func copyRealtimeSnapshot(from sourceURL: URL, to destinationURL: URL) throws {
+        try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+        do {
+            let copied = try AVAudioFile(forReading: destinationURL)
+            guard copied.length > 0 else {
+                throw NSError(
+                    domain: "TypeWhale.AudioRecorder",
+                    code: 10,
+                    userInfo: [NSLocalizedDescriptionKey: "Realtime snapshot copy is empty."]
+                )
+            }
+        } catch {
+            try? FileManager.default.removeItem(at: destinationURL)
+            throw error
+        }
+    }
+
+    private func writeRealtimeSnapshot(from sourceURL: URL, to destinationURL: URL) throws {
+        let source = try AVAudioFile(forReading: sourceURL)
+        guard source.length > 0 else {
+            throw NSError(
+                domain: "TypeWhale.AudioRecorder",
+                code: 11,
+                userInfo: [NSLocalizedDescriptionKey: "Realtime snapshot source is empty."]
+            )
+        }
+        let format = source.processingFormat
+        let destination = try AVAudioFile(forWriting: destinationURL, settings: source.fileFormat.settings)
+        let chunkFrames: AVAudioFrameCount = 8192
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: chunkFrames) else {
+            try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+            return
+        }
+        while source.framePosition < source.length {
+            let remaining = AVAudioFrameCount(min(Int64(chunkFrames), source.length - source.framePosition))
+            try source.read(into: buffer, frameCount: remaining)
+            guard buffer.frameLength > 0 else { break }
+            try destination.write(from: buffer)
+        }
+    }
+
+    private func writeRealtimeSnapshot(from buffers: [AVAudioPCMBuffer], format: AVAudioFormat, to destinationURL: URL) throws {
+        let snapshot = try AVAudioFile(forWriting: destinationURL, settings: format.settings)
+        for buffer in buffers {
+            try snapshot.write(from: buffer)
         }
     }
 

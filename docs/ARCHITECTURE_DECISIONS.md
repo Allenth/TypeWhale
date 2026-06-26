@@ -156,7 +156,8 @@ Decision:
 - Keep ASR and VAD resources warm while the user is actively typing or speaking.
 - Do not unload the native recognizer after every transcription.
 - Do not use an idle timer that unloads models after N seconds of inactivity.
-- If the process memory footprint reaches the warning threshold while the app is idle, release ASR/VAD resources and immediately warm-load them again.
+- If the process memory footprint reaches the dynamic warning threshold while the app is idle, release ASR/VAD resources and immediately warm-load them again.
+- The warning threshold is `min(20GB, max(2GB, total physical memory * 25%))`, so low-memory Macs do not wait until 20GB before self-protection while still avoiding the old 1GB churn.
 - The release path must flush the expanded native memory arena without making the next recording pay the cold-load cost.
 
 Reasoning:
@@ -172,6 +173,35 @@ Consequences:
 - `NativeSenseVoiceBridge` owns actual release of recognizer and native VAD cache.
 - Future ASR/OCR/model providers should expose explicit cache-release and warm-load APIs rather than relying on process exit.
 - Manual QA should check two paths: continuous dictation should not reload on every sentence, and memory should drop only when idle and above the warning threshold.
+
+## ADR-006: Capsule Preview Is A Presentation Pipeline With Bounded Realtime Work
+
+Date: 2026-06-26
+
+Status: Accepted
+
+Decision:
+
+- Treat the recording capsule as a presentation pipeline driven by realtime preview events, not as the owner of recording, final ASR, rewrite, translation, or paste workflows.
+- `SpeechInputCoordinator` may route realtime preview text into the capsule, but a stuck realtime VAD/ASR snapshot must not permanently block later capsule updates.
+- Each realtime preview snapshot must have a short timeout. If the timeout fires, discard that snapshot and continue with the newest pending snapshot.
+- Stale realtime callbacks must be ignored after a newer snapshot or timeout has taken ownership.
+- Realtime preview should prefer quick user-visible feedback over an extra realtime VAD pass; final ASR still keeps VAD, while preview relies on text filtering to suppress common silence hallucinations.
+- Cumulative preview context may be preserved for ASR quality, but snapshot production must avoid the long-recording trap of rewriting all in-memory buffers as the only path. Prefer a validated copy of the current recording file, then a chunked file rewrite, with buffer rewrite only as fallback.
+- `RecordingPanel`, `RecordingCapsuleView`, and `CapsuleTextBuffer` stay focused on window presentation, drawing, animation, and local text-buffer progression.
+
+Reasoning:
+
+- The capsule is the user's confidence signal while speaking; it can fail visually even when final ASR and smart rewrite still succeed.
+- Realtime preview uses asynchronous local model callbacks. Without a timeout, one lost or very slow callback can leave `realtimeBusy` stuck and prevent later preview text from reaching the capsule.
+- Running VAD and ASR sequentially for each preview snapshot can make the first visible text arrive too late, especially because preview snapshots are cumulative. The capsule's product job is confidence feedback, so responsiveness wins here.
+- Bounding realtime preview work keeps the visual layer resilient without changing final recognition correctness.
+- The user confirmed the cumulative-context path has better quality and fewer nonsense states, so the fix for long-recording freezes should optimize snapshot production rather than returning to short windows or silence segmentation.
+
+Consequences:
+
+- Logs should include realtime preview update and timeout events so future "capsule stopped typing" reports can be separated into ASR-output, realtime-timeout, and UI-animation causes.
+- Future capsule changes should not couple main-window status, screenshot flow, rewrite flow, or paste flow into capsule rendering state.
 
 ## ADR-004: Screenshot Overlay Must Not Activate The Main App Window
 
