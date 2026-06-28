@@ -275,31 +275,6 @@ extension MainViewController {
         popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxX)
     }
 
-    @objc func showPreferencesPopover(_ sender: NSButton) {
-        showPreferencesPopover(relativeTo: sender.bounds, of: sender)
-    }
-
-    func showPreferencesPopoverFromMenu() {
-        let anchor = NSRect(x: 0, y: max(0, view.bounds.height - 44), width: leftColumnWidth, height: 36)
-        showPreferencesPopover(relativeTo: anchor, of: view)
-    }
-
-    func showPreferencesPopover(relativeTo rect: NSRect, of anchorView: NSView) {
-        if let popover = preferencesPopover, popover.isShown {
-            popover.performClose(nil)
-            return
-        }
-        let popover = preferencesPopover ?? NSPopover()
-        // 半瞬态：在偏好里录快捷键、编辑提示词/术语会弹出 NSAlert，transient 会被焦点切换误关；
-        // semitransient 只在点主窗口内容时关闭，编辑期间不会整块消失。
-        popover.behavior = .semitransient
-        popover.animates = true
-        popover.contentSize = NSSize(width: 540, height: 400)
-        popover.contentViewController = makePreferencesViewController()
-        preferencesPopover = popover
-        popover.show(relativeTo: rect, of: anchorView, preferredEdge: .maxX)
-    }
-
     @objc func showModelDetail(_ sender: NSGestureRecognizer) {
         guard let anchor = sender.view else { return }
         if let popover = modelDetailPopover, popover.isShown {

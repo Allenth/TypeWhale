@@ -27,7 +27,7 @@ extension MainViewController {
         wireHotkeyButtons()
 
         // 当前会话固定在左侧，不随横向滚动移动；窄一些，把更多纵向空间留给最近转录。
-        let fixedSession = panel("当前会话", width: 300, buildSessionAndRecentContent())
+        let fixedSession = panel("当前会话", width: 300, fillsHeight: true, buildSessionAndRecentContent())
         container.addSubview(fixedSession)
 
         let panelViews = buildPanels()
@@ -102,7 +102,7 @@ extension MainViewController {
 
     // MARK: - 面板容器（明确边界）
 
-    private func panel(_ title: String, width: CGFloat, _ content: NSView) -> NSView {
+    private func panel(_ title: String, width: CGFloat, fillsHeight: Bool = false, _ content: NSView) -> NSView {
         let header = label(title, size: 12, weight: .semibold)
         header.textColor = UITheme.sectionTitle
 
@@ -121,12 +121,16 @@ extension MainViewController {
         box.layer?.borderWidth = 1
         box.layer?.borderColor = UITheme.cardBorder.cgColor
         box.addSubview(stack)
+        // fillsHeight=true：内容栈底边钉到面板底，让低 hugging 的子视图（如最近转录）撑满整列。
+        let bottom = fillsHeight
+            ? stack.bottomAnchor.constraint(equalTo: box.bottomAnchor, constant: -14)
+            : stack.bottomAnchor.constraint(lessThanOrEqualTo: box.bottomAnchor, constant: -14)
         NSLayoutConstraint.activate([
             box.widthAnchor.constraint(equalToConstant: width),
             stack.leadingAnchor.constraint(equalTo: box.leadingAnchor, constant: 14),
             stack.trailingAnchor.constraint(equalTo: box.trailingAnchor, constant: -14),
             stack.topAnchor.constraint(equalTo: box.topAnchor, constant: 14),
-            stack.bottomAnchor.constraint(lessThanOrEqualTo: box.bottomAnchor, constant: -14),
+            bottom,
         ])
         return box
     }
@@ -240,7 +244,8 @@ extension MainViewController {
         recentCard.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         recentScroll.widthAnchor.constraint(equalTo: recentScroll.contentView.widthAnchor).isActive = true
         recentStack.widthAnchor.constraint(equalTo: recentScroll.contentView.widthAnchor).isActive = true
-        // 最近转录吸收剩余高度
+        // 整个内容栈吸收面板多余高度，再由低 hugging 的最近转录卡片撑满。
+        stack.setContentHuggingPriority(.defaultLow, for: .vertical)
         recentCard.setContentHuggingPriority(.defaultLow, for: .vertical)
         recentScroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 120).isActive = true
         return stack

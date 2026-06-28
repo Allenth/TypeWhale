@@ -108,7 +108,6 @@ final class MainViewController: NSViewController {
     var lastMemoryLevel: MemoryMonitor.Level = .normal
     var onInstallModel: (() -> Void)?
     var onHotkeysChange: ((HotkeyBinding, HotkeyBinding?, HotkeyBinding, HotkeyBinding?, HotkeyBinding, HotkeyBinding?, HotkeyBinding?) -> Void)?
-    var preferencesViewController: NSViewController?
 
     let modelEntryName = label("SenseVoice int8", size: 13, weight: .semibold)
     let modelEntryStatus = label("检查中", size: 11, weight: .medium)
@@ -132,7 +131,6 @@ final class MainViewController: NSViewController {
     var usageGuidePopover: NSPopover?
     var versionHistoryPopover: NSPopover?
     var testLogsPopover: NSPopover?
-    var preferencesPopover: NSPopover?
     var modelDetailPopover: NSPopover?
     var deepSeekBalancePopover: NSPopover?
     let deepSeekBalanceClient = DeepSeekBalanceClient()
