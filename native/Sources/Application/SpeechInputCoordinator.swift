@@ -1396,15 +1396,12 @@ final class SpeechInputCoordinator {
             switch outcome {
             case .directInserted:
                 controller.detail.stringValue = "识别结果已直接输入，未改动剪贴板"
-                ToastPresenter.shared.show("已输入", style: .success)
                 hidePopup(after: 0, task: task)
             case .restored:
                 controller.detail.stringValue = "识别结果已粘贴，原剪贴板已恢复"
-                ToastPresenter.shared.show("已粘贴", style: .success)
                 hidePopup(after: 0, task: task)
             case .preservedUserClipboard:
                 controller.detail.stringValue = "识别结果已粘贴，检测到新的剪贴板内容并已保留"
-                ToastPresenter.shared.show("已粘贴", style: .success)
                 hidePopup(after: 0, task: task)
             case .failed:
                 controller.setPrimaryStatus(
