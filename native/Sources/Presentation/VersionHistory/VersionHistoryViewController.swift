@@ -9,6 +9,13 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.5.15 (Build 373)",
+            date: "2026-06-29",
+            changes: [
+                "新增应用内轻量提示（toast）：不抢焦点、点击穿透、自动淡出，不打断当前操作；先接入“已复制到剪贴板”作为首个示例。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.5.14 (Build 372)",
             date: "2026-06-29",
             changes: [

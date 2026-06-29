@@ -151,6 +151,7 @@ extension MainViewController {
         pasteboard.clearContents()
         pasteboard.setString(displayText(for: recentRecords[index]), forType: .string)
         setPrimaryStatus("已复制最近转录", detail: "最近转录内容已复制到剪贴板。", tone: .success)
+        ToastPresenter.shared.show("已复制到剪贴板", style: .success)
     }
 
     func displayText(for record: RecentTranscription) -> String {
