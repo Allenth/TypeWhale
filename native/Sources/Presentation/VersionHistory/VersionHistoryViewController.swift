@@ -9,6 +9,22 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.5.18 (Build 376)",
+            date: "2026-06-29",
+            changes: [
+                "发布口径整理版：同步 README、开发日志和应用内版本历史，修正“本地安装版”和“已封包 DMG”的表述边界。",
+                "不改变产品行为；本版用于让后续复盘能准确区分源码安装版、应用内版本历史和可分享 DMG 包。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.5.17 (Build 375)",
+            date: "2026-06-29",
+            changes: [
+                "本地构建号整理：源码包与已安装 App 对齐到 1.5.17 (375)，作为麦克风降噪与系统音量压低命名修正后的本地安装版。",
+                "未生成对应 DMG；需要分享给朋友时应单独执行封包流程。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.5.16 (Build 374)",
             date: "2026-06-29",
             changes: [

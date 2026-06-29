@@ -174,7 +174,7 @@ Consequences:
 - Future ASR/OCR/model providers should expose explicit cache-release and warm-load APIs rather than relying on process exit.
 - Manual QA should check two paths: continuous dictation should not reload on every sentence, and memory should drop only when idle and above the warning threshold.
 
-## ADR-006: Capsule Preview Is A Presentation Pipeline With Bounded Realtime Work
+## ADR-011: Capsule Preview Is A Presentation Pipeline With Bounded Realtime Work
 
 Date: 2026-06-26
 
