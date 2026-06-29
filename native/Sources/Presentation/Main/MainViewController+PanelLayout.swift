@@ -89,7 +89,12 @@ extension MainViewController {
         let historyButton = footerIconButton(title: "版本历史", symbolName: "clock.arrow.circlepath", action: #selector(showVersionHistory(_:)))
         let testLogsButton = footerIconButton(title: "测试日志", symbolName: "doc.text.magnifyingglass", action: #selector(showTestLogs(_:)))
 
-        let row = NSStackView(views: [icon, titleStack, flexSpacer(), memoryLabel, usageGuideButton, historyButton, testLogsButton])
+        // 左上角让开窗口红绿灯（交通灯）按钮，避免 logo/标题被遮挡。
+        let trafficLightPad = NSView()
+        trafficLightPad.translatesAutoresizingMaskIntoConstraints = false
+        trafficLightPad.widthAnchor.constraint(equalToConstant: 52).isActive = true
+
+        let row = NSStackView(views: [trafficLightPad, icon, titleStack, flexSpacer(), memoryLabel, usageGuideButton, historyButton, testLogsButton])
         row.orientation = .horizontal
         row.alignment = .centerY
         row.spacing = 10

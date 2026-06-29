@@ -130,8 +130,11 @@ final class SpeechInputCoordinator {
         recorder.onInputLevelDb = { [weak self] db in
             self?.popup.updateInputLevel(db: db)
         }
-        recorder.onRealtimeSnapshot = { [weak self] taskID, url, chunkIndex, isChunkFinal in
-            self?.receiveRealtimeSnapshot(taskID: taskID, url: url, chunkIndex: chunkIndex, isChunkFinal: isChunkFinal)
+        recorder.onRealtimeSnapshot = { [weak self] taskID, url, chunkIndex, isChunkFinal, reachedNearField in
+            self?.receiveRealtimeSnapshot(
+                taskID: taskID, url: url, chunkIndex: chunkIndex,
+                isChunkFinal: isChunkFinal, reachedNearField: reachedNearField
+            )
         }
         recorder.onInputRouteChanged = { [weak self] message in
             self?.handleAudioInputRouteChanged(message)
@@ -832,7 +835,7 @@ final class SpeechInputCoordinator {
         realtimeSnapshotTimeoutWorkItem = nil
     }
 
-    private func receiveRealtimeSnapshot(taskID: UUID, url: URL, chunkIndex: Int, isChunkFinal: Bool) {
+    private func receiveRealtimeSnapshot(taskID: UUID, url: URL, chunkIndex: Int, isChunkFinal: Bool, reachedNearField: Bool) {
         guard let session = activeSession, taskID == session.id else {
             try? FileManager.default.removeItem(at: url)
             return
@@ -842,7 +845,8 @@ final class SpeechInputCoordinator {
             audioURL: url,
             configuration: session.configuration,
             chunkIndex: chunkIndex,
-            isChunkFinal: isChunkFinal
+            isChunkFinal: isChunkFinal,
+            reachedNearField: reachedNearField
         )
         if realtimeBusy {
             if isChunkFinal {
@@ -888,7 +892,9 @@ final class SpeechInputCoordinator {
         // 已提交块的滞后快照直接丢弃，不污染显示。
         guard request.chunkIndex >= session.currentChunkIndex else { return }
 
-        if case .success(let value) = response, (value["error"] as? String ?? "").isEmpty {
+        // 近场门：未达到近场响度的块（远场/弱信号）不接受其文本，尾巴保持为空。
+        if request.reachedNearField,
+           case .success(let value) = response, (value["error"] as? String ?? "").isEmpty {
             let text = cleanRecognitionText(value["text"] as? String ?? "", languageMode: request.configuration.languageMode)
             // 尾巴去重/幻觉过滤只跟「本块之前的尾巴」比较；committed 前缀不参与。
             if isMeaningfulRealtimePreviewText(text, previousPreview: session.latestPreviewText) {

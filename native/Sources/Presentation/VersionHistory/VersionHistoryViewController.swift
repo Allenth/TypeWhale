@@ -9,6 +9,27 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.5.14 (Build 372)",
+            date: "2026-06-29",
+            changes: [
+                "提交收口：汇总左上角 logo 让位、近场幅度门；并把方案 D（WebRTC VAD 前置粗筛）标记为搁置“按需再做”。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.5.13 (Build 371)",
+            date: "2026-06-29",
+            changes: [
+                "新增近场幅度门：实时预览只接受“当前块达到过近场响度（约 -33dBFS）”的内容，挡掉远处人声等弱信号进入预览；最终粘贴不受影响。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.5.12 (Build 370)",
+            date: "2026-06-29",
+            changes: [
+                "修复主窗口左上角 logo/标题被窗口红绿灯按钮遮挡：品牌区右移让位。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.5.11 (Build 369)",
             date: "2026-06-29",
             changes: [
