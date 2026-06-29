@@ -107,9 +107,19 @@ xcrun clang \
 
 # Earliest-possible, dependency-free launch/crash probe (pure POSIX). Linked into
 # the executable so the Swift CrashReporter can funnel output through it.
+# Inject the current version/build so the probe writes to the per-build log file
+# (~/Library/Logs/TypeWhale/<day>/<version>-<build>.log), matching Swift LaunchDiagnostics.
+# Patterns deliberately omit the leading "<key>CFBundle" so release_local_build.sh's own
+# version grep does not match these lines; tail -1 then picks the real Info.plist heredoc.
+TW_VERSION="$(perl -ne 'print "$1\n" if m{ShortVersionString</key><string>([^<]+)}' "$0" | tail -1)"
+TW_BUILD="$(perl -ne 'print "$1\n" if m{BundleVersion</key><string>([^<]+)}' "$0" | tail -1)"
+TW_VERSION="${TW_VERSION:-0.0.0}"
+TW_BUILD="${TW_BUILD:-0}"
 xcrun clang \
   -O2 \
   -target arm64-apple-macosx14.0 \
+  -DTYPEWHALE_VERSION="\"${TW_VERSION}\"" \
+  -DTYPEWHALE_BUILD="\"${TW_BUILD}\"" \
   -c "$ROOT/native/LaunchProbe.c" \
   -o "$LAUNCH_PROBE_OBJECT"
 
@@ -153,8 +163,8 @@ cat > "$CONTENTS/Info.plist" <<'PLIST'
 <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
 <key>CFBundleName</key><string>TypeWhale</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>1.5.21</string>
-<key>CFBundleVersion</key><string>379</string>
+<key>CFBundleShortVersionString</key><string>1.5.23</string>
+<key>CFBundleVersion</key><string>381</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSMicrophoneUsageDescription</key><string>TypeWhale 需要使用麦克风进行本地语音转文字。</string>

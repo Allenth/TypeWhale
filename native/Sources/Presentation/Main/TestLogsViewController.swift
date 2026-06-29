@@ -137,8 +137,7 @@ final class TestLogsViewController: NSViewController {
     }
 
     @objc private func openLogsFolder() {
-        let directory = LaunchDiagnostics.logFileURL.deletingLastPathComponent()
-        NSWorkspace.shared.open(directory)
+        NSWorkspace.shared.open(LaunchDiagnostics.baseDirectory)
     }
 
     private func toolbarButton(_ title: String, imageName: String, action: Selector) -> NSButton {

@@ -44,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         LaunchDiagnostics.mark("applicationDidFinishLaunching begin")
+        LaunchDiagnostics.pruneOldLogs(keepingDays: 14)
         TypeWhaleApplication.terminateStaleInstances()
         LaunchDiagnostics.mark("lifecycle.setup begin")
         lifecycle.setup()

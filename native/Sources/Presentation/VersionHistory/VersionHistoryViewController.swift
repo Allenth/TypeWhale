@@ -9,6 +9,14 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.5.23 (Build 381)",
+            date: "2026-06-29",
+            changes: [
+                "日志改为「每天一个文件夹、每个 build 一个文件」：~/Library/Logs/TypeWhale/<日期>/<版本>-<build>.log，Swift 与 C 崩溃日志器写同一文件。",
+                "新增 latest.log 软链指向当前 build 文件（固定排查入口）；启动时清理 14 天前的日志文件夹与迁移前的旧 launch.log。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.5.21 (Build 379)",
             date: "2026-06-29",
             changes: [

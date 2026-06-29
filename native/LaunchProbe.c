@@ -25,15 +25,49 @@
 #include <time.h>
 #include <unistd.h>
 
+// Injected at compile time by build_native_app.sh (-DTYPEWHALE_VERSION / -DTYPEWHALE_BUILD).
+// Fallbacks keep the file compilable on its own.
+#ifndef TYPEWHALE_VERSION
+#define TYPEWHALE_VERSION "0.0.0"
+#endif
+#ifndef TYPEWHALE_BUILD
+#define TYPEWHALE_BUILD "0"
+#endif
+
+// Logs live under ~/Library/Logs/TypeWhale/<YYYY-MM-DD>/<version>-<build>.log so each
+// day is a folder and each build of the day is one file. A latest.log symlink in the
+// base folder always points at the current build's file (stable entry point for tooling).
+// Both this dependency-free C path and Swift LaunchDiagnostics must agree on this layout.
 static void typewhale_probe_log_path(char *out, size_t out_size) {
     const char *home = getenv("HOME");
     if (home == NULL || home[0] == '\0') {
         home = "/tmp";
     }
-    snprintf(out, out_size, "%s/Library/Logs/TypeWhale", home);
-    // Best-effort directory creation; ignore errors (e.g. already exists).
-    mkdir(out, 0755);
-    snprintf(out, out_size, "%s/Library/Logs/TypeWhale/launch.log", home);
+    char base[700];
+    snprintf(base, sizeof(base), "%s/Library/Logs/TypeWhale", home);
+    mkdir(base, 0755);
+
+    char day[16];
+    time_t now = time(NULL);
+    struct tm tm_buf;
+    if (localtime_r(&now, &tm_buf) != NULL) {
+        strftime(day, sizeof(day), "%Y-%m-%d", &tm_buf);
+    } else {
+        strncpy(day, "unknown", sizeof(day));
+        day[sizeof(day) - 1] = '\0';
+    }
+
+    char daydir[768];
+    snprintf(daydir, sizeof(daydir), "%s/%s", base, day);
+    mkdir(daydir, 0755);
+
+    snprintf(out, out_size, "%s/%s-%s.log", daydir, TYPEWHALE_VERSION, TYPEWHALE_BUILD);
+
+    // Best-effort: refresh latest.log -> current build's file.
+    char latest[768];
+    snprintf(latest, sizeof(latest), "%s/latest.log", base);
+    unlink(latest);
+    symlink(out, latest);
 }
 
 void typewhale_launch_probe_log(const char *message) {
