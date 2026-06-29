@@ -9,6 +9,14 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.5.21 (Build 379)",
+            date: "2026-06-29",
+            changes: [
+                "修复「第二次起录音识别成功却不粘贴」：刷新前台目标时，瞬时非粘贴前台（TypeWhale 自身胶囊/窗口、桌面等）不再清空已知的好粘贴目标，并在实时目标为空时回退到录音开始时捕获的目标。",
+                "新增 paste_drain 诊断日志（target/frontmost/fallback），便于排查粘贴目标问题。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.5.19 (Build 377)",
             date: "2026-06-29",
             changes: [

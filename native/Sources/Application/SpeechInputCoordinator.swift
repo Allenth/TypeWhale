@@ -435,15 +435,19 @@ final class SpeechInputCoordinator {
 
     private func updateTrackedTargetApp(_ app: NSRunningApplication?) {
         guard trackedTargetTaskID != nil else { return }
-        let target = pasteableTargetApp(app)
-        trackedTargetApp = target
-        if var session = activeSession, session.id == trackedTargetTaskID {
-            session.targetApp = target
-            activeSession = session
+        // 只有遇到有效可粘贴目标才更新；瞬时非粘贴前台（TypeWhale 自身胶囊/窗口、桌面等）
+        // 不清空已知的好目标，避免「识别成功却找不到粘贴目标」。
+        if let target = pasteableTargetApp(app) {
+            trackedTargetApp = target
+            if var session = activeSession, session.id == trackedTargetTaskID {
+                session.targetApp = target
+                activeSession = session
+            }
         }
+        let display = trackedTargetApp ?? app
         popup.updateTargetApp(
-            appIcon: app?.icon,
-            appName: displayNameForSelectedTarget(app)
+            appIcon: display?.icon,
+            appName: displayNameForSelectedTarget(display)
         )
     }
 
@@ -455,6 +459,11 @@ final class SpeechInputCoordinator {
         guard trackedTargetTaskID == taskID else { return fallback }
         if let trackedTargetApp, !trackedTargetApp.isTerminated {
             return trackedTargetApp
+        }
+        // 实时跟踪的目标被瞬时非粘贴前台（如 TypeWhale 自己的胶囊/窗口）清空时，
+        // 回退到录音开始时捕获的目标，避免第二次起录音「识别成功却不粘贴」。
+        if let fallback, !fallback.isTerminated {
+            return fallback
         }
         return nil
     }
@@ -1310,6 +1319,9 @@ final class SpeechInputCoordinator {
         let result = pendingPasteResults.removeFirst()
         refreshTrackedTargetFromFrontmost()
         let pasteTarget = currentTargetApp(for: result.task)
+        LaunchDiagnostics.mark(
+            "paste_drain task_id=\(result.task.id.uuidString.prefix(8)) target=\(pasteTarget?.localizedName ?? "nil") frontmost=\(NSWorkspace.shared.frontmostApplication?.localizedName ?? "nil") fallback=\(result.task.targetApp?.localizedName ?? "nil")"
+        )
         guard let pasteTarget else {
             skipAutomaticPaste(result)
             return
