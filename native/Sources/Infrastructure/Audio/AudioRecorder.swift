@@ -64,6 +64,23 @@ final class AudioRecorder: @unchecked Sendable {
     private enum RealtimeTiming {
         static let firstSnapshotSeconds: Double = 0.30
         static let snapshotIntervalSeconds: Double = 0.50
+        /// 实时预览分块：到软目标后，等下一个停顿（Silero 判定当前无人声）再在停顿处冻结提交，
+        /// 让块边界落在词/句间隙、不切词；若一直不停顿则到硬上限强制提交兜底。
+        /// 既封住长录音的 O(n²) 重识别开销，也让已提交文本稳定不跳变。
+        static let chunkSoftSeconds: Double = 10.0
+        static let chunkHardSeconds: Double = 18.0
+    }
+    /// 实时人声门控（A 方案）：每隔 intervalSeconds 把最近 windowSeconds 的单声道 PCM
+    /// 交给 Silero 跑一次，作为"当前是否有人声"的权威信号。与实时预览开关无关，始终运行。
+    private enum VoiceProbe {
+        static let windowSeconds: Double = 0.7
+        static let intervalSeconds: Double = 0.4
+        static let firstSeconds: Double = 0.3
+    }
+    /// 胶囊实时电平读数：峰值保持（快升慢降）+ 约每 0.1s 上报一次 dBFS，避免数字抖动。
+    private enum LevelReadout {
+        static let intervalSeconds: Double = 0.1
+        static let holdDecay: Float = 0.88
     }
     private enum Finalization {
         static let tailPaddingSeconds: Double = 0.25
@@ -79,8 +96,17 @@ final class AudioRecorder: @unchecked Sendable {
     private var currentPendingURL: URL?
     private var realtimeBuffers: [AVAudioPCMBuffer] = []
     private var nextRealtimeFrame: AVAudioFramePosition = 0
+    private var realtimeChunkStartFrame: AVAudioFramePosition = 0
+    private var realtimeChunkIndex = 0
+    /// 由协调器按 Silero 探测结果实时推送：当前是否有人声。用于在停顿处对齐分块边界（不切词）。
+    private var realtimeVoiceActive = true
     private var realtimeSequence = 0
     private var realtimeEnabled = false
+    private var vadWindowSamples: [Float] = []
+    private var vadWindowCapacity = 0
+    private var nextVoiceProbeFrame: AVAudioFramePosition = 0
+    private var recentPeakHold: Float = 0
+    private var nextLevelFrame: AVAudioFramePosition = 0
     private var snapshotWriteInFlight = false
     private var snapshotRequestedWhileBusy = false
     private var inputRouteObserver: AudioInputRouteObserver?
@@ -89,8 +115,13 @@ final class AudioRecorder: @unchecked Sendable {
     private var latestEmptyRecordingReason: String?
     private(set) var isRecording = false
     var onBands: (([Float]) -> Void)?
-    var onRealtimeSnapshot: ((UUID, URL) -> Void)?
+    /// (taskID, 快照音频URL, 块序号, 是否为该块的最终快照)。块最终快照用于冻结提交，不会被丢弃。
+    var onRealtimeSnapshot: ((UUID, URL, Int, Bool) -> Void)?
     var onInputRouteChanged: ((String) -> Void)?
+    /// 实时人声门控信号：(最近窗口的单声道 PCM, 采样率)。约每 0.4s 触发一次，在后台队列回调。
+    var onVoiceProbe: (([Float], Int) -> Void)?
+    /// 实时输入电平（dBFS，≤0）。约每 0.1s 在 main 回调一次，供胶囊显示。
+    var onInputLevelDb: ((Float) -> Void)?
 
     var emptyRecordingReason: String? {
         latestEmptyRecordingReason
@@ -129,12 +160,20 @@ final class AudioRecorder: @unchecked Sendable {
         currentTaskID = taskID
         currentPendingURL = pendingURL
         realtimeBuffers = []
+        realtimeChunkStartFrame = 0
+        realtimeChunkIndex = 0
+        realtimeVoiceActive = true
         realtimeSequence = 0
         self.realtimeEnabled = realtimeEnabled
         snapshotRequestedWhileBusy = false
         inputFormatDescription = "\(Int(format.sampleRate)) Hz / \(format.channelCount) ch"
         latestEmptyRecordingReason = nil
         nextRealtimeFrame = AVAudioFramePosition(format.sampleRate * RealtimeTiming.firstSnapshotSeconds)
+        vadWindowSamples = []
+        vadWindowCapacity = max(1, Int(format.sampleRate * VoiceProbe.windowSeconds))
+        nextVoiceProbeFrame = AVAudioFramePosition(format.sampleRate * VoiceProbe.firstSeconds)
+        recentPeakHold = 0
+        nextLevelFrame = AVAudioFramePosition(format.sampleRate * LevelReadout.intervalSeconds)
         state.begin()
         isRecording = true
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
@@ -149,14 +188,44 @@ final class AudioRecorder: @unchecked Sendable {
                 do {
                     try file.write(from: copy)
                     self.state.addFrames(AVAudioFramePosition(copy.frameLength))
-                    self.state.observePeak(self.peakLevel(from: copy))
+                    let bufferPeak = self.peakLevel(from: copy)
+                    self.state.observePeak(bufferPeak)
+                    self.recentPeakHold = max(bufferPeak, self.recentPeakHold * LevelReadout.holdDecay)
+                    let (frameCount, _, _) = self.state.snapshot()
                     if self.realtimeEnabled {
                         self.realtimeBuffers.append(copy)
-                        let (frameCount, _, _) = self.state.snapshot()
                         if frameCount >= self.nextRealtimeFrame {
-                            self.scheduleRealtimeSnapshot(taskID: taskID, format: format)
                             self.nextRealtimeFrame = frameCount + AVAudioFramePosition(format.sampleRate * RealtimeTiming.snapshotIntervalSeconds)
+                            let chunkFrames = Double(frameCount - self.realtimeChunkStartFrame)
+                            let softReached = chunkFrames >= format.sampleRate * RealtimeTiming.chunkSoftSeconds
+                            let hardReached = chunkFrames >= format.sampleRate * RealtimeTiming.chunkHardSeconds
+                            // 到软目标后遇到停顿（Silero 判定当前无人声）即在停顿处提交，避免切词；硬上限兜底。
+                            let isChunkFinal = hardReached || (softReached && !self.realtimeVoiceActive)
+                            let chunkIndex = self.realtimeChunkIndex
+                            let chunkBuffers = self.realtimeBuffers
+                            if isChunkFinal {
+                                // 冻结当前块：下一块从此帧起算，丢掉已提交的缓冲（也封住长录音内存增长）。
+                                self.realtimeChunkStartFrame = frameCount
+                                self.realtimeChunkIndex += 1
+                                self.realtimeBuffers.removeAll(keepingCapacity: true)
+                            }
+                            self.emitRealtimeSnapshot(
+                                taskID: taskID, format: format, buffers: chunkBuffers,
+                                chunkIndex: chunkIndex, isChunkFinal: isChunkFinal
+                            )
                         }
+                    }
+                    self.appendVoiceWindow(from: copy)
+                    if self.onVoiceProbe != nil, frameCount >= self.nextVoiceProbeFrame {
+                        let window = self.vadWindowSamples
+                        let rate = Int(format.sampleRate)
+                        self.nextVoiceProbeFrame = frameCount + AVAudioFramePosition(format.sampleRate * VoiceProbe.intervalSeconds)
+                        DispatchQueue.main.async { [weak self] in self?.onVoiceProbe?(window, rate) }
+                    }
+                    if self.onInputLevelDb != nil, frameCount >= self.nextLevelFrame {
+                        self.nextLevelFrame = frameCount + AVAudioFramePosition(format.sampleRate * LevelReadout.intervalSeconds)
+                        let db: Float = self.recentPeakHold > 1e-6 ? 20 * log10(self.recentPeakHold) : -100
+                        DispatchQueue.main.async { [weak self] in self?.onInputLevelDb?(db) }
                     }
                     let bands = self.frequencyBands(from: copy)
                     DispatchQueue.main.async { [weak self] in self?.onBands?(bands) }
@@ -309,91 +378,36 @@ final class AudioRecorder: @unchecked Sendable {
         onInputRouteChanged?(message)
     }
 
-    private func scheduleRealtimeSnapshot(taskID: UUID, format: AVAudioFormat) {
-        guard !snapshotWriteInFlight else {
-            snapshotRequestedWhileBusy = true
-            return
+    /// 把「当前块」的音频缓冲写成快照文件并回调。普通中间快照受单写入节流（盘忙就跳过，下一拍再来）；
+    /// 块最终快照（isChunkFinal）绕过节流，保证一定被写出，避免丢掉整块的提交文本。
+    private func emitRealtimeSnapshot(
+        taskID: UUID, format: AVAudioFormat, buffers: [AVAudioPCMBuffer],
+        chunkIndex: Int, isChunkFinal: Bool
+    ) {
+        if !isChunkFinal {
+            guard !snapshotWriteInFlight else { return }
+            snapshotWriteInFlight = true
         }
-        snapshotWriteInFlight = true
-        snapshotRequestedWhileBusy = false
         realtimeSequence += 1
         let sequence = realtimeSequence
-        let buffers = realtimeBuffers
-        let sourceURL = currentPendingURL
         let directory = latestURL.deletingLastPathComponent()
         let url = directory.appendingPathComponent(".realtime-\(taskID.uuidString)-\(sequence).wav")
         snapshotQueue.async { [weak self] in
             guard let self else { return }
             do {
                 try? FileManager.default.removeItem(at: url)
-                if let sourceURL, FileManager.default.fileExists(atPath: sourceURL.path) {
-                    do {
-                        try self.copyRealtimeSnapshot(from: sourceURL, to: url)
-                    } catch {
-                        do {
-                            try self.writeRealtimeSnapshot(from: sourceURL, to: url)
-                        } catch {
-                            try self.writeRealtimeSnapshot(from: buffers, format: format, to: url)
-                        }
-                    }
-                } else {
-                    try self.writeRealtimeSnapshot(from: buffers, format: format, to: url)
-                }
+                try self.writeRealtimeSnapshot(from: buffers, format: format, to: url)
                 DispatchQueue.main.async { [weak self] in
-                    self?.onRealtimeSnapshot?(taskID, url)
+                    self?.onRealtimeSnapshot?(taskID, url, chunkIndex, isChunkFinal)
                 }
             } catch {
                 try? FileManager.default.removeItem(at: url)
             }
-            self.processingQueue.async { [weak self] in
-                guard let self else { return }
-                self.snapshotWriteInFlight = false
-                guard self.realtimeEnabled, self.currentTaskID == taskID else { return }
-                if self.snapshotRequestedWhileBusy {
-                    self.scheduleRealtimeSnapshot(taskID: taskID, format: format)
+            if !isChunkFinal {
+                self.processingQueue.async { [weak self] in
+                    self?.snapshotWriteInFlight = false
                 }
             }
-        }
-    }
-
-    private func copyRealtimeSnapshot(from sourceURL: URL, to destinationURL: URL) throws {
-        try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
-        do {
-            let copied = try AVAudioFile(forReading: destinationURL)
-            guard copied.length > 0 else {
-                throw NSError(
-                    domain: "TypeWhale.AudioRecorder",
-                    code: 10,
-                    userInfo: [NSLocalizedDescriptionKey: "Realtime snapshot copy is empty."]
-                )
-            }
-        } catch {
-            try? FileManager.default.removeItem(at: destinationURL)
-            throw error
-        }
-    }
-
-    private func writeRealtimeSnapshot(from sourceURL: URL, to destinationURL: URL) throws {
-        let source = try AVAudioFile(forReading: sourceURL)
-        guard source.length > 0 else {
-            throw NSError(
-                domain: "TypeWhale.AudioRecorder",
-                code: 11,
-                userInfo: [NSLocalizedDescriptionKey: "Realtime snapshot source is empty."]
-            )
-        }
-        let format = source.processingFormat
-        let destination = try AVAudioFile(forWriting: destinationURL, settings: source.fileFormat.settings)
-        let chunkFrames: AVAudioFrameCount = 8192
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: chunkFrames) else {
-            try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
-            return
-        }
-        while source.framePosition < source.length {
-            let remaining = AVAudioFrameCount(min(Int64(chunkFrames), source.length - source.framePosition))
-            try source.read(into: buffer, frameCount: remaining)
-            guard buffer.frameLength > 0 else { break }
-            try destination.write(from: buffer)
         }
     }
 
@@ -477,6 +491,25 @@ final class AudioRecorder: @unchecked Sendable {
             let spectral = min(1, (bandMagnitude / Float(frequencies.count)) / 0.0058)
             let broadband = min(1, rms / 0.026)
             return max(0.12, min(1, spectral * 0.92 + broadband * 0.28))
+        }
+    }
+
+    /// 协调器按 Silero 探测结果推送「当前是否有人声」；录音器据此在停顿处对齐分块边界（不切词）。
+    func updateRealtimeVoiceActive(_ active: Bool) {
+        processingQueue.async { [weak self] in
+            self?.realtimeVoiceActive = active
+        }
+    }
+
+    /// 把当前缓冲的单声道 PCM（取首声道）追加进滚动窗口，并裁剪到约 windowSeconds 长度。
+    /// 全部在 processingQueue（串行）上调用，无需加锁。
+    private func appendVoiceWindow(from buffer: AVAudioPCMBuffer) {
+        guard let samples = buffer.floatChannelData?[0] else { return }
+        let count = Int(buffer.frameLength)
+        guard count > 0 else { return }
+        vadWindowSamples.append(contentsOf: UnsafeBufferPointer(start: samples, count: count))
+        if vadWindowSamples.count > vadWindowCapacity {
+            vadWindowSamples.removeFirst(vadWindowSamples.count - vadWindowCapacity)
         }
     }
 

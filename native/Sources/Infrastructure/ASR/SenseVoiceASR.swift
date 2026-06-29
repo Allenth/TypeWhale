@@ -64,6 +64,51 @@ final class NativeSenseVoiceBridge {
         }
     }
 
+    /// 实时门控：对内存中的一小段单声道 PCM 跑 Silero VAD，用作录音过程中"当前是否有人声"。
+    /// 与文件版共用缓存的检测器；调用都在同一串行队列上，无并发问题。
+    func containsSpeech(
+        samples: [Float],
+        sampleRate: Int,
+        completion: @escaping (Result<Bool, Error>) -> Void
+    ) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            do {
+                guard let vadModelURL = VoiceActivityModelManifest.preferredModelURL else {
+                    throw self.nativeError("未找到 Silero VAD 人声检测模型")
+                }
+                guard !samples.isEmpty else {
+                    completion(.success(false))
+                    return
+                }
+                var errorPointer: UnsafeMutablePointer<CChar>?
+                let result = samples.withUnsafeBufferPointer { buffer in
+                    vadModelURL.path.withCString { modelCString in
+                        TypeSpeakerNativeVadHasSpeechSamples(
+                            buffer.baseAddress,
+                            Int32(buffer.count),
+                            Int32(sampleRate),
+                            modelCString,
+                            &errorPointer
+                        )
+                    }
+                }
+                defer {
+                    if let errorPointer { TypeSpeakerNativeStringFree(errorPointer) }
+                }
+                if let errorPointer {
+                    throw self.nativeError(String(cString: errorPointer))
+                }
+                if result < 0 {
+                    throw self.nativeError("Silero VAD 实时检测失败")
+                }
+                completion(.success(result == 1))
+            } catch {
+                completion(.failure(error))
+            }
+        }
+    }
+
     func transcribe(
         audio: URL,
         configuration: ASRConfiguration,

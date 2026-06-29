@@ -9,6 +9,91 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.5.11 (Build 369)",
+            date: "2026-06-29",
+            changes: [
+                "提交发布收口：同步代码、文档（开发日志、VAD/预览设计）、版本历史、README、Info.plist 与本地安装版版本号。",
+                "本版不新增产品行为，汇总 1.5.3–1.5.10 的人声门控重构、删除能量 VAD、实时预览分块提交与 UI 调整。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.5.10 (Build 368)",
+            date: "2026-06-29",
+            changes: [
+                "实时预览分块边界改为“停顿对齐”：块到软目标(10s)后，等 Silero 判定的停顿出现再在停顿处冻结提交，避免在词中间切断；一直不停顿则到硬上限(18s)强制提交兜底。",
+                "协调器把 Silero 人声/停顿信号实时推送给录音器驱动切块；不重置已显示前缀，规避历史“停顿后重置窗口”错误路线。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.5.9 (Build 367)",
+            date: "2026-06-29",
+            changes: [
+                "主窗口“最近转录”放大：实时文本区固定为适中高度，把当前会话面板的纵向余量全部让给最近转录，并将窗口高度从 580 提到 620。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.5.8 (Build 366)",
+            date: "2026-06-29",
+            changes: [
+                "实时预览改为 12 秒固定分块：只对“当前块”反复重识别，开销恒定，封住长录音的 O(n²) 卡顿与延迟累积。",
+                "块满即冻结提交（committedPreviewText），已显示内容不再跳变；块最终快照走专用队列、绝不丢弃，避免丢整块文本。",
+                "按固定时长切块且不重置已显示前缀，刻意规避 1.4.30 删除过的“停顿后重置窗口”错误路线。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.5.7 (Build 365)",
+            date: "2026-06-29",
+            changes: [
+                "胶囊新增实时输入电平 dBFS 读数：峰值保持、约 10Hz 刷新、等宽固定宽度不抖动，便于肉眼分辨近场/远场强弱。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.5.6 (Build 364)",
+            date: "2026-06-29",
+            changes: [
+                "删除能量 VAD 人声检测：人声判定唯一由 Silero 负责（随 app 内置、常驻）；Silero 探测出错则停用停顿自动结束，仅保留手动停与硬上限。",
+                "VAD 移到独立桥接队列（vadBridge），不再与慢速实时重识别抢同一队列被饿死，全局 VAD 缓存也只被一条队列访问、无竞争。",
+                "能量频带仅保留用于波形显示，不再参与人声判定。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.5.5 (Build 363)",
+            date: "2026-06-29",
+            changes: [
+                "实时预览与 VAD 解耦：预览是否显示只取决于文本本身，避免预览可用性被 VAD 探测可靠性拖累（修复上一版预览被压制为不可用）。",
+                "新增英文静音幻觉黑名单（yeah/the/you/thank you/谢谢观看 等），在预览层过滤噪音误识别。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.5.4 (Build 362)",
+            date: "2026-06-29",
+            changes: [
+                "实时人声门控改用 Silero（A 方案）：录音中每约 0.4s 对最近 0.7s 单声道 PCM 跑一次 Silero，作为权威人声信号驱动停顿/人离自动结束。",
+                "原生新增内存版 VAD 接口 TypeSpeakerNativeVadHasSpeechSamples，与文件版共用缓存检测器与重采样路径。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.5.3 (Build 361)",
+            date: "2026-06-29",
+            changes: [
+                "UI 配色按 logo 取向调整为金+青双色：录音波形与“录音中”状态点改为青色，主色金色保留。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.5.2 (Build 360)",
+            date: "2026-06-28",
+            changes: [
+                "清理主窗口死代码：删除不可达的旧侧栏/偏好弹窗构建链，消除控件复用隐患；“最近转录”撑满当前会话列。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.5.0 (Build 358)",
+            date: "2026-06-27",
+            changes: [
+                "封版发布并本地 DMG 封包。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.4.32 (Build 320)",
             date: "2026-06-25",
             changes: [

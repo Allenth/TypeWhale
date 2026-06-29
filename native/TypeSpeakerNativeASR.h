@@ -33,6 +33,14 @@ int TypeSpeakerNativeVadHasSpeech(
     char **error_message
 );
 
+int TypeSpeakerNativeVadHasSpeechSamples(
+    const float *samples,
+    int num_samples,
+    int sample_rate,
+    const char *model_path,
+    char **error_message
+);
+
 void TypeSpeakerNativeRecognizerDestroy(TypeSpeakerNativeRecognizer recognizer);
 void TypeSpeakerNativeReleaseCachedResources(void);
 void TypeSpeakerNativeStringFree(char *value);

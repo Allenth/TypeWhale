@@ -20,16 +20,14 @@ final class SpeechInputCoordinator {
         static let realtimeSnapshotTimeoutSeconds: TimeInterval = 3
     }
 
-    /// 基于音频能量的语音活动检测（VAD）阈值，与 ASR 解耦，保证静音/人离判定每次稳定一致。
-    private enum VAD {
-        /// 7 段能量（已归一到 0.12~1）的峰值高于此值即判为"有人声"。环境噪声约 0.12~0.2，留足余量。
-        static let speechBandThreshold: Float = 0.30
-    }
-
     private var recordingStartedAt: Date?
     private var lastCapsuleStatusUpdateAt: Date?
     private var lastVoiceAt: Date?
     private var voiceEverDetected = false
+    /// 本轮人声检测（Silero）是否可用；Silero 探测出错时置 false → 停顿自动结束随之停用，
+    /// 仅保留手动停止与硬上限，避免误判成"一直没人声"而过早结束。
+    private var voiceDetectionAvailable = false
+    private var voiceProbeInFlight = false
 
     private let controller: MainViewController
     private let showMainWindow: () -> Void
@@ -40,6 +38,9 @@ final class SpeechInputCoordinator {
     private let hotkey = HotkeyMonitor()
     private let modelInstaller = SenseVoiceModelInstaller()
     private let nativeASR = NativeSenseVoiceBridge(runtimeName: "shared")
+    /// 专用于 Silero VAD 的独立桥接：所有 VAD 调用（实时探测 + 末尾人声闸门）都走它自己的串行队列，
+    /// 不再和慢速 SenseVoice 重识别抢同一条队列被饿死；全局 g_cached_vad 也因此只被一条队列访问，无竞争。
+    private let vadBridge = NativeSenseVoiceBridge(runtimeName: "vad")
     private let outputAudioDucker = OutputAudioDucker()
     private let smartEngine = DeepSeekRewriteEngine()
     private lazy var asr = SenseVoiceRouter(runtimeName: "final", native: nativeASR)
@@ -56,6 +57,8 @@ final class SpeechInputCoordinator {
     private var completedFinalTaskIDs: Set<UUID> = []
     private var realtimeBusy = false
     private var pendingRealtimeSnapshot: RealtimeSnapshotRequest?
+    /// 块最终快照的待处理队列：绝不丢弃（丢了会整块预览文本消失），优先于普通中间快照处理。
+    private var pendingFinalSnapshots: [RealtimeSnapshotRequest] = []
     private var activeRealtimeSnapshotID: UUID?
     private var realtimeSnapshotTimeoutWorkItem: DispatchWorkItem?
     private var workspaceActivationObserver: NSObjectProtocol?
@@ -118,11 +121,17 @@ final class SpeechInputCoordinator {
         recorder.onBands = { [weak self] bands in
             self?.popup.updateBands(bands)
             self?.controller.updateInputBands(bands)
-            self?.observeAudioEnergy(bands)
+            self?.tickRecordingGuards()
             self?.refreshCapsuleStatusIfNeeded()
         }
-        recorder.onRealtimeSnapshot = { [weak self] taskID, url in
-            self?.receiveRealtimeSnapshot(taskID: taskID, url: url)
+        recorder.onVoiceProbe = { [weak self] samples, sampleRate in
+            self?.receiveVoiceProbe(samples: samples, sampleRate: sampleRate)
+        }
+        recorder.onInputLevelDb = { [weak self] db in
+            self?.popup.updateInputLevel(db: db)
+        }
+        recorder.onRealtimeSnapshot = { [weak self] taskID, url, chunkIndex, isChunkFinal in
+            self?.receiveRealtimeSnapshot(taskID: taskID, url: url, chunkIndex: chunkIndex, isChunkFinal: isChunkFinal)
         }
         recorder.onInputRouteChanged = { [weak self] message in
             self?.handleAudioInputRouteChanged(message)
@@ -659,8 +668,11 @@ final class SpeechInputCoordinator {
             updateCapsuleStatus()
             lastVoiceAt = nil
             voiceEverDetected = false
+            voiceProbeInFlight = false
+            // Silero VAD 随 app 内置，正常情况下始终可用；探测出错时会在 receiveVoiceProbe 里置 false。
+            voiceDetectionAvailable = vadBridge.isVoiceActivityDetectionAvailable
             LaunchDiagnostics.mark(
-                "recording_start task_id=\(taskID.uuidString) activation=\(activation) realtime=\(realtimeEnabled)"
+                "recording_start task_id=\(taskID.uuidString) activation=\(activation) realtime=\(realtimeEnabled) voice_detect=\(voiceDetectionAvailable ? "silero" : "off")"
             )
         } catch {
             LaunchDiagnostics.mark("recording_start_failed error=\(error.localizedDescription)")
@@ -720,7 +732,7 @@ final class SpeechInputCoordinator {
             resetWaveform: true
         )
         popup.show(state: "检测中")
-        asr.containsSpeech(audio: url) { [weak self] response in
+        vadBridge.containsSpeech(audio: url) { [weak self] response in
             DispatchQueue.main.async {
                 guard let self else { return }
                 let shouldUpdateInterface = self.shouldUpdateInterface(for: taskID)
@@ -810,63 +822,94 @@ final class SpeechInputCoordinator {
             try? FileManager.default.removeItem(at: pendingRealtimeSnapshot.audioURL)
         }
         pendingRealtimeSnapshot = nil
+        for pendingFinal in pendingFinalSnapshots {
+            try? FileManager.default.removeItem(at: pendingFinal.audioURL)
+        }
+        pendingFinalSnapshots.removeAll()
         realtimeBusy = false
         activeRealtimeSnapshotID = nil
         realtimeSnapshotTimeoutWorkItem?.cancel()
         realtimeSnapshotTimeoutWorkItem = nil
     }
 
-    private func receiveRealtimeSnapshot(taskID: UUID, url: URL) {
+    private func receiveRealtimeSnapshot(taskID: UUID, url: URL, chunkIndex: Int, isChunkFinal: Bool) {
         guard let session = activeSession, taskID == session.id else {
             try? FileManager.default.removeItem(at: url)
             return
         }
+        let request = RealtimeSnapshotRequest(
+            taskID: taskID,
+            audioURL: url,
+            configuration: session.configuration,
+            chunkIndex: chunkIndex,
+            isChunkFinal: isChunkFinal
+        )
         if realtimeBusy {
-            if let pendingRealtimeSnapshot {
-                try? FileManager.default.removeItem(at: pendingRealtimeSnapshot.audioURL)
+            if isChunkFinal {
+                // 块最终快照绝不丢弃，进专用队列。
+                pendingFinalSnapshots.append(request)
+            } else {
+                // 普通中间快照只保留最新一帧（合并旧的）。
+                if let pendingRealtimeSnapshot {
+                    try? FileManager.default.removeItem(at: pendingRealtimeSnapshot.audioURL)
+                }
+                pendingRealtimeSnapshot = request
             }
-            pendingRealtimeSnapshot = RealtimeSnapshotRequest(
-                taskID: taskID,
-                audioURL: url,
-                configuration: session.configuration
-            )
             return
         }
-        transcribeRealtime(taskID: taskID, url: url, configuration: session.configuration)
+        transcribeRealtime(request)
     }
 
-    private func transcribeRealtime(taskID: UUID, url: URL, configuration: ASRConfiguration) {
+    private func transcribeRealtime(_ request: RealtimeSnapshotRequest) {
         let snapshotID = UUID()
+        let taskID = request.taskID
+        let url = request.audioURL
         activeRealtimeSnapshotID = snapshotID
         realtimeBusy = true
         scheduleRealtimeSnapshotTimeout(snapshotID: snapshotID, taskID: taskID, url: url)
         realtimeASR.transcribe(
             audio: url,
-            configuration: configuration
+            configuration: request.configuration
         ) { [weak self] response in
             DispatchQueue.main.async {
                 try? FileManager.default.removeItem(at: url)
                 guard let self else { return }
-                guard self.activeRealtimeSnapshotID == snapshotID else {
-                    return
-                }
-                if taskID == self.activeSession?.id,
-                   case .success(let value) = response,
-                    (value["error"] as? String ?? "").isEmpty {
-                    let text = cleanRecognitionText(value["text"] as? String ?? "", languageMode: configuration.languageMode)
-                    if isMeaningfulRealtimePreviewText(text, previousPreview: self.activeSession?.latestPreviewText ?? "") {
-                        self.activeSession?.latestPreviewText = text
-                        self.controller.updateRealtimeDraft(text)
-                        self.popup.updateDraft(text)
-                        let elapsedMs = self.recordingStartedAt.map { Int(Date().timeIntervalSince($0) * 1000) } ?? -1
-                        LaunchDiagnostics.mark(
-                            "realtime_preview_update task_id=\(taskID.uuidString) elapsed_ms=\(elapsedMs) chars=\(text.count)"
-                        )
-                    }
-                }
+                guard self.activeRealtimeSnapshotID == snapshotID else { return }
+                self.applyRealtimePreview(request: request, response: response)
                 self.finishRealtimeSnapshot(snapshotID: snapshotID)
             }
         }
+    }
+
+    /// 把某个块快照的识别结果合并进预览：committedPreviewText（冻结前缀）+ 当前块尾巴。
+    /// 块最终快照会把尾巴冻结进 committedPreviewText，从此不再变动（稳定、不跳变）。
+    private func applyRealtimePreview(request: RealtimeSnapshotRequest, response: Result<[String: Any], Error>) {
+        guard var session = activeSession, request.taskID == session.id else { return }
+        // 已提交块的滞后快照直接丢弃，不污染显示。
+        guard request.chunkIndex >= session.currentChunkIndex else { return }
+
+        if case .success(let value) = response, (value["error"] as? String ?? "").isEmpty {
+            let text = cleanRecognitionText(value["text"] as? String ?? "", languageMode: request.configuration.languageMode)
+            // 尾巴去重/幻觉过滤只跟「本块之前的尾巴」比较；committed 前缀不参与。
+            if isMeaningfulRealtimePreviewText(text, previousPreview: session.latestPreviewText) {
+                session.latestPreviewText = text
+            }
+        }
+        if request.isChunkFinal {
+            // 冻结提交：把当前块尾巴并入前缀，块序号前进，尾巴清空。
+            session.committedPreviewText += session.latestPreviewText
+            session.currentChunkIndex = request.chunkIndex + 1
+            session.latestPreviewText = ""
+        }
+        activeSession = session
+
+        let display = session.committedPreviewText + session.latestPreviewText
+        controller.updateRealtimeDraft(display)
+        popup.updateDraft(display)
+        let elapsedMs = recordingStartedAt.map { Int(Date().timeIntervalSince($0) * 1000) } ?? -1
+        LaunchDiagnostics.mark(
+            "realtime_preview_update task_id=\(request.taskID.uuidString) elapsed_ms=\(elapsedMs) chunk=\(request.chunkIndex) final=\(request.isChunkFinal) chars=\(display.count)"
+        )
     }
 
     private func scheduleRealtimeSnapshotTimeout(snapshotID: UUID, taskID: UUID, url: URL) {
@@ -889,17 +932,22 @@ final class SpeechInputCoordinator {
         realtimeSnapshotTimeoutWorkItem = nil
         activeRealtimeSnapshotID = nil
         realtimeBusy = false
+        // 先处理块最终快照（保证提交、保持顺序），再处理最新的中间快照。
+        if !pendingFinalSnapshots.isEmpty {
+            dispatchPendingRealtime(pendingFinalSnapshots.removeFirst())
+            return
+        }
         if let pending = pendingRealtimeSnapshot {
             pendingRealtimeSnapshot = nil
-            if pending.taskID == activeSession?.id {
-                transcribeRealtime(
-                    taskID: pending.taskID,
-                    url: pending.audioURL,
-                    configuration: pending.configuration
-                )
-            } else {
-                try? FileManager.default.removeItem(at: pending.audioURL)
-            }
+            dispatchPendingRealtime(pending)
+        }
+    }
+
+    private func dispatchPendingRealtime(_ request: RealtimeSnapshotRequest) {
+        if request.taskID == activeSession?.id {
+            transcribeRealtime(request)
+        } else {
+            try? FileManager.default.removeItem(at: request.audioURL)
         }
     }
 
@@ -1452,18 +1500,45 @@ final class SpeechInputCoordinator {
         return true
     }
 
-    /// 每个音频缓冲都会调用：用 7 段能量峰值判断当前是否有人声，并据此触发静音/人离自动结束。
-    /// 与 ASR 解耦，逐缓冲连续评估，确保每次打开胶囊都能稳定一致地识别静音。
-    private func observeAudioEnergy(_ bands: [Float]) {
+    /// 每个音频缓冲触发一次：推进时间相关的录音守卫（硬上限、无声超时），并高频评估停顿自动结束。
+    /// 人声判定本身由 receiveVoiceProbe（Silero）负责，这里不再做任何能量阈值判断。
+    private func tickRecordingGuards() {
         guard recorder.isRecording else { return }
         if enforceMaxRecordingDuration() { return }
         if enforceNoTextTimeout() { return }
-        let level = bands.max() ?? 0
-        if level >= VAD.speechBandThreshold {
-            voiceEverDetected = true
-            lastVoiceAt = Date()
-        }
         evaluateVADAutoFinish()
+    }
+
+    /// 人声门控核心：录音过程中约每 0.4s 收到一段最近窗口 PCM，交给 Silero 判定当前是否有人声。
+    /// 本方法在 main 上被调用（recorder 已派发）；原生 VAD 在其专用串行队列上跑，完成后回到 main 更新状态。
+    private func receiveVoiceProbe(samples: [Float], sampleRate: Int) {
+        guard voiceDetectionAvailable, recorder.isRecording, !voiceProbeInFlight else { return }
+        let capturedAt = Date()
+        voiceProbeInFlight = true
+        vadBridge.containsSpeech(samples: samples, sampleRate: sampleRate) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.voiceProbeInFlight = false
+                guard self.recorder.isRecording else { return }
+                switch result {
+                case .success(true):
+                    self.voiceEverDetected = true
+                    self.lastVoiceAt = capturedAt
+                    // 有人声 → 通知录音器：当前不宜在此切块（避免切词）。
+                    self.recorder.updateRealtimeVoiceActive(true)
+                    self.evaluateVADAutoFinish()
+                case .success(false):
+                    // 停顿 → 录音器可在此处对齐分块边界并冻结提交。
+                    self.recorder.updateRealtimeVoiceActive(false)
+                case .failure:
+                    // Silero 实时检测出错 → 停用人声检测：关闭停顿自动结束，仅保留手动停止与硬上限。
+                    // 同时让分块回到「硬上限驱动」（视为一直有人声，不在停顿处切）。
+                    self.voiceDetectionAvailable = false
+                    self.recorder.updateRealtimeVoiceActive(true)
+                    LaunchDiagnostics.mark("vad_probe_unavailable")
+                }
+            }
+        }
     }
 
     /// 录音超过单次硬上限时自动结束并识别，封住 ASR 内存峰值。返回是否已触发结束。
@@ -1556,7 +1631,9 @@ final class SpeechInputCoordinator {
     }
 
     private func evaluateVADAutoFinish() {
-        guard controller.autoFinishAfterPauseEnabled,
+        // 人声检测不可用时（Silero 探测出错）停用停顿自动结束，避免误判成"一直没人声"过早结束。
+        guard voiceDetectionAvailable,
+              controller.autoFinishAfterPauseEnabled,
               activeSession?.activation != .hold,
               recorder.isRecording else { return }
         let now = Date()

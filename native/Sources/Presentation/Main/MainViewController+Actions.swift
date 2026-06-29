@@ -334,7 +334,9 @@ extension MainViewController {
         switch tone {
         case .idle, .success:
             return .systemGreen
-        case .listening, .processing:
+        case .listening:
+            return UITheme.brandTeal
+        case .processing:
             return UITheme.brandYellow
         case .warning:
             return .systemOrange

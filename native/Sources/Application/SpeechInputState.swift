@@ -12,14 +12,20 @@ struct SpeechSession {
     let configuration: ASRConfiguration
     let activation: RecordingActivation
     let realtimeEnabled: Bool
-    /// 当前录音累计快照的最新实时识别结果。
+    /// 已提交（冻结）的实时预览前缀：滚出当前块的文本，不再重识别、永不跳变。
+    var committedPreviewText: String = ""
+    /// 当前块的实时识别尾巴（会随重识别更新）；显示 = committedPreviewText + latestPreviewText。
     var latestPreviewText: String
+    /// 当前正在识别的块序号；用于丢弃已提交块的滞后快照。
+    var currentChunkIndex: Int = 0
 }
 
 struct RealtimeSnapshotRequest {
     let taskID: UUID
     let audioURL: URL
     let configuration: ASRConfiguration
+    let chunkIndex: Int
+    let isChunkFinal: Bool
 }
 
 struct PendingPasteResult {

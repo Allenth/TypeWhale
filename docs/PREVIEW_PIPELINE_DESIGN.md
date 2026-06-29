@@ -2,6 +2,11 @@
 
 > Iteration note: the product and visual interaction decisions for the small recording capsule are tracked in `docs/预览层小胶囊迭代记录.md`.
 
+> **现状更新（1.5.8–1.5.10，2026-06-29）：实时预览改为「分块提交」流水线。**
+> 录音切成块，只对「当前块」反复重识别（开销恒定，封住长录音的 O(n²) 重识别）；块满即把识别结果冻结进 `committedPreviewText`、永不再改，显示 = `已提交前缀 + 当前块尾巴`。块最终快照走专用队列 `pendingFinalSnapshots`、绝不丢弃。
+> 块边界**停顿对齐**：块到软目标(10s)后等 Silero 判定的停顿出现再在停顿处提交（避免切词），一直不停顿则硬上限(18s)兜底。与 1.4.30 删除的「停顿后重置窗口」不同：本方案**冻结前缀、永不重置已显示文本**。
+> 相关代码：`SpeechInputCoordinator.applyRealtimePreview`、`AudioRecorder`（分块/停顿对齐）、`SpeechInputState.SpeechSession`。
+
 ## Problem
 
 The current realtime preview is built from rolling audio snapshots. Each snapshot is transcribed independently, then merged into a visual preview.

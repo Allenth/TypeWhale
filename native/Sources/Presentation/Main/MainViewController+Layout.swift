@@ -86,9 +86,9 @@ extension MainViewController {
         draftStack.orientation = .vertical
         draftStack.alignment = .leading
         draftStack.spacing = 7
-        // 实时文本区作为可伸缩区域，吸收卡片多余高度；窗口固定高度下保持稳定。
-        draftStack.setContentHuggingPriority(.defaultLow, for: .vertical)
-        realtimeScroll.setContentHuggingPriority(.defaultLow, for: .vertical)
+        // 实时文本区固定一个适中高度（不再抢占多余空间），把当前会话面板的纵向余量全部让给“最近转录”。
+        draftStack.setContentHuggingPriority(.defaultHigh, for: .vertical)
+        realtimeScroll.setContentHuggingPriority(.defaultHigh, for: .vertical)
         draftCaption.setContentHuggingPriority(.required, for: .vertical)
 
         let divider = hairlineView()
@@ -113,10 +113,12 @@ extension MainViewController {
         box.layer?.borderWidth = 0.5
         box.layer?.borderColor = UITheme.cardBorder.cgColor
         box.addSubview(inner)
+        // 当前会话卡片按内容自然高度，不被外层拉伸 → 多余纵向空间留给“最近转录”。
+        box.setContentHuggingPriority(.defaultHigh, for: .vertical)
 
-        // 实时文本区最小高度设为非必需优先级：极端内容时让位给“填满卡片”，避免约束冲突。
-        let draftMinHeight = realtimeScroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 40)
-        draftMinHeight.priority = NSLayoutConstraint.Priority(740)
+        // 实时文本区固定为适中高度（约 6 行），可让位给必需约束；其余高度归“最近转录”。
+        let draftMinHeight = realtimeScroll.heightAnchor.constraint(equalToConstant: 96)
+        draftMinHeight.priority = NSLayoutConstraint.Priority(730)
 
         NSLayoutConstraint.activate([
             pillStack.leadingAnchor.constraint(equalTo: pill.leadingAnchor, constant: 13),

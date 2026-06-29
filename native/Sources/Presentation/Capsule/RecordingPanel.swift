@@ -13,6 +13,8 @@ final class RecordingPanel: NSPanel {
     private let translationBadge = NSTextField(labelWithString: "自动翻译")
     private let statusDotLabel = NSTextField(labelWithString: "·")
     private let statusBadge = NSTextField(labelWithString: "")
+    private let levelDotLabel = NSTextField(labelWithString: "·")
+    private let levelLabel = NSTextField(labelWithString: "")
     private let infoBarHeight: CGFloat = 22
     private var hasContext = false
     private let fadeDuration: TimeInterval = 0.25
@@ -101,12 +103,26 @@ final class RecordingPanel: NSPanel {
         statusBadge.maximumNumberOfLines = 1
         statusBadge.isHidden = true
 
+        levelDotLabel.font = .systemFont(ofSize: 11, weight: .bold)
+        levelDotLabel.textColor = NSColor(calibratedWhite: 1, alpha: 0.5)
+        levelDotLabel.isHidden = true
+
+        // 实时输入电平（dBFS），等宽数字 + 固定宽度避免数值变化时胶囊抖动；用于肉眼分辨近场/远场强弱。
+        levelLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
+        levelLabel.textColor = NSColor(calibratedRed: 0.30, green: 0.82, blue: 0.80, alpha: 0.98)
+        levelLabel.maximumNumberOfLines = 1
+        levelLabel.alignment = .right
+        levelLabel.toolTip = "实时输入电平（dBFS），越接近 0 越响"
+        levelLabel.isHidden = true
+        levelLabel.translatesAutoresizingMaskIntoConstraints = false
+        levelLabel.widthAnchor.constraint(equalToConstant: 50).isActive = true
+
         infoBar.orientation = .horizontal
         infoBar.alignment = .centerY
         infoBar.spacing = 5
         infoBar.translatesAutoresizingMaskIntoConstraints = false
         infoBar.setViews(
-            [appIconView, appNameLabel, dotLabel, modeButton, translationDotLabel, translationBadge, statusDotLabel, statusBadge],
+            [appIconView, appNameLabel, dotLabel, modeButton, translationDotLabel, translationBadge, statusDotLabel, statusBadge, levelDotLabel, levelLabel],
             in: .leading
         )
         infoBar.isHidden = true
@@ -206,6 +222,9 @@ final class RecordingPanel: NSPanel {
     func show(state: String, draft: String? = nil) {
         visibilityGeneration += 1
         let shouldFadeIn = !isVisible
+        // 新一帧胶囊先清掉上一次的电平读数，避免显示陈旧数值。录音中会被实时更新重新点亮。
+        levelLabel.isHidden = true
+        levelDotLabel.isHidden = true
         capsule.update(state: state, draft: draft)
         resizeAndPosition()
         if shouldFadeIn {
@@ -279,5 +298,24 @@ final class RecordingPanel: NSPanel {
 
     func updateBands(_ bands: [Float]) {
         capsule.update(bands: bands)
+    }
+
+    /// 更新胶囊上的实时输入电平读数（dBFS）；db 为 nil 表示清除（非录音时）。
+    /// 固定宽度标签，仅在显隐切换时才重新布局，数值变化不触发胶囊抖动。
+    func updateInputLevel(db: Float?) {
+        guard hasContext else { return }
+        if let db {
+            let shown = max(-80, min(0, Int(db.rounded())))
+            levelLabel.stringValue = "\(shown) dB"
+            let wasHidden = levelLabel.isHidden
+            levelLabel.isHidden = false
+            levelDotLabel.isHidden = false
+            if wasHidden { resizeAndPosition() }
+        } else {
+            let wasShown = !levelLabel.isHidden
+            levelLabel.isHidden = true
+            levelDotLabel.isHidden = true
+            if wasShown { resizeAndPosition() }
+        }
     }
 }

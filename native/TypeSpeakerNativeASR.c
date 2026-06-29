@@ -117,6 +117,39 @@ static const SherpaOnnxVoiceActivityDetector *acquire_cached_vad(const char *mod
   return vad;
 }
 
+// 在指定采样率的 PCM 上跑一次 Silero VAD，必要时重采样到 16k。返回 1=有人声 0=无 -1=出错。
+static int vad_detect_at_rate(
+    const SherpaOnnxVoiceActivityDetector *vad,
+    const float *samples,
+    int32_t num_samples,
+    int32_t sample_rate,
+    char **error_message) {
+  if (sample_rate == 16000) {
+    return vad_accept_samples(vad, samples, num_samples);
+  }
+  const int32_t input_rate = sample_rate;
+  const int32_t output_rate = 16000;
+  const int32_t min_rate = input_rate < output_rate ? input_rate : output_rate;
+  const SherpaOnnxLinearResampler *resampler =
+      SherpaOnnxCreateLinearResampler(
+          input_rate, output_rate, 0.99f * 0.5f * (float)min_rate, 6);
+  if (resampler == NULL) {
+    set_error(error_message, "无法创建 VAD 重采样器");
+    return -1;
+  }
+  const SherpaOnnxResampleOut *resampled =
+      SherpaOnnxLinearResamplerResample(resampler, samples, num_samples, 1);
+  if (resampled == NULL) {
+    SherpaOnnxDestroyLinearResampler(resampler);
+    set_error(error_message, "无法重采样音频以进行 VAD 检测");
+    return -1;
+  }
+  int has_speech = vad_accept_samples(vad, resampled->samples, resampled->n);
+  SherpaOnnxLinearResamplerResampleFree(resampled);
+  SherpaOnnxDestroyLinearResampler(resampler);
+  return has_speech;
+}
+
 int TypeSpeakerNativeVadHasSpeech(
     const char *audio_path,
     const char *model_path,
@@ -146,37 +179,41 @@ int TypeSpeakerNativeVadHasSpeech(
     return -1;
   }
 
-  int has_speech = 0;
-  if (wave->sample_rate == 16000) {
-    has_speech = vad_accept_samples(vad, wave->samples, wave->num_samples);
-  } else {
-    const int32_t input_rate = wave->sample_rate;
-    const int32_t output_rate = 16000;
-    const int32_t min_rate = input_rate < output_rate ? input_rate : output_rate;
-    const SherpaOnnxLinearResampler *resampler =
-        SherpaOnnxCreateLinearResampler(
-            input_rate, output_rate, 0.99f * 0.5f * (float)min_rate, 6);
-    if (resampler == NULL) {
-      SherpaOnnxFreeWave(wave);
-      set_error(error_message, "无法创建 VAD 重采样器");
-      return -1;
-    }
-    const SherpaOnnxResampleOut *resampled =
-        SherpaOnnxLinearResamplerResample(
-            resampler, wave->samples, wave->num_samples, 1);
-    if (resampled == NULL) {
-      SherpaOnnxDestroyLinearResampler(resampler);
-      SherpaOnnxFreeWave(wave);
-      set_error(error_message, "无法重采样录音以进行 VAD 检测");
-      return -1;
-    }
-    has_speech = vad_accept_samples(vad, resampled->samples, resampled->n);
-    SherpaOnnxLinearResamplerResampleFree(resampled);
-    SherpaOnnxDestroyLinearResampler(resampler);
-  }
-
+  int has_speech = vad_detect_at_rate(
+      vad, wave->samples, wave->num_samples, wave->sample_rate, error_message);
   SherpaOnnxFreeWave(wave);
-  return has_speech ? 1 : 0;
+  return has_speech;
+}
+
+// 实时门控：在内存中的一小段 PCM（通常为最近 ~0.7s 的单声道）上跑 Silero，
+// 用作录音过程中"当前是否有人声"的权威信号，驱动停顿/自动结束。无需写文件。
+int TypeSpeakerNativeVadHasSpeechSamples(
+    const float *samples,
+    int32_t num_samples,
+    int32_t sample_rate,
+    const char *model_path,
+    char **error_message) {
+  if (error_message != NULL) {
+    *error_message = NULL;
+  }
+  if (samples == NULL || num_samples <= 0) {
+    set_error(error_message, "缺少需要检测的人声音频数据");
+    return -1;
+  }
+  if (sample_rate <= 0) {
+    set_error(error_message, "无效的采样率");
+    return -1;
+  }
+  if (model_path == NULL || model_path[0] == '\0') {
+    set_error(error_message, "缺少 Silero VAD 模型");
+    return -1;
+  }
+  const SherpaOnnxVoiceActivityDetector *vad = acquire_cached_vad(model_path);
+  if (vad == NULL) {
+    set_error(error_message, "无法创建 Silero VAD 检测器");
+    return -1;
+  }
+  return vad_detect_at_rate(vad, samples, num_samples, sample_rate, error_message);
 }
 
 TypeSpeakerNativeRecognizer TypeSpeakerNativeRecognizerCreate(

@@ -15,6 +15,15 @@ private let realtimePreviewSilencePhrases: Set<String> = [
     "谢谢", "谢谢大家", "谢谢观看", "谢谢观赏", "请", "请观看", "字幕", "中文字幕", "字幕志愿者",
 ]
 
+/// 英文静音幻觉短语（去空格后小写匹配）：SenseVoice/Whisper 类模型在噪音/静音上常吐这些。
+/// 仅用于预览过滤，最终路径不受影响。
+private let realtimePreviewSilenceLatinPhrases: Set<String> = [
+    "yeah", "yeahthe", "the", "you", "thankyou", "thankyouverymuch", "thanks",
+    "thanksforwatching", "bye", "byebye", "okay", "ok", "uh", "um", "umm",
+    "mm", "mmm", "hmm", "uhhuh", "huh", "so", "oh", "hi", "hey", "well",
+    "please", "subscribe", "and", "amen", "iknow",
+]
+
 func isMeaningfulRealtimePreviewText(
     _ text: String,
     previousPreview: String
@@ -22,6 +31,7 @@ func isMeaningfulRealtimePreviewText(
     let parts = meaningfulRecognitionTextParts(text)
     // 整段恰好是静音常见幻觉短语 → 预览不显示（无论前面是否已有内容）。
     if realtimePreviewSilencePhrases.contains(parts.semanticText) { return false }
+    if realtimePreviewSilenceLatinPhrases.contains(parts.semanticText.lowercased()) { return false }
     guard parts.isMeaningful(hasPriorPreview: !previousPreview.isEmpty) else { return false }
 
     let previousParts = meaningfulRecognitionTextParts(previousPreview)

@@ -3,6 +3,11 @@
 > 录音胶囊的「静音 / 人离自动结束」判定，以及声纹折线波形的视觉响应设计。
 > 相关代码：`native/Sources/Application/SpeechInputCoordinator.swift`、`native/Sources/Infrastructure/Audio/AudioRecorder.swift`、`native/Sources/Presentation/Capsule/RecordingCapsuleView.swift`。
 
+> **⚠️ 现状更新（1.5.4–1.5.6，2026-06-29）：本文描述的「能量阈值 VAD 人声判定」已被删除。**
+> 人声判定现唯一由 **Silero** 负责：录音中每约 0.4s 对最近 0.7s 单声道 PCM 跑一次 Silero（滚动窗口），作为权威信号驱动停顿/人离自动结束；所有 VAD 调用走独立队列 `vadBridge`。Silero 探测出错时停用停顿自动结束，仅保留手动停止与硬上限（不再回退能量 VAD）。
+> 能量频带（`frequencyBands`）与峰值（`peakLevel`）现仅用于**波形显示**与**胶囊 dBFS 电平读数**，不再参与人声判定。
+> 下文「能量 VAD 如何工作 / 判定逻辑 / 可调参数」保留为历史设计记录。
+
 ## 背景与问题
 
 旧版的「静音 / 人离」自动结束**完全依赖实时 ASR 是否吐出文字**，而不是音频本身：
