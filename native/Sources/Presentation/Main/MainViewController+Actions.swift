@@ -14,6 +14,7 @@ extension MainViewController {
             realtimePreviewEnabled: realtime.state == .on,
             autoFinishAfterPauseEnabled: autoFinish.state == .on,
             duckSystemAudioWhileRecordingEnabled: duckSystemAudio.state == .on,
+            micVoiceProcessingEnabled: micNoiseReduction.state == .on,
             asrBackend: asrBackend,
             smartRewritePreference: smartRewritePreference,
             autoTranslateEnabled: autoTranslate.state == .on,
@@ -373,6 +374,10 @@ extension MainViewController {
 
     var duckSystemAudioWhileRecordingEnabled: Bool {
         duckSystemAudio.state == .on
+    }
+
+    var micVoiceProcessingEnabled: Bool {
+        micNoiseReduction.state == .on
     }
 
     var asrBackend: ASRBackend {

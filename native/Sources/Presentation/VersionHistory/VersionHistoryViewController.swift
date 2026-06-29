@@ -9,6 +9,15 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.5.16 (Build 374)",
+            date: "2026-06-29",
+            changes: [
+                "「录音时降噪」正名为「录音时降低系统音量」——它实际是录音时压低系统扬声器输出（防外放串音），与麦克风降噪无关，消除误导。",
+                "新增「麦克风降噪（语音增强）」开关：走 Apple Voice Processing（回声消除+噪声抑制+自动增益），嘈杂环境识别更稳；默认关。",
+                "开启麦克风降噪时自动旁路近场幅度门（AGC 会归一化电平，两者协调避免互相打架）。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.5.15 (Build 373)",
             date: "2026-06-29",
             changes: [

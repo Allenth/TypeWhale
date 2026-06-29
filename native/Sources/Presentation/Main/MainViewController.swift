@@ -88,6 +88,7 @@ final class MainViewController: NSViewController {
     let realtime = BrandSwitch()
     let autoFinish = BrandSwitch()
     let duckSystemAudio = BrandSwitch()
+    let micNoiseReduction = BrandSwitch()
     let launchAtLogin = BrandSwitch()
     let asrBackendMode = NSPopUpButton()
     let smartRewriteMode = NSPopUpButton()
@@ -185,6 +186,8 @@ final class MainViewController: NSViewController {
         autoFinish.target = self; autoFinish.action = #selector(saveSettings)
         duckSystemAudio.state = settings.duckSystemAudioWhileRecordingEnabled ? .on : .off
         duckSystemAudio.target = self; duckSystemAudio.action = #selector(saveSettings)
+        micNoiseReduction.state = settings.micVoiceProcessingEnabled ? .on : .off
+        micNoiseReduction.target = self; micNoiseReduction.action = #selector(saveSettings)
         configureASRBackendMenu(settings.asrBackend)
         asrBackendMode.target = self; asrBackendMode.action = #selector(saveSettings)
         configureSmartRewriteModeMenu(settings.smartRewritePreference)

@@ -108,6 +108,8 @@ final class AudioRecorder: @unchecked Sendable {
     private var realtimeVoiceActive = true
     /// 当前块内的峰值（原始幅度）；用于判断这一块是否达到过近场响度。块边界处重置。
     private var realtimeChunkPeak: Float = 0
+    /// 本轮是否开启了麦克风语音增强（AGC 会归一化电平 → 旁路近场幅度门，避免互相打架）。
+    private var realtimeVoiceProcessingOn = false
     private var realtimeSequence = 0
     private var realtimeEnabled = false
     private var vadWindowSamples: [Float] = []
@@ -140,7 +142,7 @@ final class AudioRecorder: @unchecked Sendable {
         AppPaths.recordings.appendingPathComponent("latest.wav")
     }
 
-    func start(taskID: UUID, realtimeEnabled: Bool, inputDeviceID: AudioDeviceID?) throws {
+    func start(taskID: UUID, realtimeEnabled: Bool, inputDeviceID: AudioDeviceID?, voiceProcessingEnabled: Bool = false) throws {
         guard !isRecording else { return }
         let directory = latestURL.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -153,6 +155,16 @@ final class AudioRecorder: @unchecked Sendable {
         if let inputDeviceID {
             try bind(input: input, to: inputDeviceID)
         }
+        // 麦克风降噪（语音增强）：开启 Apple Voice Processing（回声消除 + 噪声抑制 + AGC）。
+        // 失败则降级为不处理（仍可正常录音）。
+        if voiceProcessingEnabled {
+            do {
+                try input.setVoiceProcessingEnabled(true)
+            } catch {
+                LaunchDiagnostics.mark("voice_processing_enable_failed error=\(error.localizedDescription)")
+            }
+        }
+        realtimeVoiceProcessingOn = voiceProcessingEnabled
         let format = input.outputFormat(forBus: 0)
         guard format.sampleRate > 0, format.channelCount > 0 else {
             self.engine = nil
@@ -213,7 +225,8 @@ final class AudioRecorder: @unchecked Sendable {
                             // 到软目标后遇到停顿（Silero 判定当前无人声）即在停顿处提交，避免切词；硬上限兜底。
                             let isChunkFinal = hardReached || (softReached && !self.realtimeVoiceActive)
                             // 近场门：这一块是否达到过近场响度（达不到即视为远场/弱信号，预览不接受）。
-                            let reachedNearField = self.realtimeChunkPeak >= NearField.peakThreshold
+                            // 开启麦克风语音增强(AGC)时电平被归一化，近场门失效 → 旁路（全部视为达标）。
+                            let reachedNearField = self.realtimeVoiceProcessingOn || self.realtimeChunkPeak >= NearField.peakThreshold
                             let chunkIndex = self.realtimeChunkIndex
                             let chunkBuffers = self.realtimeBuffers
                             if isChunkFinal {

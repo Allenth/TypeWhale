@@ -664,7 +664,8 @@ final class SpeechInputCoordinator {
             try recorder.start(
                 taskID: taskID,
                 realtimeEnabled: realtimeEnabled,
-                inputDeviceID: AudioInputDeviceProvider.selectedDeviceID()
+                inputDeviceID: AudioInputDeviceProvider.selectedDeviceID(),
+                voiceProcessingEnabled: controller.micVoiceProcessingEnabled
             )
             recordingStartedAt = Date()
             lastCapsuleStatusUpdateAt = nil

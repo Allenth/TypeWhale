@@ -17,7 +17,8 @@ extension MainViewController {
         backlogDirectoryButton.setAccessibilityLabel("需求池目录")
         realtime.setAccessibilityLabel("胶囊实时预览")
         autoFinish.setAccessibilityLabel("停顿自动完成")
-        duckSystemAudio.setAccessibilityLabel("录音时降低电脑声音")
+        duckSystemAudio.setAccessibilityLabel("录音时降低系统音量")
+        micNoiseReduction.setAccessibilityLabel("麦克风降噪（语音增强）")
         launchAtLogin.setAccessibilityLabel("开机自动启动")
     }
 

@@ -203,7 +203,8 @@ extension MainViewController {
         let system = subSection("系统", [
             optionRow("胶囊实时预览", realtime),
             optionRow("停顿自动完成", autoFinish),
-            optionRow("录音时降噪", duckSystemAudio),
+            optionRow("录音时降低系统音量", duckSystemAudio),
+            optionRow("麦克风降噪（语音增强）", micNoiseReduction),
             optionRow("开机自动启动", launchAtLogin),
         ])
         let d1 = hairlineView(); let d2 = hairlineView()
