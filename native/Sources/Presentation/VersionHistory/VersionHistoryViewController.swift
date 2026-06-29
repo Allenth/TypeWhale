@@ -9,6 +9,14 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.5.31 (Build 389)",
+            date: "2026-06-29",
+            changes: [
+                "移除近场幅度门：仅靠幅度根本无法区分近场/远场，且容易误挡用户自己的话，整段删除相关代码。",
+                "toast 扩展到 Key 保存成功（低频、用户主动触发）；粘贴完成不弹（太频繁）。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.5.27 (Build 385)",
             date: "2026-06-29",
             changes: [

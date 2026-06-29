@@ -136,9 +136,12 @@ extension MainViewController {
             do {
                 try DeepSeekAPIKeyStore.save(input.stringValue)
                 refreshDeepSeekKeyButton()
-                detail.stringValue = DeepSeekAPIKeyStore.hasAPIKey()
-                    ? "DeepSeek Key 已保存，智能整理已启用"
-                    : "未输入 Key，智能整理会回退原文"
+                if DeepSeekAPIKeyStore.hasAPIKey() {
+                    detail.stringValue = "DeepSeek Key 已保存，智能整理已启用"
+                    ToastPresenter.shared.show("Key 已保存", style: .success)
+                } else {
+                    detail.stringValue = "未输入 Key，智能整理会回退原文"
+                }
             } catch {
                 showDeepSeekKeyError(error)
             }

@@ -130,10 +130,9 @@ final class SpeechInputCoordinator {
         recorder.onInputLevelDb = { [weak self] db in
             self?.popup.updateInputLevel(db: db)
         }
-        recorder.onRealtimeSnapshot = { [weak self] taskID, url, chunkIndex, isChunkFinal, reachedNearField in
+        recorder.onRealtimeSnapshot = { [weak self] taskID, url, chunkIndex, isChunkFinal in
             self?.receiveRealtimeSnapshot(
-                taskID: taskID, url: url, chunkIndex: chunkIndex,
-                isChunkFinal: isChunkFinal, reachedNearField: reachedNearField
+                taskID: taskID, url: url, chunkIndex: chunkIndex, isChunkFinal: isChunkFinal
             )
         }
         recorder.onInputRouteChanged = { [weak self] message in
@@ -856,7 +855,7 @@ final class SpeechInputCoordinator {
         realtimeSnapshotTimeoutWorkItem = nil
     }
 
-    private func receiveRealtimeSnapshot(taskID: UUID, url: URL, chunkIndex: Int, isChunkFinal: Bool, reachedNearField: Bool) {
+    private func receiveRealtimeSnapshot(taskID: UUID, url: URL, chunkIndex: Int, isChunkFinal: Bool) {
         guard let session = activeSession, taskID == session.id else {
             try? FileManager.default.removeItem(at: url)
             return
@@ -866,8 +865,7 @@ final class SpeechInputCoordinator {
             audioURL: url,
             configuration: session.configuration,
             chunkIndex: chunkIndex,
-            isChunkFinal: isChunkFinal,
-            reachedNearField: reachedNearField
+            isChunkFinal: isChunkFinal
         )
         if realtimeBusy {
             if isChunkFinal {
@@ -913,9 +911,7 @@ final class SpeechInputCoordinator {
         // 已提交块的滞后快照直接丢弃，不污染显示。
         guard request.chunkIndex >= session.currentChunkIndex else { return }
 
-        // 近场门：未达到近场响度的块（远场/弱信号）不接受其文本，尾巴保持为空。
-        if request.reachedNearField,
-           case .success(let value) = response, (value["error"] as? String ?? "").isEmpty {
+        if case .success(let value) = response, (value["error"] as? String ?? "").isEmpty {
             let text = cleanRecognitionText(value["text"] as? String ?? "", languageMode: request.configuration.languageMode)
             // 尾巴去重/幻觉过滤只跟「本块之前的尾巴」比较；committed 前缀不参与。
             if isMeaningfulRealtimePreviewText(text, previousPreview: session.latestPreviewText) {
@@ -1400,12 +1396,15 @@ final class SpeechInputCoordinator {
             switch outcome {
             case .directInserted:
                 controller.detail.stringValue = "识别结果已直接输入，未改动剪贴板"
+                ToastPresenter.shared.show("已输入", style: .success)
                 hidePopup(after: 0, task: task)
             case .restored:
                 controller.detail.stringValue = "识别结果已粘贴，原剪贴板已恢复"
+                ToastPresenter.shared.show("已粘贴", style: .success)
                 hidePopup(after: 0, task: task)
             case .preservedUserClipboard:
                 controller.detail.stringValue = "识别结果已粘贴，检测到新的剪贴板内容并已保留"
+                ToastPresenter.shared.show("已粘贴", style: .success)
                 hidePopup(after: 0, task: task)
             case .failed:
                 controller.setPrimaryStatus(
@@ -1414,6 +1413,7 @@ final class SpeechInputCoordinator {
                     tone: .warning,
                     resetWaveform: true
                 )
+                ToastPresenter.shared.show("未能自动粘贴，已存历史", style: .warning)
                 hidePopup(after: 0, task: task)
             }
         }

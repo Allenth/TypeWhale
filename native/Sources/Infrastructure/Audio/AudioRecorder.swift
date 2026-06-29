@@ -82,12 +82,6 @@ final class AudioRecorder: @unchecked Sendable {
         static let intervalSeconds: Double = 0.1
         static let holdDecay: Float = 0.88
     }
-    /// 近场幅度门：实时预览只接受“当前块达到过近场响度”的内容，挡掉远处弱信号（远场人声）。
-    /// 阈值约 -33dBFS（线性峰值 ≈ 0.022）；近场说话约 -20dBFS，留约 13dB 余量避免误挡自己的声音。
-    /// 最终粘贴不受此门影响。
-    private enum NearField {
-        static let peakThreshold: Float = 0.022
-    }
     private enum Finalization {
         static let tailPaddingSeconds: Double = 0.25
     }
@@ -106,10 +100,6 @@ final class AudioRecorder: @unchecked Sendable {
     private var realtimeChunkIndex = 0
     /// 由协调器按 Silero 探测结果实时推送：当前是否有人声。用于在停顿处对齐分块边界（不切词）。
     private var realtimeVoiceActive = true
-    /// 当前块内的峰值（原始幅度）；用于判断这一块是否达到过近场响度。块边界处重置。
-    private var realtimeChunkPeak: Float = 0
-    /// 本轮是否开启了麦克风语音增强（AGC 会归一化电平 → 旁路近场幅度门，避免互相打架）。
-    private var realtimeVoiceProcessingOn = false
     private var realtimeSequence = 0
     private var realtimeEnabled = false
     private var vadWindowSamples: [Float] = []
@@ -125,9 +115,8 @@ final class AudioRecorder: @unchecked Sendable {
     private var latestEmptyRecordingReason: String?
     private(set) var isRecording = false
     var onBands: (([Float]) -> Void)?
-    /// (taskID, 快照音频URL, 块序号, 是否为该块的最终快照, 该块是否达到过近场响度)。
-    /// 块最终快照用于冻结提交、不会被丢弃；近场标记用于过滤远场/弱信号进入预览。
-    var onRealtimeSnapshot: ((UUID, URL, Int, Bool, Bool) -> Void)?
+    /// (taskID, 快照音频URL, 块序号, 是否为该块的最终快照)。块最终快照用于冻结提交、不会被丢弃。
+    var onRealtimeSnapshot: ((UUID, URL, Int, Bool) -> Void)?
     var onInputRouteChanged: ((String) -> Void)?
     /// 实时人声门控信号：(最近窗口的单声道 PCM, 采样率)。约每 0.4s 触发一次，在后台队列回调。
     var onVoiceProbe: (([Float], Int) -> Void)?
@@ -164,7 +153,6 @@ final class AudioRecorder: @unchecked Sendable {
                 LaunchDiagnostics.mark("voice_processing_enable_failed error=\(error.localizedDescription)")
             }
         }
-        realtimeVoiceProcessingOn = voiceProcessingEnabled
         let format = input.outputFormat(forBus: 0)
         guard format.sampleRate > 0, format.channelCount > 0 else {
             self.engine = nil
@@ -184,7 +172,6 @@ final class AudioRecorder: @unchecked Sendable {
         realtimeChunkStartFrame = 0
         realtimeChunkIndex = 0
         realtimeVoiceActive = true
-        realtimeChunkPeak = 0
         realtimeSequence = 0
         self.realtimeEnabled = realtimeEnabled
         snapshotRequestedWhileBusy = false
@@ -216,7 +203,6 @@ final class AudioRecorder: @unchecked Sendable {
                     let (frameCount, _, _) = self.state.snapshot()
                     if self.realtimeEnabled {
                         self.realtimeBuffers.append(copy)
-                        self.realtimeChunkPeak = max(self.realtimeChunkPeak, bufferPeak)
                         if frameCount >= self.nextRealtimeFrame {
                             self.nextRealtimeFrame = frameCount + AVAudioFramePosition(format.sampleRate * RealtimeTiming.snapshotIntervalSeconds)
                             let chunkFrames = Double(frameCount - self.realtimeChunkStartFrame)
@@ -224,9 +210,6 @@ final class AudioRecorder: @unchecked Sendable {
                             let hardReached = chunkFrames >= format.sampleRate * RealtimeTiming.chunkHardSeconds
                             // 到软目标后遇到停顿（Silero 判定当前无人声）即在停顿处提交，避免切词；硬上限兜底。
                             let isChunkFinal = hardReached || (softReached && !self.realtimeVoiceActive)
-                            // 近场门：这一块是否达到过近场响度（达不到即视为远场/弱信号，预览不接受）。
-                            // 开启麦克风语音增强(AGC)时电平被归一化，近场门失效 → 旁路（全部视为达标）。
-                            let reachedNearField = self.realtimeVoiceProcessingOn || self.realtimeChunkPeak >= NearField.peakThreshold
                             let chunkIndex = self.realtimeChunkIndex
                             let chunkBuffers = self.realtimeBuffers
                             if isChunkFinal {
@@ -234,11 +217,10 @@ final class AudioRecorder: @unchecked Sendable {
                                 self.realtimeChunkStartFrame = frameCount
                                 self.realtimeChunkIndex += 1
                                 self.realtimeBuffers.removeAll(keepingCapacity: true)
-                                self.realtimeChunkPeak = 0
                             }
                             self.emitRealtimeSnapshot(
                                 taskID: taskID, format: format, buffers: chunkBuffers,
-                                chunkIndex: chunkIndex, isChunkFinal: isChunkFinal, reachedNearField: reachedNearField
+                                chunkIndex: chunkIndex, isChunkFinal: isChunkFinal
                             )
                         }
                     }
@@ -414,7 +396,7 @@ final class AudioRecorder: @unchecked Sendable {
     /// 块最终快照（isChunkFinal）绕过节流，保证一定被写出，避免丢掉整块的提交文本。
     private func emitRealtimeSnapshot(
         taskID: UUID, format: AVAudioFormat, buffers: [AVAudioPCMBuffer],
-        chunkIndex: Int, isChunkFinal: Bool, reachedNearField: Bool
+        chunkIndex: Int, isChunkFinal: Bool
     ) {
         if !isChunkFinal {
             guard !snapshotWriteInFlight else { return }
@@ -430,7 +412,7 @@ final class AudioRecorder: @unchecked Sendable {
                 try? FileManager.default.removeItem(at: url)
                 try self.writeRealtimeSnapshot(from: buffers, format: format, to: url)
                 DispatchQueue.main.async { [weak self] in
-                    self?.onRealtimeSnapshot?(taskID, url, chunkIndex, isChunkFinal, reachedNearField)
+                    self?.onRealtimeSnapshot?(taskID, url, chunkIndex, isChunkFinal)
                 }
             } catch {
                 try? FileManager.default.removeItem(at: url)

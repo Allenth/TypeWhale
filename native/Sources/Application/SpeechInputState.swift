@@ -26,8 +26,6 @@ struct RealtimeSnapshotRequest {
     let configuration: ASRConfiguration
     let chunkIndex: Int
     let isChunkFinal: Bool
-    /// 该块是否达到过近场响度；未达到则视为远场/弱信号，预览不接受其文本。
-    let reachedNearField: Bool
 }
 
 struct PendingPasteResult {
