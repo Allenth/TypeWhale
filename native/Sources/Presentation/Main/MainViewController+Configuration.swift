@@ -19,6 +19,7 @@ extension MainViewController {
         autoFinish.setAccessibilityLabel("停顿自动完成")
         duckSystemAudio.setAccessibilityLabel("录音时降低系统音量")
         micNoiseReduction.setAccessibilityLabel("麦克风降噪（语音增强）")
+        micNoiseReduction.toolTip = "开启 Apple 语音增强（回声消除+噪声抑制），嘈杂环境识别更稳；但会增加每次开始录音的延迟，建议仅在嘈杂时临时开启。默认关闭。"
         launchAtLogin.setAccessibilityLabel("开机自动启动")
     }
 

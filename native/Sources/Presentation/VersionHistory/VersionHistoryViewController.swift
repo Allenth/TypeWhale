@@ -9,6 +9,23 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.5.27 (Build 385)",
+            date: "2026-06-29",
+            changes: [
+                "排查并定位「每次开始录音很慢」：根因是「麦克风降噪（语音增强）」每次录音都重建音频引擎、重新初始化 voiceProcessing。该开关默认关闭。",
+                "文案改为「麦克风降噪（增强·略慢）」并加悬停说明：开启会增加每次开始录音的延迟，建议仅在嘈杂环境临时开启。",
+                "新增录音链路诊断埋点：recorder_start_ms、vad_final、recorder_stop_wait_ms、paste_drain，便于后续性能排查。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.5.24 (Build 382)",
+            date: "2026-06-29",
+            changes: [
+                "重写产品 PRD：从历史版本索引升级为正式产品需求文档，补齐产品定义、用户场景、产品原则、核心旅程、功能需求、非功能需求、验收矩阵、风险和路线图。",
+                "PRD 汇总 README、设计规范、开发日志、架构决策、预览流水线、截图翻译、VAD、模型、安全、macOS 和 Windows 文档中的产品事实，作为后续规划与开发判断的产品基线。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.5.23 (Build 381)",
             date: "2026-06-29",
             changes: [

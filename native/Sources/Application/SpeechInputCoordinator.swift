@@ -670,12 +670,15 @@ final class SpeechInputCoordinator {
         )
         outputAudioDucker.duckIfNeeded(enabled: controller.duckSystemAudioWhileRecordingEnabled)
         do {
+            let startBegin = Date()
             try recorder.start(
                 taskID: taskID,
                 realtimeEnabled: realtimeEnabled,
                 inputDeviceID: AudioInputDeviceProvider.selectedDeviceID(),
                 voiceProcessingEnabled: controller.micVoiceProcessingEnabled
             )
+            let startMs = Int(Date().timeIntervalSince(startBegin) * 1000)
+            LaunchDiagnostics.mark("recorder_start_ms=\(startMs) voice_processing=\(controller.micVoiceProcessingEnabled)")
             recordingStartedAt = Date()
             lastCapsuleStatusUpdateAt = nil
             updateCapsuleStatus()
@@ -745,9 +748,17 @@ final class SpeechInputCoordinator {
             resetWaveform: true
         )
         popup.show(state: "检测中")
+        let vadStart = Date()
         vadBridge.containsSpeech(audio: url) { [weak self] response in
             DispatchQueue.main.async {
                 guard let self else { return }
+                let vadMs = Int(Date().timeIntervalSince(vadStart) * 1000)
+                let resultText: String
+                switch response {
+                case .failure(let e): resultText = "error(\(e.localizedDescription))"
+                case .success(let v): resultText = v ? "speech" : "no_speech"
+                }
+                LaunchDiagnostics.mark("vad_final task_id=\(taskID.uuidString.prefix(8)) ms=\(vadMs) result=\(resultText)")
                 let shouldUpdateInterface = self.shouldUpdateInterface(for: taskID)
                 switch response {
                 case .failure(let error):

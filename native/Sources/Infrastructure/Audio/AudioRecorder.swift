@@ -308,7 +308,12 @@ final class AudioRecorder: @unchecked Sendable {
         state.stopAccepting()
         isRecording = false
         releaseInputNode()
+        let waitStart = Date()
         processingGroup.wait()
+        let waitMs = Int(Date().timeIntervalSince(waitStart) * 1000)
+        if waitMs >= 80 {
+            LaunchDiagnostics.mark("recorder_stop_wait_ms=\(waitMs)")
+        }
         currentTaskID = nil
         currentPendingURL = nil
         realtimeBuffers = []
