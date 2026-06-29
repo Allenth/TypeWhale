@@ -9,6 +9,14 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.5.19 (Build 377)",
+            date: "2026-06-29",
+            changes: [
+                "新增历史全版本产品需求文档，按产品主线和逐版本索引整理从早期 Build 到 1.5.x 的需求演进。",
+                "文档区分当前能力、历史实验、已回滚方向和后续待办，方便后续规划与复盘。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.5.18 (Build 376)",
             date: "2026-06-29",
             changes: [
