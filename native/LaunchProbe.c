@@ -11,7 +11,7 @@
 //   * If this probe's line does NOT appear at all, dyld aborted during symbol
 //     binding (a missing-symbol / missing-library failure) before any
 //     constructor could run. In that case the precise cause is named in the
-//     system crash report (~/Library/Logs/DiagnosticReports/TypeWhale-*.ips).
+//     system crash report (~/Library/Logs/DiagnosticReports/TypeWhalePro-*.ips).
 //
 // The probe also exposes typewhale_launch_probe_log() so Swift can funnel crash
 // handler output through the same dependency-free path.
@@ -34,7 +34,7 @@
 #define TYPEWHALE_BUILD "0"
 #endif
 
-// Logs live under ~/Library/Logs/TypeWhale/<YYYY-MM-DD>/<version>-<build>.log so each
+// Logs live under ~/Library/Logs/TypeWhale Pro/<YYYY-MM-DD>/<version>-<build>.log so each
 // day is a folder and each build of the day is one file. A latest.log symlink in the
 // base folder always points at the current build's file (stable entry point for tooling).
 // Both this dependency-free C path and Swift LaunchDiagnostics must agree on this layout.
@@ -44,7 +44,7 @@ static void typewhale_probe_log_path(char *out, size_t out_size) {
         home = "/tmp";
     }
     char base[700];
-    snprintf(base, sizeof(base), "%s/Library/Logs/TypeWhale", home);
+    snprintf(base, sizeof(base), "%s/Library/Logs/TypeWhale Pro", home);
     mkdir(base, 0755);
 
     char day[16];

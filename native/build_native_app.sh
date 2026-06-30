@@ -2,7 +2,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-APP="$ROOT/macos/TypeWhale.app"
+APP_DISPLAY_NAME="TypeWhale Pro"
+APP_EXECUTABLE="TypeWhalePro"
+APP_BUNDLE_IDENTIFIER="com.waykingah.typewhale.pro"
+APP_BUNDLE_NAME="$APP_DISPLAY_NAME.app"
+APP="$ROOT/macos/$APP_BUNDLE_NAME"
 CONTENTS="$APP/Contents"
 SHERPA_ROOT="${TYPESPEAKER_SHERPA_ROOT:-/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/sherpa_onnx}"
 NATIVE_ASR="$CONTENTS/Resources/NativeASR"
@@ -20,8 +24,12 @@ if [[ -n "${TYPESPEAKER_MODEL_SOURCE:-}" ]]; then
 else
   MODEL_SOURCE=""
   for candidate in \
+    "$HOME/Library/Application Support/TypeWhale Pro/Models/sensevoice-native" \
     "$HOME/Library/Application Support/TypeWhale/Models/sensevoice-native" \
-    "$ROOT/macos/TypeWhale.app/Contents/Resources/Models/sensevoice-native"; do
+    "$ROOT/macos/TypeWhale Pro.app/Contents/Resources/Models/sensevoice-native" \
+    "$ROOT/macos/TypeWhale.app/Contents/Resources/Models/sensevoice-native" \
+    "/Applications/TypeWhale Pro.app/Contents/Resources/Models/sensevoice-native" \
+    "/Applications/TypeWhale.app/Contents/Resources/Models/sensevoice-native"; do
     if [[ -f "$candidate/model.onnx" && -f "$candidate/tokens.txt" ]]; then
       MODEL_SOURCE="$candidate"
       break
@@ -62,7 +70,17 @@ if [[ ! -f "$MODEL_SOURCE/model.onnx" || ! -f "$MODEL_SOURCE/tokens.txt" ]]; the
   echo "Expected model.onnx and tokens.txt. Set TYPESPEAKER_MODEL_SOURCE to override." >&2
   exit 1
 fi
-VAD_SOURCE="${TYPEWHALE_VAD_MODEL_SOURCE:-$HOME/Library/Application Support/TypeWhale/Models/vad/silero_vad.onnx}"
+VAD_SOURCE="${TYPEWHALE_VAD_MODEL_SOURCE:-}"
+if [[ -z "$VAD_SOURCE" ]]; then
+  for candidate in \
+    "$HOME/Library/Application Support/TypeWhale Pro/Models/vad/silero_vad.onnx" \
+    "$HOME/Library/Application Support/TypeWhale/Models/vad/silero_vad.onnx"; do
+    if [[ -f "$candidate" ]]; then
+      VAD_SOURCE="$candidate"
+      break
+    fi
+  done
+fi
 if [[ ! -f "$VAD_SOURCE" ]]; then
   echo "Missing Silero VAD model file: $VAD_SOURCE" >&2
   echo "Download it from: https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx" >&2
@@ -109,7 +127,7 @@ xcrun clang \
 # Earliest-possible, dependency-free launch/crash probe (pure POSIX). Linked into
 # the executable so the Swift CrashReporter can funnel output through it.
 # Inject the current version/build so the probe writes to the per-build log file
-# (~/Library/Logs/TypeWhale/<day>/<version>-<build>.log), matching Swift LaunchDiagnostics.
+# (~/Library/Logs/TypeWhale Pro/<day>/<version>-<build>.log), matching Swift LaunchDiagnostics.
 # Patterns deliberately omit the leading "<key>CFBundle" so release_local_build.sh's own
 # version grep does not match these lines; tail -1 then picks the real Info.plist heredoc.
 TW_VERSION="$(perl -ne 'print "$1\n" if m{ShortVersionString</key><string>([^<]+)}' "$0" | tail -1)"
@@ -149,7 +167,7 @@ xcrun swiftc \
   -l sherpa-onnx-c-api \
   -Xlinker -rpath \
   -Xlinker @executable_path/../Resources/NativeASR/lib \
-  -o "$CONTENTS/MacOS/TypeWhale"
+  -o "$CONTENTS/MacOS/$APP_EXECUTABLE"
 rm -f "$NATIVE_ASR_OBJECT" "$LAUNCH_PROBE_OBJECT"
 
 xcrun swiftc \
@@ -166,18 +184,18 @@ cat > "$CONTENTS/Info.plist" <<'PLIST'
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>CFBundleDevelopmentRegion</key><string>zh_CN</string>
-<key>CFBundleDisplayName</key><string>TypeWhale</string>
-<key>CFBundleExecutable</key><string>TypeWhale</string>
+<key>CFBundleDisplayName</key><string>TypeWhale Pro</string>
+<key>CFBundleExecutable</key><string>TypeWhalePro</string>
 <key>CFBundleIconFile</key><string>TypeWhale.icns</string>
-<key>CFBundleIdentifier</key><string>com.waykingah.typewhale</string>
+<key>CFBundleIdentifier</key><string>com.waykingah.typewhale.pro</string>
 <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-<key>CFBundleName</key><string>TypeWhale</string>
+<key>CFBundleName</key><string>TypeWhale Pro</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>1.7.1</string>
-<key>CFBundleVersion</key><string>474</string>
+<key>CFBundleVersion</key><string>476</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSHighResolutionCapable</key><true/>
-<key>NSMicrophoneUsageDescription</key><string>TypeWhale 需要使用麦克风进行本地语音转文字。</string>
+<key>NSMicrophoneUsageDescription</key><string>TypeWhale Pro 需要使用麦克风进行本地语音转文字。</string>
 </dict></plist>
 PLIST
 
@@ -217,18 +235,18 @@ if ! codesign --verify --deep --strict "$APP"; then
 fi
 
 if [[ "${TYPESPEAKER_SKIP_INSTALL:-0}" != "1" ]]; then
-  INSTALL_APP_PATH="${TYPESPEAKER_INSTALL_APP_PATH:-/Applications/TypeWhale.app}"
+  INSTALL_APP_PATH="${TYPESPEAKER_INSTALL_APP_PATH:-/Applications/$APP_BUNDLE_NAME}"
   if [[ -z "$INSTALL_APP_PATH" || "$INSTALL_APP_PATH" != /* || "$INSTALL_APP_PATH" == "/" || "$INSTALL_APP_PATH" != *.app ]]; then
     echo "Refusing unsafe install path: $INSTALL_APP_PATH" >&2
     echo "TYPESPEAKER_INSTALL_APP_PATH must be an absolute .app bundle path." >&2
     exit 1
   fi
-  if [[ "$(basename "$INSTALL_APP_PATH")" != "TypeWhale.app" ]]; then
-    echo "Refusing to replace a non-TypeWhale app bundle: $INSTALL_APP_PATH" >&2
+  if [[ "$(basename "$INSTALL_APP_PATH")" != "$APP_BUNDLE_NAME" ]]; then
+    echo "Refusing to replace a non-$APP_DISPLAY_NAME app bundle: $INSTALL_APP_PATH" >&2
     exit 1
   fi
-  osascript -e 'tell application id "com.waykingah.typewhale" to quit' >/dev/null 2>&1 || true
-  pkill -x -u "$(id -u)" TypeWhale >/dev/null 2>&1 || true
+  osascript -e "tell application id \"$APP_BUNDLE_IDENTIFIER\" to quit" >/dev/null 2>&1 || true
+  pkill -x -u "$(id -u)" "$APP_EXECUTABLE" >/dev/null 2>&1 || true
   sleep 0.5
   rm -rf "$INSTALL_APP_PATH"
   ditto "$APP" "$INSTALL_APP_PATH"

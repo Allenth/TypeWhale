@@ -146,7 +146,7 @@ extension MainViewController {
     @objc func configureDeepSeekAPIKey() {
         let alert = NSAlert()
         alert.messageText = "DeepSeek API Key"
-        alert.informativeText = "用于智能整理和自动翻译，保存到 macOS Keychain。TypeWhale 使用 deepseek-v4-flash，并关闭 thinking。"
+        alert.informativeText = "用于智能整理和自动翻译，保存到 macOS Keychain。\(AppBrand.displayName) 使用 deepseek-v4-flash，并关闭 thinking。"
         alert.alertStyle = .informational
         alert.addButton(withTitle: "保存")
         alert.addButton(withTitle: "清除")
@@ -221,7 +221,7 @@ extension MainViewController {
             try LoginItemManager.setEnabled(launchAtLogin.state == .on)
             refreshLaunchAtLoginState()
             if LoginItemManager.isPendingApproval {
-                detail.stringValue = "请在系统设置的登录项中允许 TypeWhale"
+                detail.stringValue = "请在系统设置的登录项中允许 \(AppBrand.displayName)"
             }
         } catch {
             refreshLaunchAtLoginState()
@@ -234,8 +234,8 @@ extension MainViewController {
         launchAtLogin.state = (LoginItemManager.isEnabled || LoginItemManager.isPendingApproval) ? .on : .off
         launchAtLogin.needsDisplay = true
         launchAtLogin.toolTip = LoginItemManager.isPendingApproval
-            ? "已提交开机启动请求，请在系统设置的登录项中允许 TypeWhale"
-            : "登录 macOS 后自动启动 TypeWhale"
+            ? "已提交开机启动请求，请在系统设置的登录项中允许 \(AppBrand.displayName)"
+            : "登录 macOS 后自动启动 \(AppBrand.displayName)"
     }
 
     @objc func installModel() {

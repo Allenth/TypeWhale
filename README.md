@@ -1,6 +1,6 @@
-# TypeWhale
+# TypeWhale Pro
 
-TypeWhale is a local-first desktop speech input tool. It records from the microphone, runs local ASR through a native sherpa-onnx / ONNX Runtime pipeline, previews recognition in a compact capsule, and inserts the final text back into the active app.
+TypeWhale Pro is a local-first desktop speech input tool. It records from the microphone, runs local ASR through a native sherpa-onnx / ONNX Runtime pipeline, previews recognition in a compact capsule, and inserts the final text back into the active app.
 
 ## Download
 
@@ -10,7 +10,9 @@ This is a public test build. It is not notarized with Developer ID yet, so macOS
 
 中文用户可以直接点击上面的链接下载安装包。如果浏览器没有开始下载，请右键链接选择“链接另存为”，或打开 [TypeWhale 1.3.0 (208) Test Release](https://github.com/Allenth/TypeWhale/releases/tag/v1.3.0-build208) 页面，在 **Assets** 区域下载 `TypeWhale-1.3.0-208.dmg`。
 
-Current local release build in this repository is `1.7.1 (474)`. It has been built and installed locally from source. The public GitHub DMG link above still points to the last uploaded public test artifact; local DMG artifacts are created only when a packaging step is run explicitly.
+Current local release build in this repository is `1.7.1 (476)`. It has been built and installed locally from source. The public GitHub DMG link above still points to the last uploaded public test artifact; local DMG artifacts are created only when a packaging step is run explicitly.
+
+This branch builds the standalone Pro app identity: `TypeWhale Pro.app`, bundle identifier `com.waykingah.typewhale.pro`, and default install path `/Applications/TypeWhale Pro.app`. It can coexist with the regular TypeWhale app.
 
 The current macOS baseline is:
 
@@ -61,15 +63,15 @@ Build:
 
 ```bash
 cd TypeWhale
-TYPESPEAKER_MODEL_SOURCE="$HOME/Library/Application Support/TypeWhale/Models/sensevoice-native" \
-TYPEWHALE_VAD_MODEL_SOURCE="$HOME/Library/Application Support/TypeWhale/Models/vad/silero_vad.onnx" \
+TYPESPEAKER_MODEL_SOURCE="$HOME/Library/Application Support/TypeWhale Pro/Models/sensevoice-native" \
+TYPEWHALE_VAD_MODEL_SOURCE="$HOME/Library/Application Support/TypeWhale Pro/Models/vad/silero_vad.onnx" \
 ./native/build_native_app.sh
 ```
 
 The app bundle is generated at:
 
 ```text
-macos/TypeWhale.app
+macos/TypeWhale Pro.app
 ```
 
 Local development builds may use an Apple Development or ad-hoc signature. Public distribution requires Developer ID signing, notarization, and Gatekeeper validation.
@@ -106,7 +108,7 @@ Third-party components and models remain under their own licenses and terms.
 
 ---
 
-# TypeWhale 中文说明
+# TypeWhale Pro 中文说明
 
 TypeWhale 是一个本地优先的桌面语音输入工具。它会在本机录音、本机识别，然后把最终文本粘贴回你原本正在输入的应用里。
 

@@ -771,13 +771,13 @@ final class SpeechInputCoordinator {
                 if granted {
                     self.startRecording(instructions: instructions, activation: activation, channel: channel)
                 } else {
-                    self.controller.setPrimaryStatus("麦克风未授权", detail: "请在系统设置中开启 TypeWhale 麦克风权限", tone: .error)
+                    self.controller.setPrimaryStatus("麦克风未授权", detail: "请在系统设置中开启 \(AppBrand.displayName) 麦克风权限", tone: .error)
                 }
             }
             return
         case .denied:
             refreshPermissions(checkMicrophone: true)
-            controller.setPrimaryStatus("麦克风未授权", detail: "请在系统设置中开启 TypeWhale 麦克风权限", tone: .error)
+            controller.setPrimaryStatus("麦克风未授权", detail: "请在系统设置中开启 \(AppBrand.displayName) 麦克风权限", tone: .error)
             return
         }
         cancelIdleASRUnload()

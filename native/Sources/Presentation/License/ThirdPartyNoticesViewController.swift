@@ -55,7 +55,7 @@ final class ThirdPartyNoticesViewController: NSViewController {
         title.maximumNumberOfLines = 1
         title.lineBreakMode = .byTruncatingTail
 
-        let subtitle = label("TypeWhale 随包运行库、模型来源和商业发布检查。", size: 12)
+        let subtitle = label("\(AppBrand.displayName) 随包运行库、模型来源和商业发布检查。", size: 12)
         subtitle.textColor = .secondaryLabelColor
         subtitle.maximumNumberOfLines = 1
         subtitle.lineBreakMode = .byTruncatingTail
@@ -203,7 +203,7 @@ final class ThirdPartyNoticesViewController: NSViewController {
         }
         let alert = NSAlert()
         alert.messageText = "未找到第三方组件说明"
-        alert.informativeText = "当前 App 包内缺少 THIRD_PARTY_NOTICES.md，请重新构建或安装 TypeWhale。"
+        alert.informativeText = "当前 App 包内缺少 THIRD_PARTY_NOTICES.md，请重新构建或安装 \(AppBrand.displayName)。"
         alert.alertStyle = .warning
         alert.addButton(withTitle: "好")
         alert.runModal()

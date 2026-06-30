@@ -312,10 +312,10 @@ extension MainViewController {
     }
 
     func loadAppIcon() -> NSImage? {
-        if let image = NSImage(named: "TypeWhale") {
+        if let image = NSImage(named: AppBrand.iconResourceName) {
             return image
         }
-        if let url = Bundle.main.url(forResource: "TypeWhale", withExtension: "icns") {
+        if let url = Bundle.main.url(forResource: AppBrand.iconResourceName, withExtension: "icns") {
             return NSImage(contentsOf: url)
         }
         return NSImage(named: NSImage.applicationIconName)

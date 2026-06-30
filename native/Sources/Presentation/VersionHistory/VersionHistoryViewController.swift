@@ -9,6 +9,24 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.7.1 (Build 476)",
+            date: "2026-07-01",
+            changes: [
+                "TypeWhale Pro 分支移除源码树中旧的普通版 TypeWhale.app 跟踪产物，避免 Pro 分支同时携带普通版构建包。",
+                "模型打包来源新增 /Applications 下普通版和 Pro 版模型 fallback；即使工作区旧 app 被移除，也能复用本机已安装模型。",
+                "继续保持 Pro 版默认安装到 /Applications/TypeWhale Pro.app，且不会覆盖普通 /Applications/TypeWhale.app。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.7.1 (Build 475)",
+            date: "2026-07-01",
+            changes: [
+                "当前分支改为独立 TypeWhale Pro 本地应用：Finder 显示名、主窗口标题、状态栏提示和权限文案统一为 TypeWhale Pro。",
+                "Bundle ID 切换为 com.waykingah.typewhale.pro，默认安装到 /Applications/TypeWhale Pro.app，可与普通 TypeWhale 并存。",
+                "Pro 版使用独立 Application Support、日志目录和 Keychain service；构建时仍可读取普通 TypeWhale 已下载模型作为打包来源，避免重复准备大模型。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.7.1 (Build 474)",
             date: "2026-06-30",
             changes: [

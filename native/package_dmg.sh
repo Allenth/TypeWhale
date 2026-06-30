@@ -1,11 +1,11 @@
 #!/bin/zsh
-# 把当前已构建的 macos/TypeWhale.app 打成可分发 DMG 到 dist/。
+# 把当前已构建的 macos/TypeWhale Pro.app 打成可分发 DMG 到 dist/。
 # 由 build_and_log.sh 按节奏或显式触发；也可单独运行。
 # 注意：此脚本只做打包，不做 Developer ID 公证（notarization 见 docs/商业化路线图.md P0）。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-APP="$ROOT/macos/TypeWhale.app"
+APP="$ROOT/macos/TypeWhale Pro.app"
 BUILD_SCRIPT="$ROOT/native/build_native_app.sh"
 DIST="$ROOT/dist"
 
@@ -22,16 +22,16 @@ if [[ -z "$ver" || -z "$bld" ]]; then
 fi
 
 mkdir -p "$DIST"
-DMG="$DIST/TypeWhale-$ver-$bld.dmg"
+DMG="$DIST/TypeWhale-Pro-$ver-$bld.dmg"
 
 staging="$(mktemp -d)"
 trap 'rm -rf "$staging"' EXIT
-ditto "$APP" "$staging/TypeWhale.app"
+ditto "$APP" "$staging/TypeWhale Pro.app"
 ln -s /Applications "$staging/Applications"
 
 rm -f "$DMG"
 hdiutil create \
-  -volname "TypeWhale $ver" \
+  -volname "TypeWhale Pro $ver" \
   -srcfolder "$staging" \
   -fs HFS+ \
   -format UDZO \

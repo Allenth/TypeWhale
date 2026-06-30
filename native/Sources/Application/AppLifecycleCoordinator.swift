@@ -94,7 +94,7 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
         noticesItem.target = self
         appMenu.addItem(noticesItem)
         appMenu.addItem(.separator())
-        let quitItem = NSMenuItem(title: "隐藏 TypeWhale", action: #selector(hideMainWindow), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: "隐藏 \(AppBrand.displayName)", action: #selector(hideMainWindow), keyEquivalent: "q")
         quitItem.target = self
         appMenu.addItem(quitItem)
         appItem.submenu = appMenu
@@ -118,7 +118,7 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
             button.title = ""
             button.image = makeStatusBarLogo()
             button.imagePosition = .imageOnly
-            button.toolTip = "TypeWhale"
+            button.toolTip = AppBrand.displayName
         }
 
         let menu = NSMenu()
@@ -230,7 +230,7 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
             backing: .buffered,
             defer: false
         )
-        mainWindow.title = "TypeWhale"
+        mainWindow.title = AppBrand.displayName
         mainWindow.appearance = NSAppearance(named: .darkAqua)
         mainWindow.isOpaque = false
         mainWindow.backgroundColor = .clear

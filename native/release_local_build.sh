@@ -6,7 +6,7 @@ BUILD_SCRIPT="$ROOT/native/build_native_app.sh"
 README="$ROOT/README.md"
 MACOS_README="$ROOT/macos/README.md"
 VERSION_HISTORY="$ROOT/native/Sources/Presentation/VersionHistory/VersionHistoryViewController.swift"
-INSTALL_APP_PATH="${TYPESPEAKER_INSTALL_APP_PATH:-/Applications/TypeWhale.app}"
+INSTALL_APP_PATH="${TYPESPEAKER_INSTALL_APP_PATH:-/Applications/TypeWhale Pro.app}"
 
 mode="full-version"
 for arg in "$@"; do
@@ -95,7 +95,7 @@ perl -0pi -e "s{(<key>CFBundleVersion</key><string>)\\Q$current_build\\E}{\${1}$
 
 if [[ -f "$README" ]]; then
   perl -0pi -e 's{Current local release build in this repository is `[^`]+`}{Current local release build in this repository is `'"$next_version ($next_build)"'`}' "$README"
-  perl -0pi -e "s{dist/TypeWhale-[0-9]+\\.[0-9]+(?:\\.[0-9]+)?-[0-9]+\\.dmg}{dist/TypeWhale-$next_version-$next_build.dmg}g" "$README"
+  perl -0pi -e "s{dist/TypeWhale(?:-Pro)?-[0-9]+\\.[0-9]+(?:\\.[0-9]+)?-[0-9]+\\.dmg}{dist/TypeWhale-Pro-$next_version-$next_build.dmg}g" "$README"
 fi
 
 if [[ -f "$MACOS_README" ]]; then
@@ -103,9 +103,9 @@ if [[ -f "$MACOS_README" ]]; then
 fi
 
 if [[ "$mode" == "build-only" ]]; then
-  echo "Bumped TypeWhale build to $next_version ($next_build)"
+  echo "Bumped TypeWhale Pro build to $next_version ($next_build)"
 else
-  echo "Bumped TypeWhale version to $next_version ($next_build)"
+  echo "Bumped TypeWhale Pro version to $next_version ($next_build)"
 fi
 "$BUILD_SCRIPT"
 sleep 0.8

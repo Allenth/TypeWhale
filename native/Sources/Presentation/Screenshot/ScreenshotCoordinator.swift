@@ -2352,7 +2352,7 @@ private final class ScreenshotOCRRecognizer {
             .appendingPathComponent("TypeWhaleVisionOCR")
         guard FileManager.default.isExecutableFile(atPath: helperURL.path) else {
             throw NSError(domain: "TypeWhale.ScreenshotOCR", code: 2, userInfo: [
-                NSLocalizedDescriptionKey: "OCR 组件缺失，请重新安装 TypeWhale。"
+                NSLocalizedDescriptionKey: "OCR 组件缺失，请重新安装 \(AppBrand.displayName)。"
             ])
         }
 

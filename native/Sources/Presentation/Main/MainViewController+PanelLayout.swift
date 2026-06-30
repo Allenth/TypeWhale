@@ -77,7 +77,7 @@ extension MainViewController {
         icon.widthAnchor.constraint(equalToConstant: 30).isActive = true
         icon.heightAnchor.constraint(equalToConstant: 30).isActive = true
 
-        let title = label("TypeWhale", size: 15, weight: .semibold)
+        let title = label(AppBrand.displayName, size: 15, weight: .semibold)
         let version = label(versionText(), size: 10, weight: .medium)
         version.textColor = .secondaryLabelColor
         let titleStack = NSStackView(views: [title, version])
@@ -100,7 +100,7 @@ extension MainViewController {
         row.spacing = 10
         row.translatesAutoresizingMaskIntoConstraints = false
         memoryLabel.textColor = .secondaryLabelColor
-        memoryLabel.toolTip = "TypeWhale 当前物理内存占用（与活动监视器“内存”一致）"
+        memoryLabel.toolTip = "\(AppBrand.displayName) 当前物理内存占用（与活动监视器“内存”一致）"
         updateMemoryReadout()
         return row
     }
