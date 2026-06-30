@@ -85,6 +85,29 @@ final class AudioRecorder: @unchecked Sendable {
     private enum Finalization {
         static let tailPaddingSeconds: Double = 0.25
     }
+    private enum RouteStability {
+        static let startupGraceSeconds: TimeInterval = 1.2
+    }
+    private struct InputRouteSnapshot {
+        let manualDeviceID: AudioDeviceID?
+        let defaultDeviceID: AudioDeviceID?
+        let startedAt: Date
+
+        var targetDescription: String {
+            if let manualDeviceID {
+                return "manual:\(manualDeviceID)"
+            }
+            return "default:\(defaultDeviceID.map(String.init) ?? "unknown")"
+        }
+
+        func stillTargetsSameInput() -> Bool {
+            if let manualDeviceID {
+                return AudioInputDeviceProvider.devices().contains { $0.id == manualDeviceID }
+            }
+            guard let defaultDeviceID else { return false }
+            return AudioInputDeviceProvider.currentDefaultInputDeviceID() == defaultDeviceID
+        }
+    }
 
     private var engine: AVAudioEngine?
     private var inputTapInstalled = false
@@ -113,6 +136,7 @@ final class AudioRecorder: @unchecked Sendable {
     private var snapshotRequestedWhileBusy = false
     private var inputRouteObserver: AudioInputRouteObserver?
     private var engineConfigurationObserver: NSObjectProtocol?
+    private var inputRouteSnapshot: InputRouteSnapshot?
     private var inputFormatDescription = ""
     private var latestEmptyRecordingReason: String?
     private(set) var isRecording = false
@@ -186,6 +210,11 @@ final class AudioRecorder: @unchecked Sendable {
         snapshotRequestedWhileBusy = false
         inputFormatDescription = "\(Int(format.sampleRate)) Hz / \(format.channelCount) ch"
         latestEmptyRecordingReason = nil
+        inputRouteSnapshot = InputRouteSnapshot(
+            manualDeviceID: inputDeviceID,
+            defaultDeviceID: AudioInputDeviceProvider.currentDefaultInputDeviceID(),
+            startedAt: Date()
+        )
         nextRealtimeFrame = AVAudioFramePosition(format.sampleRate * RealtimeTiming.firstSnapshotSeconds)
         vadWindowSamples = []
         vadWindowCapacity = max(1, Int(format.sampleRate * VoiceProbe.windowSeconds))
@@ -390,6 +419,7 @@ final class AudioRecorder: @unchecked Sendable {
         engine.stop()
         engine.reset()
         self.engine = nil
+        inputRouteSnapshot = nil
         LaunchDiagnostics.mark("recorder_input_release reason=\(reason) had_engine=true")
         DispatchQueue.main.async { [weak self] in self?.onBands?(Array(repeating: 0.1, count: 7)) }
     }
@@ -407,7 +437,7 @@ final class AudioRecorder: @unchecked Sendable {
                 object: engine,
                 queue: .main
             ) { [weak self] _ in
-                self?.handleInputRouteChanged("录音引擎配置已变化。")
+                self?.handleEngineConfigurationChanged()
             }
         }
     }
@@ -423,12 +453,50 @@ final class AudioRecorder: @unchecked Sendable {
 
     private func handleInputRouteChanged(_ message: String) {
         guard isRecording else { return }
+        if shouldIgnoreStartupRouteChange(message: message) {
+            return
+        }
+        cancelForInputRouteChange(message)
+    }
+
+    private func cancelForInputRouteChange(_ message: String) {
         latestEmptyRecordingReason = "\(message)请重新开始录音。"
         state.stopAccepting()
         stopInputRouteMonitoring()
         releaseInputNode(reason: "input_route_changed")
         scheduleIdleInputRelease(reason: "input_route_changed_delayed")
         onInputRouteChanged?(message)
+    }
+
+    private func handleEngineConfigurationChanged() {
+        guard isRecording else { return }
+        if shouldIgnoreStartupRouteChange(message: "录音引擎配置已变化。") {
+            restartEngineIfNeededAfterStartupRouteChange()
+            return
+        }
+        cancelForInputRouteChange("录音引擎配置已变化。")
+    }
+
+    private func shouldIgnoreStartupRouteChange(message: String) -> Bool {
+        guard let inputRouteSnapshot else { return false }
+        let elapsed = Date().timeIntervalSince(inputRouteSnapshot.startedAt)
+        guard elapsed <= RouteStability.startupGraceSeconds else { return false }
+        guard inputRouteSnapshot.stillTargetsSameInput() else { return false }
+        LaunchDiagnostics.mark(
+            "audio_route_startup_change_ignored elapsed_ms=\(Int(elapsed * 1000)) target=\(inputRouteSnapshot.targetDescription) message=\(message)"
+        )
+        return true
+    }
+
+    private func restartEngineIfNeededAfterStartupRouteChange() {
+        guard let engine, !engine.isRunning else { return }
+        do {
+            try engine.start()
+            LaunchDiagnostics.mark("audio_route_startup_engine_restarted")
+        } catch {
+            LaunchDiagnostics.mark("audio_route_startup_engine_restart_failed error=\(error.localizedDescription)")
+            cancelForInputRouteChange("录音引擎配置已变化。")
+        }
     }
 
     /// 把「当前块」的音频缓冲写成快照文件并回调。普通中间快照受单写入节流（盘忙就跳过，下一拍再来）；

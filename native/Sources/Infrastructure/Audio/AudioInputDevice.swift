@@ -104,6 +104,10 @@ enum AudioInputDeviceProvider {
         )
     }
 
+    static func currentDefaultInputDeviceID() -> AudioDeviceID? {
+        defaultInputDeviceID()
+    }
+
     private static func allAudioDeviceIDs() -> [AudioDeviceID] {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDevices,

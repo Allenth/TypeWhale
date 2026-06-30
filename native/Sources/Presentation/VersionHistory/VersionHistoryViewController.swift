@@ -9,6 +9,24 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.6.7 (Build 459)",
+            date: "2026-06-30",
+            changes: [
+                "补强蓝牙耳机麦克风启动稳定逻辑：同一输入设备的启动配置变化被判定为可恢复事件。",
+                "如果蓝牙输入启动配置变化导致 AVAudioEngine 短暂停止，AudioRecorder 会尝试立即重新启动录音引擎，并记录 `audio_route_startup_engine_restarted`。",
+                "如果录音引擎无法恢复，仍会按输入路由异常停止本次录音，避免继续录到不可用音频。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.6.7 (Build 458)",
+            date: "2026-06-30",
+            changes: [
+                "修复蓝牙耳机麦克风开始录音后立刻提示“麦克风已切换 / 请重新录音”的问题。",
+                "AudioRecorder 现在会在录音启动时记录目标输入设备；蓝牙输入启动短时间内，如果仍然是同一个输入设备触发引擎配置变化或设备列表刷新，将记录诊断并继续录音。",
+                "真正切换系统默认输入、手动锁定设备消失或录音中后段发生路由变化时，仍会停止本次录音并提示重新开始，避免跨设备音频污染。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.6.7 (Build 457)",
             date: "2026-06-30",
             changes: [
