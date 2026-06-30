@@ -97,6 +97,7 @@ final class MainViewController: NSViewController {
     let launchAtLogin = BrandSwitch()
     let asrBackendMode = NSPopUpButton()
     let smartRewriteMode = NSPopUpButton()
+    let smartAIModelMode = NSPopUpButton()
     let deepSeekKeyButton = NSButton(title: "Key", target: nil, action: nil)
     let deepSeekBalanceButton = NSButton(title: "!", target: nil, action: nil)
     let promptSettingsButton = NSButton(title: "提示词", target: nil, action: nil)
@@ -140,6 +141,8 @@ final class MainViewController: NSViewController {
     var modelDetailPopover: NSPopover?
     var deepSeekBalancePopover: NSPopover?
     var audioInputRouteObserver: AudioInputRouteObserver?
+    var audioInputDeviceMenuHasLoaded = false
+    var smartAIKeyRow: NSView?
     var smartAIUsageRow: NSView?
     let deepSeekBalanceClient = DeepSeekBalanceClient()
     lazy var versionHistoryViewController = VersionHistoryViewController()
@@ -202,6 +205,8 @@ final class MainViewController: NSViewController {
         asrBackendMode.target = self; asrBackendMode.action = #selector(saveSettings)
         configureSmartRewriteModeMenu(settings.smartRewritePreference)
         smartRewriteMode.target = self; smartRewriteMode.action = #selector(saveSettings)
+        configureSmartAIModelMenu(SmartAIModelStore.load())
+        smartAIModelMode.target = self; smartAIModelMode.action = #selector(saveSettings)
         configureDeepSeekKeyButton()
         configurePromptSettingsButton()
         configureAutoScopeButton()
@@ -240,7 +245,6 @@ final class MainViewController: NSViewController {
         )
         DispatchQueue.main.async { [weak self] in
             _ = self?.versionHistoryViewController.view
-            self?.startAudioInputRouteObserver()
         }
     }
 

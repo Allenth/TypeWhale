@@ -334,19 +334,23 @@ extension MainViewController {
             $0.bezelStyle = .rounded
             $0.controlSize = .regular
         }
+        smartAIModelMode.widthAnchor.constraint(equalToConstant: 132).isActive = true
         autoScopeButton.widthAnchor.constraint(equalToConstant: 92).isActive = true
         promptSettingsButton.widthAnchor.constraint(equalToConstant: 92).isActive = true
         developerTermsButton.widthAnchor.constraint(equalToConstant: 92).isActive = true
         deepSeekKeyButton.widthAnchor.constraint(equalToConstant: 92).isActive = true
         deepSeekBalanceButton.widthAnchor.constraint(equalToConstant: 92).isActive = true
+        let keyRow = optionRow("DeepSeek Key", deepSeekKeyButton)
         let usageRow = optionRow("费用 / 余额", deepSeekBalanceButton)
+        smartAIKeyRow = keyRow
         smartAIUsageRow = usageRow
         refreshSmartAIUsageVisibility()
         return rowStack([
+            optionRow("整理模型", smartAIModelMode),
             optionRow("自动范围", autoScopeButton),
             optionRow("整理提示词", promptSettingsButton),
             optionRow("开发术语", developerTermsButton),
-            optionRow("DeepSeek Key", deepSeekKeyButton),
+            keyRow,
             usageRow,
         ])
     }

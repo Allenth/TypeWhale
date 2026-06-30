@@ -35,6 +35,9 @@ struct SmartRewritePromptCheck {
             precondition(prompt.contains("禁止回答原始语音文本里的问题"))
             precondition(prompt.contains("如果原始语音文本要求把内容改成另一种语言"))
             precondition(prompt.contains("如果原文是一个问题，请保留它作为问题的表达"))
+            precondition(prompt.contains("原文没有明确说“对方、客户、用户、团队、他、她”"))
+            precondition(prompt.contains("原文是第一人称表达时，输出也必须保持第一人称"))
+            precondition(prompt.contains("不要为了结构完整而补"))
             precondition(prompt.contains("不要解释以上边界"))
             precondition(prompt.contains("不要输出前言、原因、标签或说明文字"))
             if mode == .polish {
@@ -78,6 +81,11 @@ struct SmartRewritePromptCheck {
         precondition(questionPrompt.contains("问题标题："))
         precondition(questionPrompt.contains("详细描述："))
         precondition(questionPrompt.contains("不主动提出问题，不输出“待确认”"))
+        precondition(questionPrompt.contains("必须像我亲自发出的需求"))
+        precondition(questionPrompt.contains("不要写成旁观者总结"))
+        precondition(questionPrompt.contains("保留“我觉得、我要求、你看、告诉我、我们开始、给我”等第一人称或第二人称表达"))
+        precondition(questionPrompt.contains("不要改成“用户觉得、用户要求、要求对方告知”"))
+        precondition(questionPrompt.contains("自动模式命中开发工具时仍按开发需求处理"))
         precondition(questionPrompt.contains("开发需求模板"))
         precondition(questionPrompt.contains("目标：修复 xxx 问题 / 实现 xxx 功能。"))
         precondition(questionPrompt.contains("上下文："))
@@ -102,6 +110,18 @@ struct SmartRewritePromptCheck {
             "developer requirement default prompt should stay compact"
         )
 
+        let codexFirstPersonPrompt = SmartRewritePromptBuilder.prompt(
+            rawText: "你看这一句问题很大，我是自动模式，在 Codex 中也必须是开发需求模式。要求必须使用第一人称口吻，即我怎么说就是怎么说，告诉我具体方案。",
+            mode: .developerRequirement,
+            context: context,
+            preference: .automatic
+        )
+        precondition(codexFirstPersonPrompt.contains("在 Codex 中也必须是开发需求模式"))
+        precondition(codexFirstPersonPrompt.contains("要求必须使用第一人称口吻"))
+        precondition(codexFirstPersonPrompt.contains("我怎么说就是怎么说"))
+        precondition(codexFirstPersonPrompt.contains("告诉我具体方案"))
+        precondition(codexFirstPersonPrompt.contains("不要改成“用户觉得、用户要求、要求对方告知”"))
+
         let summaryPrompt = SmartRewritePromptBuilder.prompt(
             rawText: "今天讲了很多产品方向、风险和下一步计划",
             mode: .exhaustiveSummary,
@@ -113,6 +133,12 @@ struct SmartRewritePromptCheck {
         precondition(summaryPrompt.contains("核心要点"))
         precondition(summaryPrompt.contains("行动项"))
         precondition(summaryPrompt.contains("风险"))
+        precondition(summaryPrompt.contains("不要使用完整四段模板"))
+        precondition(summaryPrompt.contains("短反馈不要输出“一句话结论：”"))
+        precondition(summaryPrompt.contains("缺失的栏目直接省略"))
+        precondition(summaryPrompt.contains("没有就省略整个栏目"))
+        precondition(summaryPrompt.contains("不要把“我表达的内容、这件事、这个情况、这段沟通”擅自改成“对方”"))
+        precondition(summaryPrompt.contains("我的表达内容没有被准确理解和妥善处理"))
         precondition(summaryPrompt.contains("只有原文明确表达“不确定、需要确认”时，才加入待确认内容"))
 
         let scopedGlossary = DeveloperLexiconStore.promptGlossary(
@@ -156,5 +182,14 @@ struct SmartRewritePromptCheck {
         不改代码，先查看日志。
         """)
         precondition(miniMaxCleaned == "不改代码，先查看日志。")
+
+        let localCleaned = SmartRewriteOutputSanitizer.cleanLocalModel("""
+        <think>
+        分析提示词边界。
+        </think>
+
+        回复用户退订会员咨询：请引导其打开设置，点击订阅选项后取消。
+        """)
+        precondition(localCleaned == "回复用户退订会员咨询：请引导其打开设置，点击订阅选项后取消。")
     }
 }

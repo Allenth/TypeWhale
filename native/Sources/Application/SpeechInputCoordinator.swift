@@ -46,9 +46,7 @@ final class SpeechInputCoordinator {
     private lazy var realtimeASR = SenseVoiceRouter(runtimeName: "realtime", native: nativeASR)
     private lazy var finalRecognitionUseCase = FinalRecognitionUseCase(transcriber: asr)
     private lazy var smartInputRouter = SmartInputRouter(engine: smartEngine)
-    private lazy var screenshotCoordinator = ScreenshotCoordinator { [weak self] status, detail, tone in
-        self?.controller.setPrimaryStatus(status, detail: detail, tone: tone, resetWaveform: true)
-    }
+    private lazy var screenshotCoordinator = ScreenshotCoordinator()
     private let pasteCoordinator = PasteCoordinator()
     private var inputState: SpeechInputState = .idle
     private var workflowState = SpeechWorkflowState()
@@ -63,6 +61,7 @@ final class SpeechInputCoordinator {
     private var workspaceActivationObserver: NSObjectProtocol?
     private var trackedTargetTaskID: UUID?
     private var trackedTargetApp: NSRunningApplication?
+    private var lastKnownPasteableTargetApp: NSRunningApplication?
     private var hotkeyIsPressed = false
     private var longPressWorkItem: DispatchWorkItem?
     private var autoFinishWorkItem: DispatchWorkItem?
@@ -205,7 +204,7 @@ final class SpeechInputCoordinator {
         refreshPermissions()
         PermissionDiagnosticsProvider.requestAccessibilityIfNeeded()
         startBackgroundHealthTimer()
-        PermissionDiagnosticsProvider.requestMicrophone { [weak self] in self?.refreshPermissions() }
+        prewarmSmartAIModelIfNeeded(reason: "app_start")
     }
 
     func stop() {
@@ -300,6 +299,14 @@ final class SpeechInputCoordinator {
     private func cancelStartupHotkeyRecovery() {
         startupHotkeyRecoveryWorkItems.forEach { $0.cancel() }
         startupHotkeyRecoveryWorkItems.removeAll()
+    }
+
+    private func prewarmSmartAIModelIfNeeded(reason: String) {
+        let model = SmartAIModelStore.load()
+        guard model.provider == .ollama else { return }
+        Task.detached(priority: .utility) {
+            await OllamaRewriteEngine.warmUp(model: model, reason: reason)
+        }
     }
 
     private func startBackgroundHealthTimer() {
@@ -418,12 +425,17 @@ final class SpeechInputCoordinator {
         capsuleStatusTimer = nil
     }
 
-    private func refreshPermissions() {
-        let permissions = PermissionDiagnosticsProvider.current()
+    private func refreshPermissions(checkMicrophone: Bool = false) {
+        let permissions = PermissionDiagnosticsProvider.current(checkMicrophone: checkMicrophone)
         let globalListening = hotkey.isGlobalListening
         UserDefaults.standard.synchronize()
-        controller.micStatus.stringValue = permissions.microphoneAuthorized ? "● 已开启" : "● 未开启"
-        controller.micStatus.textColor = permissions.microphoneAuthorized ? .systemGreen : .systemRed
+        if checkMicrophone {
+            controller.micStatus.stringValue = permissions.microphoneAuthorized ? "● 已开启" : "● 未开启"
+            controller.micStatus.textColor = permissions.microphoneAuthorized ? .systemGreen : .systemRed
+        } else {
+            controller.micStatus.stringValue = "● 录音时确认"
+            controller.micStatus.textColor = .secondaryLabelColor
+        }
         controller.accessibilityStatus.stringValue = permissions.accessibilityTrusted ? "● 已开启" : "● 未开启"
         controller.accessibilityStatus.textColor = permissions.accessibilityTrusted ? .systemGreen : .systemRed
         controller.screenRecordingStatus.stringValue = permissions.screenRecordingAuthorized ? "● 已开启" : "● 未开启"
@@ -458,8 +470,11 @@ final class SpeechInputCoordinator {
     }
 
     private func handleActivatedApplication(_ notification: Notification) {
-        guard trackedTargetTaskID != nil else { return }
         let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+        if let target = pasteableTargetApp(app) {
+            lastKnownPasteableTargetApp = target
+        }
+        guard trackedTargetTaskID != nil else { return }
         updateTrackedTargetApp(app)
     }
 
@@ -472,13 +487,18 @@ final class SpeechInputCoordinator {
     private func updateTrackedTargetApp(_ app: NSRunningApplication?) {
         guard trackedTargetTaskID != nil else { return }
         // 只有遇到有效可粘贴目标才更新；瞬时非粘贴前台（TypeWhale 自身胶囊/窗口、桌面等）
-        // 不清空已知的好目标，避免「识别成功却找不到粘贴目标」。
+        // 或系统控制中心/菜单栏弹窗不清空已知的好目标，避免「识别成功却找不到粘贴目标」。
         if let target = pasteableTargetApp(app) {
             trackedTargetApp = target
+            lastKnownPasteableTargetApp = target
             if var session = activeSession, session.id == trackedTargetTaskID {
                 session.targetApp = target
                 activeSession = session
             }
+        } else if let app {
+            LaunchDiagnostics.mark(
+                "target_tracking_ignored app=\(Self.logApp(app)) reason=not_pasteable current=\(Self.logApp(trackedTargetApp))"
+            )
         }
         let display = trackedTargetApp ?? app
         popup.updateTargetApp(
@@ -515,10 +535,56 @@ final class SpeechInputCoordinator {
         if app.activationPolicy != .regular {
             return nil
         }
+        if isTransientSystemUIApp(app) {
+            return nil
+        }
         guard app.localizedName?.isEmpty == false else {
             return nil
         }
         return app
+    }
+
+    private func reusableLastKnownTarget(for frontmostApp: NSRunningApplication?) -> NSRunningApplication? {
+        guard let frontmostApp,
+              isTransientSystemUIApp(frontmostApp),
+              let target = lastKnownPasteableTargetApp,
+              !target.isTerminated else {
+            return nil
+        }
+        return target
+    }
+
+    private func isTransientSystemUIApp(_ app: NSRunningApplication) -> Bool {
+        let bundleID = app.bundleIdentifier ?? ""
+        let name = app.localizedName ?? ""
+        let blockedBundleIDs: Set<String> = [
+            "com.apple.ControlCenter",
+            "com.apple.controlcenter",
+            "com.apple.systemuiserver",
+            "com.apple.notificationcenterui",
+            "com.apple.Spotlight",
+            "com.apple.dock",
+            "com.apple.loginwindow",
+            "com.bjango.istatmenus.status",
+            "com.bjango.istatmenus.agent",
+        ]
+        if blockedBundleIDs.contains(bundleID) {
+            return true
+        }
+        let loweredName = name.lowercased()
+        return loweredName == "control center" ||
+            loweredName == "控制中心" ||
+            loweredName == "notification center" ||
+            loweredName == "通知中心" ||
+            loweredName == "systemuiserver" ||
+            loweredName.contains("menubar")
+    }
+
+    private static func logApp(_ app: NSRunningApplication?) -> String {
+        guard let app else { return "nil" }
+        let name = app.localizedName ?? "unknown"
+        let bundleID = app.bundleIdentifier ?? "unknown"
+        return "\(name)[\(bundleID)#\(app.processIdentifier)]"
     }
 
     private func displayNameForSelectedTarget(_ app: NSRunningApplication?) -> String {
@@ -692,6 +758,28 @@ final class SpeechInputCoordinator {
         channel: SpeechInputChannel? = nil
     ) {
         guard !recorder.isRecording else { return }
+        switch PermissionDiagnosticsProvider.microphoneAccessState() {
+        case .authorized:
+            break
+        case .notDetermined:
+            controller.setPrimaryStatus("需要麦克风权限", detail: "允许后将继续录音", tone: .warning)
+            LaunchDiagnostics.mark("permission_prompt service=microphone source=recording_start")
+            PermissionDiagnosticsProvider.requestMicrophone { [weak self] granted in
+                guard let self else { return }
+                self.refreshPermissions(checkMicrophone: true)
+                LaunchDiagnostics.mark("permission_result service=microphone granted=\(granted)")
+                if granted {
+                    self.startRecording(instructions: instructions, activation: activation, channel: channel)
+                } else {
+                    self.controller.setPrimaryStatus("麦克风未授权", detail: "请在系统设置中开启 TypeWhale 麦克风权限", tone: .error)
+                }
+            }
+            return
+        case .denied:
+            refreshPermissions(checkMicrophone: true)
+            controller.setPrimaryStatus("麦克风未授权", detail: "请在系统设置中开启 TypeWhale 麦克风权限", tone: .error)
+            return
+        }
         cancelIdleASRUnload()
         discardPendingRealtimeSnapshot()
         didFlushASRArenaForElevatedMemory = false
@@ -702,7 +790,10 @@ final class SpeechInputCoordinator {
         let realtimeEnabled = controller.realtimePreviewEnabled && resolvedBackend == .senseVoice
         let taskID = UUID()
         let frontmostApp = NSWorkspace.shared.frontmostApplication
-        let initialTargetApp = pasteableTargetApp(frontmostApp)
+        let initialTargetApp = pasteableTargetApp(frontmostApp) ?? reusableLastKnownTarget(for: frontmostApp)
+        LaunchDiagnostics.mark(
+            "target_tracking_start task_id=\(taskID.uuidString.prefix(8)) frontmost=\(Self.logApp(frontmostApp)) initial_target=\(Self.logApp(initialTargetApp))"
+        )
         let session = SpeechSession(
             id: taskID,
             targetApp: initialTargetApp,
@@ -722,9 +813,10 @@ final class SpeechInputCoordinator {
         controller.setPrimaryStatus("录音中", detail: instructions, tone: .listening)
         applyPreviewTheme(controller.previewTheme)
         popup.show(state: "录音中", draft: "")
+        let displayedTargetApp = initialTargetApp ?? frontmostApp
         popup.setContext(
-            appIcon: frontmostApp?.icon,
-            appName: displayNameForSelectedTarget(frontmostApp),
+            appIcon: displayedTargetApp?.icon,
+            appName: displayNameForSelectedTarget(displayedTargetApp),
             modeName: controller.smartRewritePreference.displayName,
             autoTranslateEnabled: controller.autoTranslateEnabled
         )
@@ -807,7 +899,6 @@ final class SpeechInputCoordinator {
         let configuration = session.configuration
         let realtimePreviewTextAtFinish = session.committedPreviewText + session.latestPreviewText
         let realtimeVoiceDetectedAtFinish = voiceEverDetected
-        refreshTrackedTargetFromFrontmost()
         let targetApp = currentTargetApp(taskID: taskID, fallback: session.targetApp)
         let result: (URL, TimeInterval)?
         do {
@@ -1454,7 +1545,6 @@ final class SpeechInputCoordinator {
         }
 
         let result = pendingPasteResults.removeFirst()
-        refreshTrackedTargetFromFrontmost()
         let pasteTarget = currentTargetApp(for: result.task)
         LaunchDiagnostics.mark(
             "paste_drain task_id=\(result.task.id.uuidString.prefix(8)) target=\(pasteTarget?.localizedName ?? "nil") frontmost=\(NSWorkspace.shared.frontmostApplication?.localizedName ?? "nil") fallback=\(result.task.targetApp?.localizedName ?? "nil")"

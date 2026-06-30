@@ -136,7 +136,7 @@ xcrun swiftc \
   -target arm64-apple-macosx14.0 \
   -import-objc-header "$ROOT/native/TypeSpeakerNativeASR.h" \
   -framework AppKit \
-  -framework AVFoundation \
+  -framework AVFAudio \
   -framework ApplicationServices \
   -framework CryptoKit \
   -framework QuartzCore \
@@ -152,6 +152,15 @@ xcrun swiftc \
   -o "$CONTENTS/MacOS/TypeWhale"
 rm -f "$NATIVE_ASR_OBJECT" "$LAUNCH_PROBE_OBJECT"
 
+xcrun swiftc \
+  -O \
+  -target arm64-apple-macosx14.0 \
+  -framework AppKit \
+  -framework Vision \
+  "$ROOT/native/Helpers/TypeWhaleVisionOCR.swift" \
+  -o "$CONTENTS/Resources/TypeWhaleVisionOCR"
+chmod +x "$CONTENTS/Resources/TypeWhaleVisionOCR"
+
 cat > "$CONTENTS/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -164,8 +173,8 @@ cat > "$CONTENTS/Info.plist" <<'PLIST'
 <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
 <key>CFBundleName</key><string>TypeWhale</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>1.6.7</string>
-<key>CFBundleVersion</key><string>459</string>
+<key>CFBundleShortVersionString</key><string>1.7.1</string>
+<key>CFBundleVersion</key><string>474</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSMicrophoneUsageDescription</key><string>TypeWhale 需要使用麦克风进行本地语音转文字。</string>

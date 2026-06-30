@@ -9,6 +9,123 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.7.1 (Build 474)",
+            date: "2026-06-30",
+            changes: [
+                "截图翻译进入“翻译中”状态时，选区内部会显示 loading 提示，不再只依赖工具栏按钮文字反馈。",
+                "loading 提示使用轻量动画点，只在截图翻译 pending 期间运行，翻译成功、失败、取消或重捕获都会自动停止。",
+                "普通截图、普通 OCR、复制、保存、标注和截图翻译结果贴回布局保持不变。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.7.1 (Build 473)",
+            date: "2026-06-30",
+            changes: [
+                "截图翻译入口的蒙层现在会明确显示“截图翻译模式”，避免和普通截图入口混淆。",
+                "翻译模式下的操作提示改为说明松开后会自动 OCR 并翻译覆盖；普通截图模式提示保持不变。",
+                "截图架构边界检查新增翻译模式提示守卫，防止后续改动把翻译入口退回成普通截图提示。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.7.0 (Build 472)",
+            date: "2026-06-30",
+            changes: [
+                "拆除截图功能与主界面显示之间的历史耦合：截图关闭、复制、保存、OCR、翻译和右键取消都不再写主面板状态或登记 reopen 抑制。",
+                "截图浮层从普通窗口改为非激活 Panel，截图可以接收鼠标和键盘，但不把 TypeWhale 主 App 拉进主窗口生命周期。",
+                "新增截图架构边界检查，防止 ScreenshotCoordinator 再次引用 MainViewController 或主界面 reopen 策略。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.7.0 (Build 471)",
+            date: "2026-06-30",
+            changes: [
+                "收紧开发需求智能整理提示词：在 Codex、Cursor、Claude Code 等 coding agent 中输出必须像用户亲自发出的需求。",
+                "自动模式命中开发工具时继续使用开发需求模式，并保留“我觉得、我要求、告诉我、我们开始”等第一人称或第二人称表达。",
+                "新增提示词回归检查，防止把用户原话改写成“用户要求”“要求对方告知”等第三人称转述。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.7.0 (Build 470)",
+            date: "2026-06-30",
+            changes: [
+                "修复 Dock 或 Finder 中再次点击 TypeWhale 后主界面不显示的问题。",
+                "Dock/Finder reopen 现在会显式打开主窗口；截图覆盖层关闭时只短暂抑制一次系统 reopen，避免复发截图复制后主窗口误弹。",
+                "本次完整版本构建验证新的三段十进制规则：1.6.9 之后进入 1.7.0。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.6.9 (Build 469)",
+            date: "2026-06-30",
+            changes: [
+                "固化新的短版本号递增规则：从 1.6.9 开始，完整版本构建的下一版是 1.7.0，而不是 1.6.10 或 1.69。",
+                "之后版本按十进制滚动：1.7.0 到 1.7.9，再进入 1.8.0。",
+                "构建脚本和项目协作规则已同步更新，后续自动完整版本构建会按该规则递增。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.6.9 (Build 468)",
+            date: "2026-06-30",
+            changes: [
+                "修复控制中心、菜单栏弹窗或系统浮层抢占前台后，录音结束无法自动粘贴到原目标应用的问题。",
+                "录音开始时会冻结真实可粘贴目标；控制中心、通知中心、SystemUIServer、iStat Menus 菜单栏等瞬时系统 UI 不再污染胶囊目标。",
+                "自动粘贴前如果检测到系统浮层仍在前台，会先尝试收起浮层，再回到录音开始时的目标应用执行粘贴，并写入目标识别诊断日志。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.6.9 (Build 467)",
+            date: "2026-06-30",
+            changes: [
+                "修复空闲启动仍加载 Vision / AVFoundation 捕获栈的问题：截图 OCR 改由独立 helper 进程按需运行。",
+                "主程序不再 import Vision；用户点击 OCR 或截图翻译时才启动 TypeWhaleVisionOCR，识别完成后 helper 退出。",
+                "保留截图 OCR、截图翻译和行级贴回能力，同时让空闲 TypeWhale 主进程不再因 OCR 模块加载 AVFCapture / CMCapture。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.6.9 (Build 464)",
+            date: "2026-06-30",
+            changes: [
+                "优化本地 Ollama 模型第一次整理变慢的问题：启动后如果当前选择本地 Qwen，会在后台发送极小 warm-up 请求，提前加载模型。",
+                "切换到本地 Ollama 模型时也会立即后台预热；预热只访问本机 127.0.0.1，不会走 DeepSeek，也不会产生云端费用。",
+                "精简本地模型 system prompt，保留“只整理不回答”和主体不明正反例，减少重复约束带来的请求负担。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.6.8 (Build 463)",
+            date: "2026-06-30",
+            changes: [
+                "收紧本地模型极致归纳提示词：主体不明确时保持不明确，不再擅自补成“对方、客户、用户、团队、他、她”。",
+                "短反馈不再硬套“一句话结论 / 核心要点 / 行动项 / 风险”四段模板；没有行动项或风险时直接省略栏目，不输出“无明确行动项”。",
+                "新增主体不明正反例，约束模型把“我的表达内容没有被准确理解”保持为被动/内容表述，而不是改写成“对方未准确理解”。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.6.8 (Build 462)",
+            date: "2026-06-30",
+            changes: [
+                "进一步修复空闲状态被 macOS 归入麦克风模式的问题：主程序不再静态链接 AVFoundation 捕获栈。",
+                "AudioRecorder 改为只导入 AVFAudio；麦克风权限改用 AVAudioApplication 的录音权限 API，避免空闲启动加载 AVFCapture / CMCapture。",
+                "构建脚本同步从 AVFoundation 切换为 AVFAudio，保留首次录音时请求麦克风权限的体验，录音结束资源释放逻辑不变。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.6.8 (Build 461)",
+            date: "2026-06-30",
+            changes: [
+                "新增本地 Ollama 智能整理模型，默认使用本机 `qwen3.6:35b-mlx`，可切换到 `qwen3:8b` 极速档或 DeepSeek v4 flash。",
+                "智能整理、自动翻译和截图翻译统一走全局模型选择；本地模型失败、超时或空输出时回退原文，不会自动改走 DeepSeek 产生云端费用。",
+                "主窗口智能整理面板新增“整理模型”下拉菜单；选择本地模型时收起 DeepSeek Key 和余额入口，切回 DeepSeek 时再显示。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.6.8 (Build 460)",
+            date: "2026-06-30",
+            changes: [
+                "修复空闲打开 TypeWhale 时 macOS 菜单栏仍显示 TypeWhale 正在使用麦克风的问题。",
+                "主窗口的麦克风设备列表改为懒加载：启动时不再枚举 CoreAudio 输入设备，也不启动输入路由监听；用户点刷新或真正开始录音时才读取设备。",
+                "麦克风权限不再随 app 启动主动请求或诊断，首次录音时再确认/请求权限，避免空闲状态进入系统麦克风模式。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.6.7 (Build 459)",
             date: "2026-06-30",
             changes: [

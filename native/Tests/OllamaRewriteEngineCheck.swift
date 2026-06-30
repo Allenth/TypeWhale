@@ -1,0 +1,122 @@
+import Foundation
+
+private final class StubURLProtocol: URLProtocol {
+    nonisolated(unsafe) static var lastRequest: URLRequest?
+    nonisolated(unsafe) static var lastBody: Data?
+    nonisolated(unsafe) static var responseStatus = 200
+    nonisolated(unsafe) static var responseBody = Data()
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        Self.lastRequest = request
+        Self.lastBody = Self.bodyData(from: request)
+        let response = HTTPURLResponse(
+            url: request.url!,
+            statusCode: Self.responseStatus,
+            httpVersion: nil,
+            headerFields: ["Content-Type": "application/json"]
+        )!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Self.responseBody)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+
+    private static func bodyData(from request: URLRequest) -> Data? {
+        if let body = request.httpBody {
+            return body
+        }
+        guard let stream = request.httpBodyStream else {
+            return nil
+        }
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while stream.hasBytesAvailable {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count <= 0 { break }
+            data.append(buffer, count: count)
+        }
+        return data
+    }
+}
+
+@main
+struct OllamaRewriteEngineCheck {
+    static func main() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StubURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        StubURLProtocol.responseBody = """
+        {
+          "message": {
+            "role": "assistant",
+            "content": "<think>不要泄露</think>\\n\\n回复用户退订会员咨询：请引导其打开设置，点击订阅选项后取消。"
+          },
+          "total_duration": 1200000000,
+          "prompt_eval_count": 10,
+          "eval_count": 22
+        }
+        """.data(using: .utf8)!
+
+        let engine = OllamaRewriteEngine(
+            model: .ollamaQwen35B,
+            endpoint: URL(string: "http://127.0.0.1:11434/api/chat")!,
+            session: session
+        )
+        let context = SmartInputContext(targetAppName: "Codex", targetBundleIdentifier: "com.openai.codex")
+        let output = try await engine.rewrite(
+            rawText: "帮我回答一下用户问怎么退订会员，你就说打开设置点击订阅然后取消。",
+            mode: .polish,
+            context: context,
+            preference: .polish
+        )
+        precondition(output.text == "回复用户退订会员咨询：请引导其打开设置，点击订阅选项后取消。")
+        precondition(output.usage == nil)
+
+        guard let body = StubURLProtocol.lastBody,
+              let json = try JSONSerialization.jsonObject(with: body) as? [String: Any] else {
+            preconditionFailure("missing Ollama request body")
+        }
+        precondition(json["model"] as? String == "qwen3.6:35b-mlx")
+        precondition(json["stream"] as? Bool == false)
+        precondition(json["think"] as? Bool == false)
+        precondition(json["keep_alive"] as? String == "30m")
+        let options = json["options"] as? [String: Any]
+        precondition(options?["temperature"] as? Double == 0.1)
+        precondition(options?["top_p"] as? Double == 0.9)
+        precondition(options?["num_predict"] as? Int == SmartRewriteCostGuard.maxOutputTokens)
+        let messages = json["messages"] as? [[String: Any]]
+        precondition(messages?.count == 2)
+        precondition(messages?.first?["role"] as? String == "system")
+        precondition((messages?.first?["content"] as? String)?.contains("不要改成直接对最终用户说话") == true)
+        precondition((messages?.first?["content"] as? String)?.contains("不合格示例") == true)
+        precondition((messages?.first?["content"] as? String)?.contains("保持输入主要语言") == true)
+        precondition(messages?.last?["role"] as? String == "user")
+        precondition((messages?.last?["content"] as? String)?.contains("原始语音文本") == true)
+
+        StubURLProtocol.lastBody = nil
+        await OllamaRewriteEngine.warmUp(
+            model: .ollamaQwen35B,
+            endpoint: URL(string: "http://127.0.0.1:11434/api/chat")!,
+            session: session,
+            reason: "test"
+        )
+        guard let warmupBody = StubURLProtocol.lastBody,
+              let warmupJSON = try JSONSerialization.jsonObject(with: warmupBody) as? [String: Any] else {
+            preconditionFailure("missing Ollama warmup request body")
+        }
+        precondition(warmupJSON["model"] as? String == "qwen3.6:35b-mlx")
+        precondition(warmupJSON["stream"] as? Bool == false)
+        precondition(warmupJSON["think"] as? Bool == false)
+        precondition(warmupJSON["keep_alive"] as? String == "30m")
+        let warmupOptions = warmupJSON["options"] as? [String: Any]
+        precondition(warmupOptions?["num_predict"] as? Int == 2)
+
+        print("OllamaRewriteEngineCheck passed")
+    }
+}

@@ -32,6 +32,10 @@
 		<data>
 		SY0zINXsFWBI2Y4mhb2/EbSfyrE=
 		</data>
+		<key>Resources/TypeWhaleVisionOCR</key>
+		<data>
+		OB0YpuUqy+rJ4s0J6NDRXunIqJU=
+		</data>
 	</dict>
 	<key>files2</key>
 	<dict>
@@ -82,6 +86,13 @@
 			<key>hash2</key>
 			<data>
 			3Z3B9VWuKR1E54tv+ELW3jIev/YAqhHJBeA0GVtq94g=
+			</data>
+		</dict>
+		<key>Resources/TypeWhaleVisionOCR</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			4oPkzmusITHskxO4wjdFO5FaUAO/LIAJDipMTxeIhsQ=
 			</data>
 		</dict>
 	</dict>

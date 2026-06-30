@@ -64,15 +64,41 @@ final class PasteCoordinator {
             finish(request, outcome: .failed("录音开始时的目标应用已关闭"))
             return
         }
+        let frontmostBeforeActivation = NSWorkspace.shared.frontmostApplication
+        let didDismissTransientUI = Self.dismissTransientSystemUIIfNeeded(
+            frontmostBeforeActivation,
+            targetApp: targetApp,
+            attempt: attempt
+        )
+        let activationDelay: TimeInterval = didDismissTransientUI ? 0.14 : 0
+        DispatchQueue.main.asyncAfter(deadline: .now() + activationDelay) { [weak self] in
+            self?.activatePreparedTarget(for: request, attempt: attempt)
+        }
+    }
+
+    private func activatePreparedTarget(for request: Request, attempt: Int) {
+        guard let targetApp = request.targetApp, !targetApp.isTerminated else {
+            finish(request, outcome: .failed("录音开始时的目标应用已关闭"))
+            return
+        }
+        LaunchDiagnostics.mark(
+            "paste_activate_start target=\(Self.logApp(targetApp)) frontmost=\(Self.logApp(NSWorkspace.shared.frontmostApplication)) attempt=\(attempt)"
+        )
         guard targetApp.activate(options: []) else {
+            LaunchDiagnostics.mark(
+                "paste_activate_failed target=\(Self.logApp(targetApp)) frontmost=\(Self.logApp(NSWorkspace.shared.frontmostApplication)) attempt=\(attempt) reason=activate_returned_false"
+            )
             finish(request, outcome: .failed("无法激活录音开始时的目标应用"))
             return
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) { [weak self] in
             guard let self else { return }
             let frontmostPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
             guard frontmostPID == targetApp.processIdentifier else {
-                if attempt < 1 {
+                LaunchDiagnostics.mark(
+                    "paste_activate_wait target=\(Self.logApp(targetApp)) frontmost=\(Self.logApp(NSWorkspace.shared.frontmostApplication)) attempt=\(attempt)"
+                )
+                if attempt < 2 {
                     self.activateTarget(for: request, attempt: attempt + 1)
                 } else {
                     self.finish(request, outcome: .failed("目标应用未能获得输入焦点，已取消自动粘贴"))
@@ -133,6 +159,9 @@ final class PasteCoordinator {
         guard let targetApp = request.targetApp,
               !targetApp.isTerminated,
               NSWorkspace.shared.frontmostApplication?.processIdentifier == targetApp.processIdentifier else {
+            LaunchDiagnostics.mark(
+                "paste_cancelled reason=focus_changed target=\(Self.logApp(request.targetApp)) frontmost=\(Self.logApp(NSWorkspace.shared.frontmostApplication))"
+            )
             finish(request, outcome: .failed("目标应用焦点已变化，已取消自动粘贴"))
             return
         }
@@ -172,8 +201,70 @@ final class PasteCoordinator {
     }
 
     private func finish(_ request: Request, outcome: PasteOutcome) {
+        LaunchDiagnostics.mark(
+            "paste_finish target=\(Self.logApp(request.targetApp)) outcome=\(outcome.logName)"
+        )
         request.completion(outcome)
         isProcessing = false
         processNextIfNeeded()
+    }
+
+    private static func logApp(_ app: NSRunningApplication?) -> String {
+        guard let app else { return "nil" }
+        let name = app.localizedName ?? "unknown"
+        let bundleID = app.bundleIdentifier ?? "unknown"
+        return "\(name)[\(bundleID)#\(app.processIdentifier)]"
+    }
+
+    private static func dismissTransientSystemUIIfNeeded(
+        _ frontmostApp: NSRunningApplication?,
+        targetApp: NSRunningApplication,
+        attempt: Int
+    ) -> Bool {
+        guard isTransientSystemUIApp(frontmostApp) else { return false }
+        let posted = postEscapeKey()
+        LaunchDiagnostics.mark(
+            "paste_dismiss_transient_ui frontmost=\(logApp(frontmostApp)) target=\(logApp(targetApp)) attempt=\(attempt) escape_posted=\(posted)"
+        )
+        return posted
+    }
+
+    private static func isTransientSystemUIApp(_ app: NSRunningApplication?) -> Bool {
+        guard let app, !app.isTerminated else { return false }
+        let bundleID = app.bundleIdentifier ?? ""
+        let name = app.localizedName ?? ""
+        let blockedBundleIDs: Set<String> = [
+            "com.apple.ControlCenter",
+            "com.apple.controlcenter",
+            "com.apple.systemuiserver",
+            "com.apple.notificationcenterui",
+            "com.apple.Spotlight",
+            "com.apple.dock",
+            "com.apple.loginwindow",
+            "com.bjango.istatmenus.status",
+            "com.bjango.istatmenus.agent",
+        ]
+        if blockedBundleIDs.contains(bundleID) {
+            return true
+        }
+        let loweredName = name.lowercased()
+        return loweredName == "control center" ||
+            loweredName == "控制中心" ||
+            loweredName == "notification center" ||
+            loweredName == "通知中心" ||
+            loweredName == "systemuiserver" ||
+            loweredName.contains("menubar")
+    }
+
+    private static func postEscapeKey() -> Bool {
+        guard let source = CGEventSource(stateID: .hidSystemState),
+              let down = CGEvent(keyboardEventSource: source, virtualKey: 53, keyDown: true),
+              let up = CGEvent(keyboardEventSource: source, virtualKey: 53, keyDown: false) else {
+            return false
+        }
+        source.localEventsSuppressionInterval = 0
+        down.post(tap: .cghidEventTap)
+        up.post(tap: .cghidEventTap)
+        return true
     }
 }

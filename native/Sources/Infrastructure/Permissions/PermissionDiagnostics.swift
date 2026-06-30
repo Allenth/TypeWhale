@@ -1,5 +1,5 @@
 import ApplicationServices
-import AVFoundation
+import AVFAudio
 import Foundation
 
 struct PermissionDiagnostics {
@@ -9,12 +9,31 @@ struct PermissionDiagnostics {
 }
 
 enum PermissionDiagnosticsProvider {
-    static func current() -> PermissionDiagnostics {
+    enum MicrophoneAccessState {
+        case authorized
+        case notDetermined
+        case denied
+    }
+
+    static func current(checkMicrophone: Bool = false) -> PermissionDiagnostics {
         PermissionDiagnostics(
-            microphoneAuthorized: AVCaptureDevice.authorizationStatus(for: .audio) == .authorized,
+            microphoneAuthorized: checkMicrophone && microphoneAccessState() == .authorized,
             accessibilityTrusted: AXIsProcessTrusted(),
             screenRecordingAuthorized: CGPreflightScreenCaptureAccess()
         )
+    }
+
+    static func microphoneAccessState() -> MicrophoneAccessState {
+        switch AVAudioApplication.shared.recordPermission {
+        case .granted:
+            return .authorized
+        case .undetermined:
+            return .notDetermined
+        case .denied:
+            return .denied
+        @unknown default:
+            return .denied
+        }
     }
 
     static func requestAccessibilityIfNeeded() {
@@ -23,13 +42,15 @@ enum PermissionDiagnosticsProvider {
         AXIsProcessTrustedWithOptions(options)
     }
 
-    static func requestMicrophone(completion: @escaping () -> Void) {
-        guard AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined else {
-            DispatchQueue.main.async { completion() }
+    static func requestMicrophone(completion: @escaping (Bool) -> Void) {
+        guard AVAudioApplication.shared.recordPermission == .undetermined else {
+            DispatchQueue.main.async { completion(AVAudioApplication.shared.recordPermission == .granted) }
             return
         }
-        AVCaptureDevice.requestAccess(for: .audio) { _ in
-            DispatchQueue.main.async { completion() }
+        AVAudioApplication.requestRecordPermission { granted in
+            DispatchQueue.main.async {
+                completion(granted)
+            }
         }
     }
 }

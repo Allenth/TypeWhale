@@ -29,13 +29,34 @@ if [[ -z "$current_version" || -z "$current_build" ]]; then
   exit 1
 fi
 
-IFS='.' read -r major minor patch <<< "$current_version"
-if [[ -z "${major:-}" || -z "${minor:-}" || -z "${patch:-}" ]]; then
-  echo "Unexpected version format: $current_version" >&2
-  exit 1
-fi
+next_full_version() {
+  local version="$1"
+  if [[ ! "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+    echo "Unexpected version format: $version" >&2
+    return 1
+  fi
 
-next_patch=$((patch + 1))
+  local major="${match[1]}"
+  local minor="${match[2]}"
+  local patch="${match[3]}"
+  local patch_number=$((10#$patch))
+  local minor_number=$((10#$minor))
+
+  if (( patch_number < 0 || patch_number > 9 )); then
+    echo "Unexpected decimal patch in version: $version" >&2
+    return 1
+  fi
+
+  if (( patch_number < 9 )); then
+    patch_number=$((patch_number + 1))
+  else
+    minor_number=$((minor_number + 1))
+    patch_number=0
+  fi
+
+  echo "$major.$minor_number.$patch_number"
+}
+
 next_build=$((current_build + 1))
 if [[ -n "${TYPEWHALE_NEXT_VERSION:-}" ]]; then
   mode="full-version"
@@ -44,10 +65,14 @@ fi
 if [[ "$mode" == "build-only" ]]; then
   next_version="$current_version"
 else
-  next_version="${TYPEWHALE_NEXT_VERSION:-${major}.${minor}.${next_patch}}"
+  if [[ -n "${TYPEWHALE_NEXT_VERSION:-}" ]]; then
+    next_version="$TYPEWHALE_NEXT_VERSION"
+  else
+    next_version="$(next_full_version "$current_version")"
+  fi
 fi
 
-if [[ -n "${TYPEWHALE_NEXT_VERSION:-}" && ! "$TYPEWHALE_NEXT_VERSION" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then
+if [[ -n "${TYPEWHALE_NEXT_VERSION:-}" && ! "$TYPEWHALE_NEXT_VERSION" =~ ^[0-9]+\\.[0-9]+\\.[0-9]$ ]]; then
   echo "Unexpected TYPEWHALE_NEXT_VERSION format: $TYPEWHALE_NEXT_VERSION" >&2
   exit 1
 fi
@@ -70,7 +95,7 @@ perl -0pi -e "s{(<key>CFBundleVersion</key><string>)\\Q$current_build\\E}{\${1}$
 
 if [[ -f "$README" ]]; then
   perl -0pi -e 's{Current local release build in this repository is `[^`]+`}{Current local release build in this repository is `'"$next_version ($next_build)"'`}' "$README"
-  perl -0pi -e "s{dist/TypeWhale-[0-9]+\\.[0-9]+\\.[0-9]+-[0-9]+\\.dmg}{dist/TypeWhale-$next_version-$next_build.dmg}g" "$README"
+  perl -0pi -e "s{dist/TypeWhale-[0-9]+\\.[0-9]+(?:\\.[0-9]+)?-[0-9]+\\.dmg}{dist/TypeWhale-$next_version-$next_build.dmg}g" "$README"
 fi
 
 if [[ -f "$MACOS_README" ]]; then

@@ -2,13 +2,16 @@ import Foundation
 
 final class SelectedSmartAITextEngine: SmartAITextEngine {
     private let deepSeek: SmartAITextEngine
+    private let ollama: (SmartAIModel) -> SmartAITextEngine
     private let modelProvider: () -> SmartAIModel
 
     init(
         deepSeek: SmartAITextEngine = DeepSeekRewriteEngine(),
+        ollama: @escaping (SmartAIModel) -> SmartAITextEngine = { OllamaRewriteEngine(model: $0) },
         modelProvider: @escaping () -> SmartAIModel = { SmartAIModelStore.load() }
     ) {
         self.deepSeek = deepSeek
+        self.ollama = ollama
         self.modelProvider = modelProvider
     }
 
@@ -62,6 +65,8 @@ final class SelectedSmartAITextEngine: SmartAITextEngine {
 
     private func engine(for model: SmartAIModel) -> SmartAITextEngine {
         switch model {
+        case .ollamaQwen35B, .ollamaQwen8B:
+            return ollama(model)
         case .deepSeekV4Flash:
             return deepSeek
         }

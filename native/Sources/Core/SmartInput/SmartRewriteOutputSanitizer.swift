@@ -27,6 +27,11 @@ enum SmartRewriteOutputSanitizer {
         return clean(withoutThink)
     }
 
+    static func cleanLocalModel(_ text: String) -> String {
+        let withoutThink = removingThinkBlocks(from: text)
+        return clean(withoutThink)
+    }
+
     private static func removingThinkBlocks(from text: String) -> String {
         let fullRange = NSRange(text.startIndex..<text.endIndex, in: text)
         guard let regex = try? NSRegularExpression(

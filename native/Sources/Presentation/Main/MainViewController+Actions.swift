@@ -4,6 +4,8 @@ extension MainViewController {
     @objc func saveSettings() {
         let previousAudioInputUID = AppSettingsStore.loadMainViewSettings().audioInputDeviceUID
         let nextAudioInputUID = selectedAudioInputDeviceUID
+        let previousSmartAIModel = SmartAIModelStore.load()
+        let nextSmartAIModel = smartAIModel
         if autoFinish.state == .on {
             realtime.state = .on
             realtime.needsDisplay = true
@@ -24,6 +26,7 @@ extension MainViewController {
             translationDirection: translationDirection,
             previewTheme: selectedPreviewTheme
         ))
+        SmartAIModelStore.save(nextSmartAIModel)
         if previousAudioInputUID != nextAudioInputUID {
             let mode = nextAudioInputUID.isEmpty ? "system_default" : "manual"
             LaunchDiagnostics.mark("audio_input_selection_save mode=\(mode) uid=\(nextAudioInputUID)")
@@ -31,6 +34,16 @@ extension MainViewController {
                 ? "麦克风输入已改为跟随系统"
                 : "麦克风输入已锁定为：\(audioInputDeviceMode.titleOfSelectedItem ?? "手动选择")"
         }
+        if previousSmartAIModel != nextSmartAIModel {
+            LaunchDiagnostics.mark("smart_ai_model_save provider=\(nextSmartAIModel.provider.rawValue) model=\(nextSmartAIModel.rawValue)")
+            detail.stringValue = "智能整理模型已切换为：\(nextSmartAIModel.displayName)"
+            if nextSmartAIModel.provider == .ollama {
+                Task.detached(priority: .utility) {
+                    await OllamaRewriteEngine.warmUp(model: nextSmartAIModel, reason: "model_selection")
+                }
+            }
+        }
+        refreshSmartAIUsageVisibility()
         refreshDisplayedModelState()
         refreshPreviewThemeTiles()
     }
@@ -412,6 +425,10 @@ extension MainViewController {
 
     var smartRewritePreference: SmartRewritePreference {
         SmartRewritePreference.fromMenuTag(smartRewriteMode.selectedItem?.tag ?? 0)
+    }
+
+    var smartAIModel: SmartAIModel {
+        SmartAIModel.fromMenuTag(smartAIModelMode.selectedItem?.tag ?? 0)
     }
 
     /// 循环切换到下一个整理模式，持久化并返回新模式（供胶囊手动切换调用）。

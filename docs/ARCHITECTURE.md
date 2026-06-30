@@ -105,6 +105,8 @@ Preview non-goals:
 
 - Screenshot mode observes the desktop; entering it must not show, hide, restore, or otherwise manage the TypeWhale main window.
 - Screenshot overlay may become key enough to receive input without activating the main TypeWhale app window.
+- Screenshot presentation must not depend on `MainViewController`, main-panel status tones, or app reopen suppression. Screenshot status is screenshot-owned and may use non-activating transient feedback only.
+- Screenshot overlay windows must remain non-activating panels; they must not become the app's main window.
 - Window-level capture may raise the explicitly selected target window and recapture in place.
 - During screenshot OCR/translation pending state, actions that export or mutate unstable output must be disabled or guarded. Cancel remains allowed.
 - Stale OCR/translation callbacks must be ignored after cancel or superseding operations.
@@ -114,11 +116,12 @@ Preview non-goals:
 
 - Main-window visibility is governed only by explicit user actions, the configured main-window shortcut, status-item/menu commands, and approved first-install/default-open behavior.
 - Login-item/background launch must not unexpectedly surface the main window.
-- Screenshot and recording flows must not take ownership of main-window visibility.
+- Screenshot and recording flows must not take ownership of main-window visibility. Screenshot close/copy/save/OCR/translation/cancel paths must not register reopen suppression or call `showMainWindow()`.
 
 ### AI Providers
 
-- DeepSeek v4 flash is the only active user-facing AI text provider.
+- Ollama local Qwen is the default user-facing AI text provider for smart rewrite, voice translation, and screenshot translation.
+- DeepSeek v4 flash remains an explicit paid cloud option, not an automatic fallback from local failures.
 - The provider boundary stays in code through `SelectedSmartAITextEngine`.
 - MiniMax remains non-user-facing unless it later passes intent-preservation tests.
 - Future providers must enter through adapter/strategy boundaries and pass smart rewrite, voice translation, and screenshot translation quality fixtures before becoming visible.
@@ -170,6 +173,7 @@ These items come from the code review before the next refactor pass. They are co
 #### Version A Resolved In First Pass
 
 - `TypeSpeakerApp.applicationDidFinishLaunching` no longer calls `lifecycle.showMainWindow()` unconditionally. Launch now records an explicit hidden-by-default launch visibility policy.
+- Dock/Finder reopen is an explicit user entry point and should call `AppLifecycleCoordinator.showMainWindow()`. Screenshot overlay shutdown no longer registers reopen suppression; screenshot copy/cancel/save/OCR/translation paths stay outside main-window lifecycle.
 - `SpeechInputCoordinator.beginScreenshotFromHotkey(...)` no longer calls `hideMainWindow()` before entering screenshot mode. Screenshot entry keeps the TypeWhale main-window state unchanged.
 - `ScreenshotOverlayView` now limits toolbar interaction during translation pending state to cancel only. Copy, save, OCR, annotation, undo, and done are disabled while translation is in flight.
 - Screenshot translation callbacks are guarded by an overlay-local generation token and are invalidated on close, cancel, replace/recapture, and pending recapture.
