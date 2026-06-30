@@ -9,7 +9,7 @@ final class ScreenshotCoordinator {
     private var overlays: [ScreenshotOverlayWindow] = []
     private var escapeKeyLocalMonitor: Any?
     private var escapeKeyGlobalMonitor: Any?
-    private var operationGeneration = 0
+    private var operationTokens = ScreenshotOperationTokens()
     private let ocrRecognizer = ScreenshotOCRRecognizer()
     private let translationEngine = SelectedSmartAITextEngine()
     private let onStatus: (String, String, MainViewController.PrimaryStatusTone) -> Void
@@ -75,15 +75,14 @@ final class ScreenshotCoordinator {
     }
 
     private func focusWindowThenBeginScreenshot(_ candidate: ScreenshotWindowCandidate, autoTranslateAfterSelection: Bool) {
-        operationGeneration += 1
-        let generation = operationGeneration
+        let token = operationTokens.start(.windowRecapture)
         overlays.forEach { $0.setWindowRecapturePending(true) }
         onStatus("正在置顶窗口", "将选中的窗口移到最前后重新截图", .processing)
         raiseWindow(candidate)
         Task { [weak self] in
             try? await Task.sleep(nanoseconds: 180_000_000)
             guard let self else { return }
-            guard generation == self.operationGeneration else {
+            guard self.operationTokens.isCurrent(token) else {
                 // 置顶操作被打断/作废：若已无截图浮层在显示，复位主状态，
                 // 避免“正在置顶窗口”+进度条永久残留在主会话区。若有新浮层接管则保留其状态。
                 if self.overlays.isEmpty {
@@ -139,15 +138,14 @@ final class ScreenshotCoordinator {
     }
 
     private func recognizeText(in image: NSImage) {
-        operationGeneration += 1
-        let generation = operationGeneration
+        let token = operationTokens.start(.ocr)
         closeAll()
         onStatus("OCR 识别中", "正在识别选区文字", .processing)
         Task { [weak self] in
             guard let self else { return }
             do {
                 let text = try await ocrRecognizer.recognize(image: image).text
-                guard generation == operationGeneration else { return }
+                guard operationTokens.isCurrent(token) else { return }
                 if text.isEmpty {
                     onStatus("未识别到文字", "可以调整截图范围后再试一次", .warning)
                     return
@@ -157,7 +155,7 @@ final class ScreenshotCoordinator {
                 closeAll()
                 showTransientStatus("内容已复制", "OCR 识别结果已复制到剪贴板", .success)
             } catch {
-                guard generation == operationGeneration else { return }
+                guard operationTokens.isCurrent(token) else { return }
                 onStatus("OCR 识别失败", error.localizedDescription, .error)
             }
         }
@@ -167,15 +165,14 @@ final class ScreenshotCoordinator {
         in image: NSImage,
         completion: @escaping (Result<ScreenshotTranslationResult, Error>) -> Void
     ) {
-        operationGeneration += 1
-        let generation = operationGeneration
+        let token = operationTokens.start(.translation)
         onStatus("截图翻译中", "正在识别选区英文内容", .processing)
         Task { [weak self] in
             guard let self else { return }
             do {
                 let ocrResult = try await ocrRecognizer.recognize(image: image)
                 let text = ocrResult.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard generation == operationGeneration else { return }
+                guard operationTokens.isCurrent(token) else { return }
                 guard !text.isEmpty else {
                     completion(.failure(ScreenshotTranslationError.emptyOCR))
                     return
@@ -192,7 +189,7 @@ final class ScreenshotCoordinator {
                     ),
                     triggeredBy: "screenshot_translation"
                 )
-                guard generation == operationGeneration else { return }
+                guard operationTokens.isCurrent(token) else { return }
                 SmartUsageLedgerStore.record(output.usage)
                 let translatedLines = Self.parseScreenshotLineTranslations(
                     output.translatedText,
@@ -203,7 +200,7 @@ final class ScreenshotCoordinator {
                     translatedLines: translatedLines
                 )))
             } catch {
-                guard generation == operationGeneration else { return }
+                guard operationTokens.isCurrent(token) else { return }
                 completion(.failure(error))
             }
         }
@@ -257,7 +254,10 @@ final class ScreenshotCoordinator {
     private func closeAll() {
         removeEscapeKeyMonitors()
         overlays.forEach {
-            ($0.contentView as? ScreenshotOverlayView)?.discardActiveTextField()
+            if let overlayView = $0.contentView as? ScreenshotOverlayView {
+                overlayView.invalidatePendingCallbacks()
+                overlayView.discardActiveTextField()
+            }
             $0.orderOut(nil)
         }
         overlays.removeAll()
@@ -293,15 +293,15 @@ final class ScreenshotCoordinator {
     }
 
     private func invalidatePendingOperations() {
-        operationGeneration += 1
+        operationTokens.invalidate()
     }
 
     private func showTransientStatus(_ status: String, _ detail: String, _ tone: MainViewController.PrimaryStatusTone) {
-        let generation = operationGeneration
+        let token = operationTokens.start(.transientStatus)
         onStatus(status, detail, tone)
         Task { [weak self] in
             try? await Task.sleep(nanoseconds: 1_800_000_000)
-            guard let self, generation == operationGeneration else { return }
+            guard let self, operationTokens.isCurrent(token) else { return }
             onStatus("等待录音", "Fn 录音", .idle)
         }
     }
@@ -477,71 +477,44 @@ private final class ScreenshotOverlayWindow: NSWindow {
     }
 }
 
-private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
-    private enum ToolAction: CaseIterable {
-        case copy
-        case save
-        case ocr
-        case translate
-        case annotate
-        case rectangle
-        case arrow
-        case pen
-        case text
-        case undo
-        case done
-        case cancel
-
-        var title: String {
-            switch self {
-            case .copy: return "复制"
-            case .save: return "保存本地"
-            case .ocr: return "OCR"
-            case .translate: return "翻译"
-            case .annotate: return "标注"
-            case .rectangle: return "矩形"
-            case .arrow: return "箭头"
-            case .pen: return "画笔"
-            case .text: return "文字"
-            case .undo: return "撤销"
-            case .done: return "完成"
-            case .cancel: return "取消"
-            }
-        }
-
-        var symbolName: String {
-            switch self {
-            case .copy: return "doc.on.doc"
-            case .save: return "square.and.arrow.down"
-            case .ocr: return "text.viewfinder"
-            case .translate: return "character.book.closed"
-            case .annotate: return "pencil.and.outline"
-            case .rectangle: return "rectangle"
-            case .arrow: return "arrow.up.right"
-            case .pen: return "pencil.tip"
-            case .text: return "textformat"
-            case .undo: return "arrow.uturn.backward"
-            case .done: return "checkmark"
-            case .cancel: return "xmark"
-            }
-        }
-
-        var isAnnotationTool: Bool {
-            switch self {
-            case .rectangle, .arrow, .pen, .text:
-                return true
-            case .copy, .save, .ocr, .translate, .annotate, .undo, .done, .cancel:
-                return false
-            }
-        }
-
-        var isEnabled: Bool {
-            switch self {
-            case .copy, .save, .ocr, .translate, .annotate, .rectangle, .arrow, .pen, .text, .undo, .done, .cancel:
-                return true
-            }
+private extension ScreenshotToolbarCommand {
+    var title: String {
+        switch self {
+        case .copy: return "复制"
+        case .save: return "保存本地"
+        case .ocr: return "OCR"
+        case .translate: return "翻译"
+        case .annotate: return "标注"
+        case .rectangle: return "矩形"
+        case .arrow: return "箭头"
+        case .pen: return "画笔"
+        case .text: return "文字"
+        case .undo: return "撤销"
+        case .done: return "完成"
+        case .cancel: return "取消"
         }
     }
+
+    var symbolName: String {
+        switch self {
+        case .copy: return "doc.on.doc"
+        case .save: return "square.and.arrow.down"
+        case .ocr: return "text.viewfinder"
+        case .translate: return "character.book.closed"
+        case .annotate: return "pencil.and.outline"
+        case .rectangle: return "rectangle"
+        case .arrow: return "arrow.up.right"
+        case .pen: return "pencil.tip"
+        case .text: return "textformat"
+        case .undo: return "arrow.uturn.backward"
+        case .done: return "checkmark"
+        case .cancel: return "xmark"
+        }
+    }
+}
+
+private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
+    private typealias ToolAction = ScreenshotToolbarCommand
 
     private enum AnnotationTool {
         case rectangle
@@ -625,8 +598,8 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     private var activePenPoints: [NSPoint] = []
     private var activeTextField: NSTextField?
     private var activeTextOrigin: NSPoint?
-    private var isTranslating = false
-    private var isWindowRecapturePending = false
+    private var sessionState = ScreenshotSessionState()
+    private var operationTokens = ScreenshotOperationTokens()
     private var hasAutoTranslatedSelection = false
     private var isSelectionLocked = false
     private let clickDragThreshold: CGFloat = 4
@@ -664,6 +637,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             selection = localWindowRect(for: preselectedWindowFrame) ?? .zero
             isSelectionLocked = hasUsableSelection
         }
+        refreshSessionStateForSelection()
         wantsLayer = true
         if autoTranslateAfterSelection, hasUsableSelection {
             DispatchQueue.main.async { [weak self] in
@@ -717,8 +691,15 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     }
 
     override func mouseDown(with event: NSEvent) {
-        guard !isWindowRecapturePending else { return }
         let point = convert(event.locationInWindow, from: nil)
+        if !sessionState.canHandlePointerInput {
+            if let action = action(at: point) {
+                pressedToolbarAction = action
+                hoveredAction = action
+                needsDisplay = true
+            }
+            return
+        }
         if event.clickCount >= 2, hasUsableSelection, selection.contains(point) {
             if activeTextField != nil {
                 commitActiveTextField()
@@ -773,15 +754,15 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         dragMode = .create
         selection = NSRect(origin: point, size: .zero)
         isSelectionLocked = false
+        setSessionPhase(.selecting)
         needsDisplay = true
     }
 
     override func rightMouseDown(with event: NSEvent) {
-        onCancel()
+        perform(.cancel)
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard !isWindowRecapturePending else { return }
         if let pressedToolbarAction {
             let point = convert(event.locationInWindow, from: nil)
             let action = action(at: point)
@@ -792,6 +773,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             }
             return
         }
+        guard sessionState.canHandlePointerInput else { return }
         guard let dragStart else { return }
         let current = clamped(convert(event.locationInWindow, from: nil))
         switch dragMode {
@@ -820,20 +802,22 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             if distance(from: dragStart, to: current) >= clickDragThreshold {
                 guard !isSelectionLocked else { return }
                 dragMode = .create
+                setSessionPhase(.selecting)
                 selection = normalizedRect(from: dragStart, to: current)
                 markups.removeAll()
                 hasAutoTranslatedSelection = false
             }
         }
+        sessionState.hasSelection = hasUsableSelection
         needsDisplay = true
     }
 
     override func mouseMoved(with event: NSEvent) {
-        guard !isWindowRecapturePending else { return }
         let point = convert(event.locationInWindow, from: nil)
         let action = action(at: point)
-        let handle = isSelectionLocked ? nil : handle(at: point)
-        let windowCandidate = hasUsableSelection ? nil : windowCandidate(at: point)
+        let canHandlePointerInput = sessionState.canHandlePointerInput
+        let handle = canHandlePointerInput && !isSelectionLocked ? handle(at: point) : nil
+        let windowCandidate = canHandlePointerInput && !hasUsableSelection ? windowCandidate(at: point) : nil
         if action != hoveredAction || handle != hoveredHandle || windowCandidate != hoveredWindowCandidate {
             hoveredAction = action
             hoveredHandle = handle
@@ -843,7 +827,6 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     }
 
     override func mouseUp(with event: NSEvent) {
-        guard !isWindowRecapturePending else { return }
         if let pressedToolbarAction {
             let point = convert(event.locationInWindow, from: nil)
             let releasedAction = action(at: point)
@@ -856,6 +839,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             }
             return
         }
+        guard sessionState.canHandlePointerInput else { return }
         guard let startPoint = dragStart else { return }
         let point = clamped(convert(event.locationInWindow, from: nil))
         if case .pendingWindowSelect(let candidate) = dragMode,
@@ -872,19 +856,22 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         dragMode = nil
         if !hasUsableSelection {
             selection = .zero
+            refreshSessionStateForSelection()
         } else if autoTranslateAfterSelection {
             isSelectionLocked = true
+            refreshSessionStateForSelection()
             translateSelectionIfNeeded()
         } else {
+            refreshSessionStateForSelection()
             translateSelectionIfNeeded()
         }
         needsDisplay = true
     }
 
     override func keyDown(with event: NSEvent) {
-        if isWindowRecapturePending {
+        if !sessionState.canHandlePointerInput {
             if event.keyCode == 53 {
-                onCancel()
+                perform(.cancel)
             }
             return
         }
@@ -895,20 +882,18 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         if isAnnotating,
            event.modifierFlags.contains(.command),
            event.charactersIgnoringModifiers?.lowercased() == "z" {
-            undoMarkup()
+            perform(.undo)
             return
         }
         switch event.keyCode {
         case 36:
-            if hasUsableSelection {
-                copySelection()
-            }
+            perform(.done)
         case 1 where event.modifierFlags.contains(.command):
-            saveSelection()
+            perform(.save)
         case 51 where isAnnotating, 117 where isAnnotating:
             deleteSelectedOrUndoMarkup()
         case 53:
-            onCancel()
+            perform(.cancel)
         default:
             super.keyDown(with: event)
         }
@@ -919,7 +904,23 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     }
 
     private var canAdjustSelection: Bool {
-        hasUsableSelection && !isSelectionLocked
+        effectiveSessionState.canAdjustSelection && !isSelectionLocked
+    }
+
+    private var isTranslating: Bool {
+        sessionState.phase == .translating
+    }
+
+    private func setSessionPhase(_ phase: ScreenshotSessionState.Phase) {
+        sessionState.phase = phase
+        sessionState.hasSelection = hasUsableSelection
+    }
+
+    private func refreshSessionStateForSelection() {
+        sessionState = ScreenshotSessionState(
+            phase: hasUsableSelection ? .selected : .idle,
+            hasSelection: hasUsableSelection
+        )
     }
 
     private func drawInstruction() {
@@ -1065,7 +1066,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     }
 
     private func drawToolbarButton(_ action: ToolAction, in rect: NSRect) {
-        let isEffectivelyEnabled = action.isEnabled && !(isTranslating && action == .translate)
+        let isEffectivelyEnabled = isActionEnabled(action)
         let isHovered = isEffectivelyEnabled && hoveredAction == action
         let isPressed = isHovered && pressedToolbarAction == action
         let isSelectedAnnotationTool =
@@ -1124,8 +1125,26 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
 
     private func action(at point: NSPoint) -> ToolAction? {
         lastToolbarRects.first { action, rect in
-            action.isEnabled && !(isTranslating && action == .translate) && rect.contains(point)
+            isActionEnabled(action) && rect.contains(point)
         }?.key
+    }
+
+    private func isActionEnabled(_ action: ToolAction) -> Bool {
+        ScreenshotCommandDispatcher.canPerform(action, in: commandContext)
+    }
+
+    private var commandContext: ScreenshotCommandContext {
+        ScreenshotCommandContext(
+            sessionState: sessionState,
+            hasUsableSelection: hasUsableSelection,
+            operationGeneration: operationTokens.currentGeneration,
+            isAnnotating: isAnnotating,
+            activeAnnotationTool: commandTool(from: annotationTool)
+        )
+    }
+
+    private var effectiveSessionState: ScreenshotSessionState {
+        ScreenshotCommandDispatcher.effectiveState(for: commandContext)
     }
 
     private func handle(at point: NSPoint) -> SelectionHandle? {
@@ -1133,65 +1152,74 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     }
 
     private func perform(_ action: ToolAction) {
-        if activeTextField != nil, action != .cancel {
+        let effect = ScreenshotCommandDispatcher.effect(for: action, in: commandContext)
+        guard effect != .ignore else { return }
+        if activeTextField != nil, effect != .cancel {
             commitActiveTextField()
         }
-        switch action {
+        apply(effect)
+    }
+
+    private func apply(_ effect: ScreenshotCommandEffect) {
+        switch effect {
         case .copy:
             copySelection()
         case .save:
             saveSelection()
         case .ocr:
             guard let image = selectedImage() else {
+                setSessionPhase(.failed)
                 onStatus("无法识别截图", "未能读取选区截图，请检查屏幕录制权限", .error)
                 return
             }
+            setSessionPhase(.completed)
             onOCR(image)
         case .translate:
             translateSelection()
-        case .annotate:
+        case .startAnnotation(let tool):
             isAnnotating = true
-            annotationTool = .rectangle
+            annotationTool = annotationTool(from: tool)
             onStatus("截图标注", "可直接在截图框内添加矩形、箭头、画笔和文字", .processing)
             needsDisplay = true
-        case .rectangle:
-            selectAnnotationTool(.rectangle)
-        case .arrow:
-            selectAnnotationTool(.arrow)
-        case .pen:
-            selectAnnotationTool(.pen)
-        case .text:
-            selectAnnotationTool(.text)
+        case .selectAnnotationTool(let tool):
+            selectAnnotationTool(annotationTool(from: tool))
         case .undo:
             undoMarkup()
         case .done:
             copySelection()
         case .cancel:
+            setSessionPhase(.cancelled)
             onCancel()
+        case .ignore:
+            break
         }
     }
 
     private func translateSelection() {
         guard !isTranslating else { return }
         guard let image = selectedImage() else {
+            setSessionPhase(.failed)
             onStatus("无法翻译截图", "未能读取选区截图，请检查屏幕录制权限", .error)
             return
         }
-        isTranslating = true
+        let token = operationTokens.start(.translation)
+        setSessionPhase(.translating)
         hoveredAction = nil
         onStatus("截图翻译中", "正在识别选区英文内容", .processing)
         needsDisplay = true
         onTranslate(image) { [weak self] result in
             guard let self else { return }
-            self.isTranslating = false
+            guard self.operationTokens.isCurrent(token) else { return }
             switch result {
             case .success(let translation):
                 guard !translation.translatedLines.isEmpty else {
+                    self.setSessionPhase(.failed)
                     self.onStatus("截图翻译失败", "翻译结果为空，请稍后重试", .warning)
                     self.needsDisplay = true
                     return
                 }
                 guard let group = self.translationGroup(for: translation.translatedLines) else {
+                    self.setSessionPhase(.failed)
                     self.onStatus("截图翻译失败", "未能定位原文位置，请稍后重试", .warning)
                     self.needsDisplay = true
                     return
@@ -1199,8 +1227,10 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
                 self.markups.append(.translation(group))
                 self.selectedMarkupIndex = self.markups.indices.last
                 self.isAnnotating = true
+                self.refreshSessionStateForSelection()
                 self.onStatus("翻译已覆盖", "已按原文位置贴入中文译文", .success)
             case .failure(let error):
+                self.setSessionPhase(.failed)
                 if case ScreenshotTranslationError.emptyOCR = error {
                     self.onStatus("未识别到文字", Self.translationErrorMessage(error), .warning)
                 } else {
@@ -1230,6 +1260,32 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         return "保留截图选区，可重试或保存原图"
     }
 
+    private func commandTool(from tool: AnnotationTool) -> ScreenshotAnnotationTool {
+        switch tool {
+        case .rectangle:
+            return .rectangle
+        case .arrow:
+            return .arrow
+        case .pen:
+            return .pen
+        case .text:
+            return .text
+        }
+    }
+
+    private func annotationTool(from tool: ScreenshotAnnotationTool) -> AnnotationTool {
+        switch tool {
+        case .rectangle:
+            return .rectangle
+        case .arrow:
+            return .arrow
+        case .pen:
+            return .pen
+        case .text:
+            return .text
+        }
+    }
+
     private func selectAnnotationTool(_ tool: AnnotationTool) {
         isAnnotating = true
         annotationTool = tool
@@ -1240,9 +1296,11 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
 
     private func copySelection() {
         guard let image = renderedSelectionImage() else {
+            setSessionPhase(.failed)
             onStatus("无法复制截图", "未能读取选区截图，请检查屏幕录制权限", .error)
             return
         }
+        setSessionPhase(.completed)
         onCopy(image)
     }
 
@@ -1272,18 +1330,22 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
 
     private func saveSelection() {
         guard let image = renderedSelectionImage() else {
+            setSessionPhase(.failed)
             onStatus("无法保存截图", "未能读取选区截图，请检查屏幕录制权限", .error)
             return
         }
         guard let data = image.pngData else {
+            setSessionPhase(.failed)
             onStatus("无法保存截图", "未能生成 PNG 文件", .error)
             return
         }
 
         do {
             let url = try writeScreenshotData(data, to: ScreenshotSaveLocationStore.directory)
+            setSessionPhase(.completed)
             onSaved(url)
         } catch {
+            setSessionPhase(.failed)
             onStatus("无法保存截图", error.localizedDescription, .error)
         }
     }
@@ -1356,11 +1418,14 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     }
 
     func setWindowRecapturePending(_ isPending: Bool) {
-        isWindowRecapturePending = isPending
         if isPending {
+            invalidatePendingCallbacks()
+            setSessionPhase(.windowRecapturePending)
             pressedToolbarAction = nil
             dragStart = nil
             dragMode = nil
+        } else {
+            refreshSessionStateForSelection()
         }
     }
 
@@ -1369,12 +1434,12 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         windowCandidates: [ScreenshotWindowCandidate],
         preselectedWindowFrame: CGRect?
     ) {
+        invalidatePendingCallbacks()
         discardActiveTextField()
         self.screenshot = screenshot
         self.windowCandidates = windowCandidates
         selection = preselectedWindowFrame.flatMap { localWindowRect(for: $0) } ?? .zero
         isSelectionLocked = hasUsableSelection
-        isWindowRecapturePending = false
         isAnnotating = false
         annotationTool = .rectangle
         markups.removeAll()
@@ -1389,8 +1454,8 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         hoveredWindowCandidate = nil
         dragStart = nil
         dragMode = nil
-        isTranslating = false
         hasAutoTranslatedSelection = false
+        refreshSessionStateForSelection()
         needsDisplay = true
         if autoTranslateAfterSelection, hasUsableSelection {
             DispatchQueue.main.async { [weak self] in
@@ -1420,6 +1485,13 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             activeMarkupPoint = localPoint
         }
         needsDisplay = true
+    }
+
+    func invalidatePendingCallbacks() {
+        operationTokens.invalidate()
+        if sessionState.phase == .translating || sessionState.phase == .windowRecapturePending {
+            refreshSessionStateForSelection()
+        }
     }
 
     private func updateMarkup(to point: NSPoint) {

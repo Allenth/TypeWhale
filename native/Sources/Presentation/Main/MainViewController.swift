@@ -86,9 +86,9 @@ final class MainViewController: NSViewController {
     let modelProgress = NSProgressIndicator()
     let modelInstallButton = NSButton(title: "安装模型", target: nil, action: nil)
     let realtime = BrandSwitch()
-    let previewThemeNotch = BrandSwitch()
     weak var previewThemeClassicTile: ThemePreviewTile?
     weak var previewThemeNotchTile: ThemePreviewTile?
+    var selectedPreviewTheme: PreviewTheme = .default
     let autoFinish = BrandSwitch()
     let duckSystemAudio = BrandSwitch()
     let micNoiseReduction = BrandSwitch()
@@ -189,8 +189,7 @@ final class MainViewController: NSViewController {
         let settings = AppSettingsStore.loadMainViewSettings()
         realtime.state = settings.realtimePreviewEnabled ? .on : .off
         realtime.target = self; realtime.action = #selector(saveSettings)
-        previewThemeNotch.state = settings.previewTheme == .notch ? .on : .off
-        previewThemeNotch.target = self; previewThemeNotch.action = #selector(saveSettings)
+        selectedPreviewTheme = settings.previewTheme
         autoFinish.state = settings.autoFinishAfterPauseEnabled ? .on : .off
         autoFinish.target = self; autoFinish.action = #selector(saveSettings)
         duckSystemAudio.state = settings.duckSystemAudioWhileRecordingEnabled ? .on : .off

@@ -8,8 +8,8 @@ import QuartzCore
 /// - 真刘海屏：紧贴刘海下方的紧凑圆角矩形，顶部较大的 icon|刘海|pulse、下方单行文字，
 ///   圆角与刘海一致。从顶部中心一个小点放大展开。
 ///
-/// 出现/收起都以各自锚点做「单点」缩放（无刘海=中心、刘海=顶部中心）+ 淡入淡出。
-/// 锚点在 orderFront 之后、不可见时设定，避免首次从左向右展开与闪动。
+/// 出现/收起都固定面板最终几何，只动画 reveal mask path（无刘海=中心、刘海=顶部中心），
+/// 黑色背景、图标、脉冲和文字由同一个 mask 一起裁切展开，避免内容和黑框一前一后。
 final class NotchPreviewPresenter: PreviewPresenting {
     var onCycleMode: (() -> Void)?
 
@@ -30,12 +30,15 @@ final class NotchPreviewPresenter: PreviewPresenting {
 
     private let panelMargin: CGFloat = 4
     private let openDuration: TimeInterval = 0.3
-    private let closeDuration: TimeInterval = 0.2
+    private let closeDuration: TimeInterval = 0.22
+    private let collapsedScale: CGFloat = 0.01
     private let draftStepInterval: TimeInterval = 0.075
 
     private let panel: NSPanel
     private let container = NSView()
     private let island = NSView()
+    private let backgroundLayer = CAShapeLayer()
+    private let revealMaskLayer = CAShapeLayer()
     private let iconView = NSImageView()
     private let pulseView = NotchPulseView()
     private let textLabel = NSTextField(labelWithString: "")
@@ -45,7 +48,7 @@ final class NotchPreviewPresenter: PreviewPresenting {
 
     private var currentState = ""
     private var isVisible = false
-    private var islandAnchor = CGPoint(x: 0.5, y: 0.5)
+    private var animationOrigin = CGPoint(x: 0.5, y: 0.5)
     private var screenObserver: NSObjectProtocol?
 
     init() {
@@ -65,8 +68,12 @@ final class NotchPreviewPresenter: PreviewPresenting {
         panel.contentView = container
 
         island.wantsLayer = true
-        island.layer?.backgroundColor = NSColor.black.cgColor
-        island.layer?.masksToBounds = true
+        island.layer?.backgroundColor = NSColor.clear.cgColor
+        island.layer?.masksToBounds = false
+        backgroundLayer.fillColor = NSColor.black.cgColor
+        island.layer?.addSublayer(backgroundLayer)
+        revealMaskLayer.fillColor = NSColor.black.cgColor
+        island.layer?.mask = revealMaskLayer
         container.addSubview(island)
 
         iconView.imageScaling = .scaleProportionallyUpOrDown
@@ -89,7 +96,7 @@ final class NotchPreviewPresenter: PreviewPresenting {
         ) { [weak self] _ in
             guard let self, self.isVisible else { return }
             self.reposition()
-            self.applyIslandAnchor()
+            self.applyIslandGeometry()
         }
     }
 
@@ -205,7 +212,7 @@ final class NotchPreviewPresenter: PreviewPresenting {
             islandH = topInset + notchTextRow + 2
             islandTop = screenFrame.maxY
             island.layer?.cornerRadius = notchCorner
-            islandAnchor = CGPoint(x: 0.5, y: 1.0) // 顶部中心
+            animationOrigin = CGPoint(x: 0.5, y: 1.0) // 顶部中心
 
             let topMidY = islandH - topInset / 2
             let leftGap = (islandW - notchW) / 2
@@ -217,7 +224,7 @@ final class NotchPreviewPresenter: PreviewPresenting {
             islandH = pillHeight
             islandTop = screenFrame.maxY - topInset - belowGap
             island.layer?.cornerRadius = pillCorner
-            islandAnchor = CGPoint(x: 0.5, y: 0.5) // 中心
+            animationOrigin = CGPoint(x: 0.5, y: 0.5) // 中心
 
             let lineH: CGFloat = 18
             iconView.frame = NSRect(x: edge, y: (islandH - barIconSize) / 2, width: barIconSize, height: barIconSize)
@@ -229,68 +236,167 @@ final class NotchPreviewPresenter: PreviewPresenting {
         let panelH = islandH + panelMargin * 2
         let panelOriginX = min(max(screenFrame.minX, screenFrame.midX - panelW / 2), screenFrame.maxX - panelW)
         let panelOriginY = islandTop - panelMargin - islandH
-        panel.setFrame(NSRect(x: panelOriginX, y: panelOriginY, width: panelW, height: panelH), display: false)
-        island.frame = NSRect(x: panelMargin, y: panelMargin, width: islandW, height: islandH)
+        withoutLayerActions {
+            panel.setFrame(NSRect(x: panelOriginX, y: panelOriginY, width: panelW, height: panelH), display: false)
+            island.frame = NSRect(x: panelMargin, y: panelMargin, width: islandW, height: islandH)
+            applyIslandGeometry()
+        }
         LaunchDiagnostics.mark(
             "notch_preview_layout physical=\(geo.hasPhysicalNotch) w=\(Int(islandW)) h=\(Int(islandH))"
         )
     }
 
-    /// 显式锁定缩放锚点（无刘海=中心、刘海=顶部中心），并校正 position 保持位置不动。
-    private func applyIslandAnchor() {
+    /// 让 view/layer 始终停在完整最终几何；真实开合只动画黑色背景 path。
+    private func applyIslandGeometry() {
         guard let layer = island.layer else { return }
         let f = island.frame
-        layer.anchorPoint = islandAnchor
-        layer.position = CGPoint(x: f.minX + f.width * islandAnchor.x, y: f.minY + f.height * islandAnchor.y)
+        layer.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+        layer.bounds = CGRect(origin: .zero, size: f.size)
+        layer.position = CGPoint(x: f.midX, y: f.midY)
+        backgroundLayer.frame = layer.bounds
+        backgroundLayer.path = finalBackgroundPath()
+        revealMaskLayer.frame = layer.bounds
+        revealMaskLayer.path = finalBackgroundPath()
+    }
+
+    private func finalBackgroundPath() -> CGPath {
+        let rect = CGRect(origin: .zero, size: island.bounds.size)
+        return roundedPath(in: rect)
+    }
+
+    private func collapsedBackgroundPath() -> CGPath {
+        roundedPath(in: collapsedBackgroundRect())
+    }
+
+    private func collapsedBackgroundRect() -> CGRect {
+        let bounds = CGRect(origin: .zero, size: island.bounds.size)
+        let collapsed = CGSize(
+            width: max(1, bounds.width * collapsedScale),
+            height: max(1, bounds.height * collapsedScale)
+        )
+        let originPoint = CGPoint(
+            x: bounds.minX + bounds.width * animationOrigin.x,
+            y: bounds.minY + bounds.height * animationOrigin.y
+        )
+        let x = originPoint.x - collapsed.width / 2
+        let y: CGFloat
+        if animationOrigin.y >= 1 {
+            y = originPoint.y - collapsed.height
+        } else if animationOrigin.y <= 0 {
+            y = originPoint.y
+        } else {
+            y = originPoint.y - collapsed.height / 2
+        }
+        return CGRect(origin: CGPoint(x: x, y: y), size: collapsed)
+    }
+
+    private func roundedPath(in rect: CGRect) -> CGPath {
+        let cornerRadius = island.layer?.cornerRadius ?? pillCorner
+        let radius = min(cornerRadius, rect.width / 2, rect.height / 2)
+        return CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil)
+    }
+
+    private func withoutLayerActions(_ updates: () -> Void) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        updates()
+        CATransaction.commit()
+    }
+
+    private func addPathAnimation(
+        to layer: CALayer,
+        key: String,
+        from: CGPath,
+        to: CGPath,
+        duration: TimeInterval
+    ) {
+        let animation = CABasicAnimation(keyPath: "path")
+        animation.fromValue = from
+        animation.toValue = to
+        animation.duration = duration
+        animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        layer.add(animation, forKey: key)
+    }
+
+    private func addOpacityAnimation(
+        to layer: CALayer,
+        key: String,
+        from: Float,
+        to: Float,
+        duration: TimeInterval
+    ) {
+        let animation = CABasicAnimation(keyPath: "opacity")
+        animation.fromValue = from
+        animation.toValue = to
+        animation.duration = duration
+        animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        layer.add(animation, forKey: key)
     }
 
     private func setVisible(_ visible: Bool) {
         guard let layer = island.layer else { return }
         if visible {
+            if isVisible {
+                withoutLayerActions {
+                    panel.alphaValue = 1
+                    applyIslandGeometry()
+                    layer.opacity = 1
+                }
+                return
+            }
+
             isVisible = true
-            panel.alphaValue = 1
-            layer.opacity = 0 // 不可见，规避锚点设定与首帧的闪动
-            panel.orderFrontRegardless()
-            applyIslandAnchor() // orderFront 之后再设锚点，首次也从正确的点展开
             layer.removeAllAnimations()
+            backgroundLayer.removeAllAnimations()
+            revealMaskLayer.removeAllAnimations()
+
+            // 先在不可见状态下摆好锚点和收缩起点，避免首次显示时 Core Animation
+            // 为 anchor/position/frame 自动补一段从左侧来的隐式动画。
+            withoutLayerActions {
+                panel.alphaValue = 1
+                applyIslandGeometry()
+                layer.opacity = 0
+                revealMaskLayer.path = collapsedBackgroundPath()
+            }
+
+            panel.orderFrontRegardless()
+
+            let startPath = collapsedBackgroundPath()
+            let finalPath = finalBackgroundPath()
             CATransaction.begin()
-            layer.transform = CATransform3DIdentity
+            CATransaction.setDisableActions(true)
+            applyIslandGeometry()
             layer.opacity = 1
-            let open = CABasicAnimation(keyPath: "transform.scale")
-            open.fromValue = 0.01
-            open.toValue = 1.0
-            open.duration = openDuration
-            open.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            layer.add(open, forKey: "open")
-            let fade = CABasicAnimation(keyPath: "opacity")
-            fade.fromValue = 0.0
-            fade.toValue = 1.0
-            fade.duration = min(openDuration, 0.18)
-            layer.add(fade, forKey: "fadeIn")
+            revealMaskLayer.path = finalPath
+            addPathAnimation(to: revealMaskLayer, key: "openMaskPath", from: startPath, to: finalPath, duration: openDuration)
+            addOpacityAnimation(to: layer, key: "fadeIn", from: 0, to: 1, duration: openDuration)
             CATransaction.commit()
         } else {
             isVisible = false
+            let currentPath = revealMaskLayer.presentation()?.path ?? revealMaskLayer.path ?? finalBackgroundPath()
+            let currentOpacity = layer.presentation()?.opacity ?? layer.opacity
+            let endPath = collapsedBackgroundPath()
+            layer.removeAllAnimations()
+            backgroundLayer.removeAllAnimations()
+            revealMaskLayer.removeAllAnimations()
+
             CATransaction.begin()
-            CATransaction.setCompletionBlock { [panel, layer] in
+            CATransaction.setDisableActions(true)
+            CATransaction.setCompletionBlock { [panel, layer, backgroundLayer, revealMaskLayer] in
                 panel.orderOut(nil)
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
                 layer.removeAllAnimations()
-                layer.transform = CATransform3DIdentity
+                backgroundLayer.removeAllAnimations()
+                revealMaskLayer.removeAllAnimations()
+                self.applyIslandGeometry()
                 layer.opacity = 1
+                CATransaction.commit()
             }
-            // 终态保持「单点收拢 + 透明」直到 orderOut，避免回弹/闪动。
-            layer.transform = CATransform3DMakeScale(0.01, 0.01, 1)
+            revealMaskLayer.path = endPath
             layer.opacity = 0
-            let close = CABasicAnimation(keyPath: "transform.scale")
-            close.fromValue = 1.0
-            close.toValue = 0.01
-            close.duration = closeDuration
-            close.timingFunction = CAMediaTimingFunction(name: .easeIn)
-            layer.add(close, forKey: "close")
-            let fade = CABasicAnimation(keyPath: "opacity")
-            fade.fromValue = 1.0
-            fade.toValue = 0.0
-            fade.duration = closeDuration
-            layer.add(fade, forKey: "fadeOut")
+            addPathAnimation(to: revealMaskLayer, key: "closeMaskPath", from: currentPath, to: endPath, duration: closeDuration)
+            addOpacityAnimation(to: layer, key: "fadeOut", from: currentOpacity, to: 0, duration: closeDuration)
             CATransaction.commit()
         }
     }

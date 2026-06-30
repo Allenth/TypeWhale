@@ -9,6 +9,196 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.6.6 (Build 456)",
+            date: "2026-06-30",
+            changes: [
+                "架构治理 Version C 第二阶段：新增 FinalRecognitionUseCase，把最终 ASR 调用、原始响应解析、文本清洗和空结果判断从 SpeechInputCoordinator 中抽出。",
+                "SpeechInputCoordinator 继续负责 VAD 门控、界面状态、智能整理/翻译和粘贴编排；最终识别 use case 只输出 recognized、empty 或 failed，不触碰 UI 或粘贴队列。",
+                "新增 FinalRecognitionUseCaseCheck，覆盖有效识别、空结果、模型错误和 fake ASR adapter 回调，确保最终识别边界可单独验证。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.6.6 (Build 455)",
+            date: "2026-06-30",
+            changes: [
+                "架构治理 Version C 第一阶段：新增 SpeechWorkflowState，把语音任务身份、界面更新闸门、实时预览回调接收和 final 结果提交防重统一为可测试模型。",
+                "SpeechInputCoordinator 继续负责现有录音、VAD、final ASR、智能整理/翻译和粘贴编排，但旧任务回调现在先经过统一 task gate，避免跨录音污染当前界面、历史或粘贴队列。",
+                "新增 SpeechWorkflowStateCheck，覆盖新录音使旧任务失效、final 提交去重、processed result stale gate、realtime 回调接收边界和 completed final task 上限。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.6.6 (Build 454)",
+            date: "2026-06-30",
+            changes: [
+                "架构治理 Version B 第四阶段：新增 ScreenshotTranslationLayoutCheck，把截图翻译行级排版策略从临时验证升级为正式轻量回归测试。",
+                "新增 Screenshot Overlay QA Checklist，明确普通截图、窗口选择、pending cancel-only、复制、保存、OCR、翻译、标注、撤销和取消的真实安装版验收路径。",
+                "架构 handoff 更新到 B4 first pass complete，下一步集中执行 B5 真实截图浮层验证门。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.6.5 (Build 453)",
+            date: "2026-06-30",
+            changes: [
+                "修正内存治理 active 文档口径：高内存安全网阈值统一为 MemoryMonitor 的动态预警阈值，而不是旧的 1GB 固定值。",
+                "架构计划新增 source-of-truth consistency audit，后续会系统审计内存阈值、构建安装规则、版本基线、成本/token 限额和截图 pending 语义等跨文档口径。",
+                "同步 PRD、发布草案、架构文档和代码注释中的当前版本/构建/内存阈值表达，历史日志继续保留当时事实。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.6.5 (Build 452)",
+            date: "2026-06-30",
+            changes: [
+                "架构治理 Version B 第三阶段：新增 ScreenshotOperationToken / ScreenshotOperationTokens，把窗口重截、OCR、截图翻译和短暂状态恢复统一到显式 operation token 模型。",
+                "旧的窗口置顶、OCR 或翻译回调如果在取消、关闭、重截或新操作后返回，将被 token 判定为过期，不再更新状态、剪贴板、标注层或保存结果。",
+                "补充 ScreenshotSessionStateCheck，覆盖新操作作废旧 token、手动 invalidate 作废当前 token、OCR token 保持当前等回归场景。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.6.5 (Build 451)",
+            date: "2026-06-30",
+            changes: [
+                "架构治理 Version B 第二阶段：新增 ScreenshotCommandDispatcher，把截图工具栏命令的可用性和 effect 决策从 overlay 视图里抽成纯 Swift 模型。",
+                "ScreenshotOverlayView 继续负责绘制、事件转发和执行复制、保存、OCR、翻译、标注等副作用；dispatcher 不接触 AppKit 绘制、截图裁剪、DeepSeek、文件系统或剪贴板。",
+                "补充 ScreenshotSessionStateCheck，覆盖普通选区、内部状态滞后、pending 只允许取消、终态忽略命令等回归场景。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.6.4 (Build 450)",
+            date: "2026-06-30",
+            changes: [
+                "调整截图翻译行级贴回排版：译文块现在与对应 OCR 原文行的起始位置左对齐，不再统一吸附到选区左边距。",
+                "当原文靠近选区右侧时，译文块会在不溢出的前提下向左回退，保留可读性和边界安全。",
+                "补充 ScreenshotTranslationCheck 回归检查，覆盖原文起点对齐和右边界回退。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.6.4 (Build 449)",
+            date: "2026-06-30",
+            changes: [
+                "修复 Build 448 截图状态机回归：普通截图选区完成后，工具栏按钮不应被内部 selecting/idle 状态误判为不可点击。",
+                "工具栏命令可用性现在以当前真实选区为准；只要已有有效选区且不在翻译或窗口重截 pending，复制、保存、OCR、翻译和标注等按钮都保持可用。",
+                "补充回归检查，覆盖 selecting/idle 但已有选区时所有截图工具栏命令必须可用。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.6.4 (Build 448)",
+            date: "2026-06-30",
+            changes: [
+                "架构治理 Version B 第一阶段：新增 ScreenshotSessionState 和 ScreenshotToolbarCommand，把截图浮层状态与工具条命令可用性收敛成可测试模型。",
+                "截图工具条、鼠标、键盘快捷入口统一查询同一套命令可用性；翻译中和窗口重截 pending 期间只允许取消，避免复制、保存、OCR、标注等动作读取不稳定输出。",
+                "新增 ScreenshotSessionStateCheck 回归检查，覆盖 idle、selected、translating、window recapture pending、completed、cancelled 和 failed 状态。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.6.3 (Build 447)",
+            date: "2026-06-30",
+            changes: [
+                "架构治理 Version A 第一阶段：启动后不再无条件弹出主窗口，改为默认后台驻留，保留显式打开面板入口。",
+                "截图快捷键进入截图模式时不再隐藏 TypeWhale 主窗口，截图只观察当前桌面并保留主窗口原有可见状态。",
+                "截图翻译进行中只允许取消，复制、保存、OCR、标注、撤销和完成等不稳定输出动作会被禁用；旧翻译回调也会在取消、重截或关闭后失效。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.6.3 (Build 446)",
+            date: "2026-06-30",
+            changes: [
+                "修复刘海主题黑岛展开时图标和右侧脉冲先出现、黑框后出现的不同步问题。",
+                "黑色背景、目标应用图标、脉冲和文字改由同一个 reveal mask 一起裁切展开，不再分成背景 path 动画与内容淡入两套节奏。",
+                "继续保持从刘海顶部中心展开/收起的动效语义。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.6.3 (Build 445)",
+            date: "2026-06-30",
+            changes: [
+                "进一步修复刘海主题顶部胶囊仍像从右上角落下/展开的问题。",
+                "黑色岛背景改为独立 CAShapeLayer，面板和内容容器从一开始保持最终位置，只动画背景 path 从刘海顶部中心的小圆角矩形展开到完整形状。",
+                "图标、脉冲和文字延迟淡入，避免内容在黑色背景展开前露出；收起时也按 path 收拢并淡出。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.6.2 (Build 444)",
+            date: "2026-06-30",
+            changes: [
+                "重新覆盖安装验证刘海主题顶部胶囊几何动画修复，确保当前源码、应用内版本历史和安装版一致。",
+                "本 build 沿用 Build 443 的行为：顶部弹出改为显式 bounds.size + position 动画，不再依赖 anchorPoint + transform 缩放。",
+                "保留真实安装版录屏抽帧验证结论：早期黑岛围绕中心参考线展开。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.6.2 (Build 443)",
+            date: "2026-06-30",
+            changes: [
+                "再次修复顶部刘海主题胶囊首次弹出仍像从左向右展开的问题。",
+                "动效不再依赖 layer-backed NSView 的 anchorPoint + transform 缩放，改为显式动画 bounds.size 和 position：无刘海从中心展开，刘海屏从顶部中心展开。",
+                "收起同样按当前 presentation 几何收拢到对应原点，并保留 ease-in-out 淡入淡出。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.6.2 (Build 442)",
+            date: "2026-06-30",
+            changes: [
+                "压缩「开发需求」默认提示词，降低每次智能整理请求的输入 token 消耗。",
+                "保留原有能力边界：语言不变、术语归一化、不过度精简、保留背景/现象/期望/约束/风险和判断强度。",
+                "新增更明确的简单/复杂问题输出规则：简单问题直接自然段，复杂问题按“问题一/问题二”拆分为问题标题和详细描述；完整 coding-agent 执行模板仍在用户明确需要时可用。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.6.1 (Build 441)",
+            date: "2026-06-30",
+            changes: [
+                "修复刘海主题灵动岛首次展示时从左侧展开的问题，展示前先稳定锚点、边界和收缩起点，再以显式动画从锚点放大。",
+                "收起动画改为从当前显示状态缩小并淡出，不再先跳到隐藏态导致直接消失。",
+                "展开与收起统一使用 ease-in-out 曲线，降低线性感和突兀感。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.6.1 (Build 440)",
+            date: "2026-06-30",
+            changes: [
+                "修复主语音快捷键设为右 Option 后单击无反应的问题。",
+                "根因是右 Option 同时也是默认截图快捷键；截图快捷键分支先消费了修饰键事件，导致语音快捷键收不到按下/松开事件。",
+                "当截图快捷键与语音快捷键完全冲突时，现在优先保留语音快捷键，截图绑定不再吞掉该事件；并新增回归测试覆盖右 Option 冲突场景。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.6.1 (Build 439)",
+            date: "2026-06-30",
+            changes: [
+                "从「更多设置 > 系统」里移除「刘海预览主题」开关，避免同一主题选择在两个位置重复出现。",
+                "预览主题仍保留在主界面的「预览主题」卡片中切换：默认胶囊 / 刘海主题两张预览瓦片作为唯一入口。",
+                "内部状态改为由 previewTheme 属性保存，不再依赖隐藏的开关控件作为主题状态源。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.6.0 (Build 438)",
+            date: "2026-06-30",
+            changes: [
+                "进入 1.6.0 本地验证版本：收口刘海预览主题、截图翻译排版、开发需求提示词模板和构建验证流程。",
+                "刘海预览主题继续修正首次显示锚点和收起闪烁问题；截图翻译改为固定左边距左对齐，提升截图后文字覆盖的可读性。",
+                "开发需求智能整理新增可交给 coding agent 的执行模板，覆盖目标、上下文、约束和完成标准。",
+                "构建规则改为代码改动后必须安装验证，日常只递增 build；完整版本构建才递增短版本号。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.5.76 (Build 437)",
+            date: "2026-06-30",
+            changes: [
+                "开发需求默认提示词补充固定模板：目标、上下文、约束、完成标准四段，覆盖 bug 修复和功能实现口述。",
+                "模板要求保留相关文件、当前现象、期望行为、复现步骤，并提醒 coding agent 先定位根因、实现修复、运行最小相关测试、最后总结验证与风险。",
+                "新增提示词回归检查，防止开发需求模板和安全边界被后续改动误删。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.5.76 (Build 436)",
+            date: "2026-06-30",
+            changes: [
+                "构建规则调整：代码改动后的日常验证构建只递增 build 号；每累计 3 次 build 或明确要求完整构建时，才同时递增短版本号和 build 号。",
+                "构建脚本新增 build-only / full-version 模式，并同步 AGENTS 规则、开发日志、README 与应用内版本历史门禁。",
+                "本 build 同时包含刘海预览主题动画状态修正：首次显示前禁用隐式动画摆好锚点/缩放起点，收起时从当前 presentation 状态过渡，降低从左侧展开与回收闪烁风险。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.5.76 (Build 435)",
             date: "2026-06-30",
             changes: [

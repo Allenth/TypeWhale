@@ -185,9 +185,9 @@ extension MainViewController {
         return stack
     }
 
-    /// 点击预览瓦片切换主题：同步「更多设置」里的开关并存盘，刷新选中高亮。
+    /// 点击预览瓦片切换主题：存盘并刷新选中高亮。
     func selectPreviewTheme(_ theme: PreviewTheme) {
-        previewThemeNotch.state = theme == .notch ? .on : .off
+        selectedPreviewTheme = theme
         saveSettings()
         refreshPreviewThemeTiles()
     }
@@ -247,7 +247,6 @@ extension MainViewController {
         let system = subSection("系统", [
             optionRow("输入设备", audioInputControls),
             optionRow("胶囊实时预览", realtime),
-            optionRow("刘海预览主题", previewThemeNotch),
             optionRow("停顿自动完成", autoFinish),
             optionRow("录音时降低系统音量", duckSystemAudio),
             optionRow("麦克风降噪（增强·略慢）", micNoiseReduction),

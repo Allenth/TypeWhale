@@ -22,7 +22,7 @@ extension MainViewController {
             smartRewritePreference: smartRewritePreference,
             autoTranslateEnabled: autoTranslate.state == .on,
             translationDirection: translationDirection,
-            previewTheme: previewThemeNotch.state == .on ? .notch : .classic
+            previewTheme: selectedPreviewTheme
         ))
         if previousAudioInputUID != nextAudioInputUID {
             let mode = nextAudioInputUID.isEmpty ? "system_default" : "manual"
@@ -384,7 +384,7 @@ extension MainViewController {
     }
 
     var previewTheme: PreviewTheme {
-        previewThemeNotch.state == .on ? .notch : .classic
+        selectedPreviewTheme
     }
 
     var autoFinishAfterPauseEnabled: Bool {

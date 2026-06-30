@@ -56,7 +56,7 @@ Boundary rule: views should not decide final paste safety, provider routing, cro
 Known concentration points:
 
 - `SpeechInputCoordinator` still owns too many application concerns: hotkeys, recording, VAD, realtime preview, final ASR, smart rewrite/translation, paste, screenshot entry, memory safety.
-- `ScreenshotCoordinator` / overlay view still mix UI rendering, toolbar action policy, annotation, OCR/translation callbacks, and window recapture state.
+- Screenshot Version B has completed its first architecture pass: toolbar command policy, pending-state rules, operation-token invalidation, and translation layout policy now have explicit state/command models and checks. `ScreenshotOverlayView` still owns AppKit rendering and side-effect execution, but this is the accepted boundary for the current pass.
 
 These files should be split through explicit state models, use cases, commands, and adapter ports, not through an app-wide rewrite.
 
@@ -97,7 +97,8 @@ Preview non-goals:
 - Final VAD is a soft gate: if realtime preview or recording-time VAD shows speech evidence, final ASR must still run even when final VAD says `no_speech`.
 - ASR/VAD resources stay warm during normal use.
 - Do not reintroduce idle timer unloading.
-- High-memory safety may flush and immediately warm-load the native ASR/VAD arena only when the app is idle and above the warning threshold.
+- High-memory safety may flush and immediately warm-load the native ASR/VAD arena only when the app is idle and above the dynamic warning threshold.
+- Current memory warning threshold source of truth is `MemoryMonitor.warnThresholdMB = min(20GB, max(2GB, totalPhysicalMemoryMB * 25%))`; the high threshold follows that value by about 20% and is capped at 24GB.
 - Never release model resources while recording, recognizing, smart-processing, or pasting.
 
 ### Screenshot, OCR, And Translation
@@ -166,26 +167,129 @@ Each version must preserve the stable main path unless a behavior change is expl
 
 These items come from the code review before the next refactor pass. They are concrete blockers or ambiguity sources that must be addressed by the staged plan below.
 
-#### Version A Blockers
+#### Version A Resolved In First Pass
 
-- `TypeSpeakerApp.applicationDidFinishLaunching` currently calls `lifecycle.showMainWindow()` unconditionally. This violates the main-window lifecycle invariant for login-item/background launches. Action: introduce an explicit launch visibility policy before showing the main window.
-- `SpeechInputCoordinator.beginScreenshotFromHotkey(...)` currently calls `hideMainWindow()` before entering screenshot mode. This violates the screenshot invariant that screenshot entry observes the desktop and does not manage TypeWhale's main window. Action: remove screenshot ownership of main-window visibility.
-- `ScreenshotOverlayView` only disables the translate button while `isTranslating == true`; copy, save, OCR, annotation, undo, and done remain available against unstable output. Action: add a pending-state action policy that allows cancel and blocks or guards all unstable-output actions.
-- Screenshot translation callbacks have no overlay-local generation token. `replaceScreenshot(...)` resets `isTranslating`, and a stale callback can still mutate markups/status after cancel or recapture. Action: generation-gate OCR/translation callbacks and invalidate them on cancel, replace, recapture, and close.
+- `TypeSpeakerApp.applicationDidFinishLaunching` no longer calls `lifecycle.showMainWindow()` unconditionally. Launch now records an explicit hidden-by-default launch visibility policy.
+- `SpeechInputCoordinator.beginScreenshotFromHotkey(...)` no longer calls `hideMainWindow()` before entering screenshot mode. Screenshot entry keeps the TypeWhale main-window state unchanged.
+- `ScreenshotOverlayView` now limits toolbar interaction during translation pending state to cancel only. Copy, save, OCR, annotation, undo, and done are disabled while translation is in flight.
+- Screenshot translation callbacks are guarded by an overlay-local generation token and are invalidated on close, cancel, replace/recapture, and pending recapture.
 
-#### Version B Blockers
+#### Version A Remaining Review Items
 
-- Screenshot toolbar availability is still computed ad hoc in drawing and mouse handling. Action: introduce `ScreenshotSessionState` plus command availability checks before adding more screenshot tools.
-- Screenshot overlay view still owns both rendering and product action policy. Action: keep drawing/annotation rendering in Presentation, but move state transition and action dispatch policy into a testable command/state model.
+- First-install/default-open policy is not yet product-specified. Current implemented policy is hidden-by-default on normal launch.
+
+#### Version B Resolved In First Pass
+
+- Added `ScreenshotSessionState` with explicit `idle`, `selecting`, `selected`, `windowRecapturePending`, `translating`, `completed`, `cancelled`, and `failed` phases.
+- Added `ScreenshotToolbarCommand` availability rules and wired toolbar hit-testing, drawing, pointer handling, and keyboard shortcuts through the same command gate.
+- Added `ScreenshotSessionStateCheck` so pending-state command availability is covered without instantiating AppKit overlay windows.
+- Build 449 corrected a Build 448 regression: if the overlay already has a usable selection, `idle` or `selecting` must not disable ordinary screenshot toolbar commands. Translation and window-recapture pending still allow cancel only.
+- Build 450 corrected screenshot translation layout: line-level translation blocks align to each OCR source line's starting x position, with right-edge fallback only when needed.
+- Build 451 added `ScreenshotCommandDispatcher`, a pure command reducer that maps screenshot command context to command availability and effects. `ScreenshotOverlayView` now renders and executes effects, while command policy lives in the testable model.
+- Build 452 added `ScreenshotOperationToken` / `ScreenshotOperationTokens`, replacing ad hoc generation counters for window recapture, OCR, screenshot translation, and transient status reset.
+- Build 454 added `ScreenshotTranslationLayoutCheck` so Build 450 source-line x alignment and right-edge fallback are covered by a formal lightweight test instead of a temporary shell snippet.
+- Build 454 added `docs/SCREENSHOT_OVERLAY_QA.md` as the real installed-app verification checklist for the remaining Version B gate.
+- B5 real installed-app overlay QA passed manually on 2026-06-30 using `docs/SCREENSHOT_OVERLAY_QA.md` shortest critical path. Covered ordinary region screenshot, toolbar availability, translation pending cancel-only behavior, stale callback safety by Esc/right-click cancel, copy/save/OCR/translate/annotation/undo, and main-window visibility preservation.
+
+#### Version B Remaining Review Items
+
+- None for the current Version B gate. Future screenshot interaction changes must still include real installed-app overlay QA because Build 448 proved code-level state tests alone are insufficient.
+
+#### Refined Version B Plan
+
+Version B should finish screenshot architecture before Version C starts. The goal is not to add a broad framework; the goal is to make screenshot behavior explainable, testable, and hard to regress.
+
+1. `B2 ScreenshotCommandDispatcher`
+   - Status: first pass complete in Build 451.
+   - `ScreenshotCommandContext` carries current session state, real usable selection, operation generation, and annotation mode.
+   - `ScreenshotCommandDispatcher` returns command availability and `ScreenshotCommandEffect` values such as copy, save, OCR, translate, select tool, undo, done, cancel, or ignore.
+   - The dispatcher does not render AppKit views, crop images, call OCR, call DeepSeek, write files, or touch the pasteboard.
+   - `ScreenshotOverlayView` keeps rendering, event forwarding, and side-effect execution.
+
+2. `B3 Screenshot Operation Tokens`
+   - Status: first pass complete in Build 452.
+   - Consolidated translation, OCR, and window recapture invalidation into one explicit operation token model.
+   - Cancel, close, replace/recapture, and superseding actions invalidate outstanding callbacks.
+   - Old callbacks may finish, but they must not mutate markups, status, pasteboard, saved files, or overlay state.
+   - The same token model also guards transient status reset so a newer screenshot operation is not overwritten by an older success timeout.
+
+3. `B4 Screenshot Layout Policy`
+   - Status: first pass complete in Build 454.
+   - Keep screenshot translation layout policy in `ScreenshotTranslationLayout`.
+   - Preserve Build 450 behavior: translation blocks align to source-line starting x; only right-edge overflow may shift left.
+   - Do not move line-level translation placement into `ScreenshotOverlayView` drawing code.
+   - `ScreenshotTranslationLayoutCheck` is the current lightweight regression for this policy.
+
+4. `B5 Real Overlay Verification Gate`
+   - Status: passed manually on 2026-06-30 against installed `1.6.6 (Build 454)`.
+   - Verified installed app behavior for ordinary region selection, toolbar buttons, translation pending cancel-only state, stale callback safety, copy/save/OCR/translation/annotation/undo, Esc/right-click cancel, and main-window visibility preservation.
+   - Window-selection and recapture behavior remain covered by the QA checklist for future screenshot passes; no blocker remains for entering Version C.
+   - Use `docs/SCREENSHOT_OVERLAY_QA.md` as the checklist for this gate.
+
+Exit criteria for Version B:
+
+- Met for the current architecture pass. `ScreenshotCoordinator` / `ScreenshotOverlayView` still execute AppKit side effects, but command policy, pending-state availability, operation invalidation, and layout policy now live behind explicit state/command/layout models.
+- Version C may begin next, preserving all screenshot invariants above.
 
 #### Version C Blockers
 
 - `SpeechInputCoordinator` remains the main concentration point for hotkeys, recording, VAD, realtime preview, final ASR, smart rewrite/translation, paste, screenshot entry, and memory safety. Action: split through speech workflow state/use cases after Version A/B stabilize user-visible state.
 - Final ASR, smart processing, paste, target tracking, and ASR memory safety are interleaved in one coordinator. Action: define use cases for final recognition, smart processing, paste submission, and idle memory safety before moving logic.
 
+#### Version C Resolved In First Pass
+
+- Build 455 introduced `SpeechWorkflowState`, a pure task-identity and stale-callback gate for the voice workflow.
+- `SpeechWorkflowState` now owns the latest submitted task id, completed final task de-duplication, realtime callback acceptance, UI update eligibility, and processed-result submission eligibility.
+- `SpeechInputCoordinator` still orchestrates recording, VAD, realtime preview, final ASR, smart processing, paste, target tracking, and memory safety, but old task callbacks now pass through one workflow gate before mutating UI, history, backlog, paste queues, or realtime preview state.
+- `SpeechWorkflowStateCheck` covers new-recording invalidation of older tasks, final submission de-duplication, processed-result stale gating, realtime callback acceptance, and the completed-final task retention limit.
+- Build 456 introduced `FinalRecognitionUseCase`, which owns the final ASR adapter call, raw ASR response parsing, recognition text cleanup, model-error handling, and empty-result classification.
+- `SpeechInputCoordinator` still owns final VAD gating, UI progress, smart rewrite/translation, paste submission, target app lookup, and memory safety. The final recognition boundary now returns only `recognized`, `empty`, or `failed`.
+- `FinalRecognitionUseCaseCheck` covers successful final recognition parsing, empty-result classification, model error propagation, and the fake-ASR callback path.
+
+#### Version C Next Review Items
+
+- Verify Build 456 installed-app voice main path before extracting the next boundary.
+- Extract smart processing next, using the stable `FinalRecognitionOutcome` contract as input.
+- Extract paste submission only after smart processing has a stable task/result contract.
+- Keep ASR/VAD memory safety in the coordinator until recording/finalizing/pasting state transitions are fully represented in the workflow model.
+
 #### Preview Pipeline Blocker
 
 - `AudioRecorder` advances chunk state and clears `realtimeBuffers` before the final chunk snapshot has been successfully written. If `writeRealtimeSnapshot` fails, the coordinator never receives that final chunk, while the recorder has already discarded the buffers and advanced `realtimeChunkIndex`. Action: make final chunk commit two-phase or otherwise recoverable so the "final chunk snapshots should not be dropped" invariant is true in failure paths.
+
+### Next Section Handoff
+
+The next coding section should start from this document, not from chat history.
+
+Read order:
+
+1. `docs/ARCHITECTURE.md`: stable invariants, review action items, and the staged Version A-D plan.
+2. `docs/开发日志.md`: latest Build 454 entry for screenshot layout check and overlay QA gate, Build 453 for active documentation consistency, Build 452 for screenshot operation tokens, Build 451 for screenshot command dispatcher, Build 450 for screenshot translation layout, Build 449 for the screenshot toolbar regression fix, then Build 448 for the original Version B state model work.
+3. `native/Sources/Presentation/Screenshot/ScreenshotSessionState.swift`: session state, toolbar command availability, command context, dispatcher, pure command effects, and operation token model.
+4. `native/Sources/Presentation/Screenshot/ScreenshotCoordinator.swift`: current screenshot overlay rendering, event forwarding, command effect execution, and token-gated async callbacks.
+5. `native/Tests/ScreenshotTranslationLayoutCheck.swift`: current lightweight layout regression for Build 450 translation placement.
+6. `docs/SCREENSHOT_OVERLAY_QA.md`: real installed-app checklist required before declaring Version B done.
+7. `native/Sources/Application/SpeechWorkflowState.swift`: current pure task identity and stale-callback gate for Version C.
+8. `native/Tests/SpeechWorkflowStateCheck.swift`: current lightweight regression for Version C task gating.
+9. `native/Sources/Application/SpeechInputCoordinator.swift`: current speech workflow orchestration and still-large concentration point.
+10. `native/TypeSpeakerApp.swift`: current hidden-by-default launch policy and explicit main-window entry points.
+
+Recommended next action:
+
+- Continue Version C only after Build 456 installed-app voice path verification. Preserve Build 455 `SpeechWorkflowState` task gate, Build 456 final recognition use-case boundary, Build 449 command availability, Build 450 translation layout, Build 451 command dispatcher boundaries, Build 452 operation-token invalidation, Build 454 formal layout regression, and the 2026-06-30 B5 installed-app overlay QA result.
+- Do not start with a broad `SpeechInputCoordinator` rewrite. Next split smart processing behind a small use-case boundary, then paste submission and idle memory safety in small verified steps.
+- Preserve the Build 450 behavior: screenshot entry does not own TypeWhale main-window visibility, launch is hidden by default unless an explicit user action opens the main interface, normal screenshot toolbars stay usable after selection, translation/window-recapture pending allow cancel only, and translation blocks align to their OCR source-line starting x.
+
+Current verification baseline:
+
+- Full Swift typecheck passed after Build 456 changes.
+- `ScreenshotSessionStateCheck` passed, including dispatcher availability/effect checks and operation-token invalidation checks.
+- `ScreenshotTranslationLayoutCheck` passed, preserving Build 450 source-line x alignment and right-edge fallback.
+- `SpeechWorkflowStateCheck` passed, preserving Version C task identity and stale-callback gating.
+- `FinalRecognitionUseCaseCheck` passed, preserving final recognition response parsing and empty-result classification.
+- `git diff --check` passed.
+- `./native/build_and_log.sh` installed and opened `/Applications/TypeWhale.app` as `1.6.6 (Build 456)`.
+- Manual B5 installed-app overlay QA shortest critical path passed per user report on 2026-06-30.
 
 ### Version A: State And Window-Lifecycle Corrections
 
@@ -204,7 +308,7 @@ Verification:
 - Manual screenshot QA with TypeWhale main window hidden, behind another app, and visible in front.
 - Pending screenshot translation QA: copy/save do not export unstable images.
 - Relevant checks for changed state policy.
-- Build/local install only when explicitly requested under repository build rules.
+- Code changes must follow the repository build rule in `AGENTS.md`: run `./native/build_and_log.sh`, overwrite `/Applications/TypeWhale.app`, open the installed app, and report any verification gap.
 
 ### Version B: Screenshot Session State Machine And Toolbar Commands
 
@@ -220,6 +324,7 @@ Scope:
 Verification:
 
 - Lightweight checks for allowed actions per screenshot state.
+- `ScreenshotTranslationLayoutCheck` for screenshot translation placement.
 - Manual QA: region selection, window selection, Esc cancel, translate, copy, save, undo.
 
 ### Version C: Speech Workflow State Machine And Use Cases
@@ -248,11 +353,14 @@ Scope:
 - Keep AI, OCR, ASR, paste, keychain, observability, and screen-capture APIs behind adapters.
 - Add provider-quality validation fixtures before future providers return to UI.
 - Enforce observability privacy boundaries.
+- Add a source-of-truth consistency audit for active docs and code comments. Priority terms: memory thresholds, build/install rules, version baselines, cost/token limits, screenshot pending-state semantics, and ASR/VAD warm-resource policy.
+- Historical logs and version history may retain old values as historical facts; active docs (`AGENTS.md`, `docs/ARCHITECTURE.md`, PRD, release docs, current code comments) must not present superseded values as current behavior.
 
 Verification:
 
 - Provider route tests.
 - Privacy checklist for observability events.
+- Consistency audit checklist: `rg` for stale threshold/version/build-rule terms; confirm active docs point to code-level source of truth; record intentional historical references separately.
 - Manual main-path QA after behavior-affecting changes.
 
 ## Verification Gates
@@ -272,14 +380,16 @@ Minimum for code architecture changes:
 - Main voice path remains valid: hotkey, recording, realtime preview, final ASR, paste.
 - Screenshot path remains valid when touched: region selection, window selection, cancel, copy/save, OCR/translation.
 - UI/interaction changes receive design review or a clearly stated verification gap.
-- Build/local install only when explicitly requested by the user according to `AGENTS.md`.
+- Code changes must follow `AGENTS.md`: run `./native/build_and_log.sh`, overwrite `/Applications/TypeWhale.app`, open the installed app, and report verification gaps. Pure docs-only changes do not require a build unless requested.
 
 ## Documentation Rules
 
 - Current architecture belongs here.
 - Chronological implementation details belong in `docs/开发日志.md`.
+- Current numeric thresholds and operational policies must point to their code-level source of truth when one exists; do not duplicate stale literals such as memory limits across active docs.
 - UI/visual rules belong in `DESIGN.md`.
 - Screenshot translation product specifics belong in `docs/SCREENSHOT_TRANSLATION_SPEC.md`.
+- Screenshot overlay installed-app verification belongs in `docs/SCREENSHOT_OVERLAY_QA.md`.
 - Model setup belongs in `docs/MODEL_SETUP.md`.
 - Security/privacy policy belongs in `SECURITY.md` and relevant architecture privacy notes here.
 - Old architecture files are migration stubs and must not become current sources again.

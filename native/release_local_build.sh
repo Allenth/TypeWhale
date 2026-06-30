@@ -8,6 +8,19 @@ MACOS_README="$ROOT/macos/README.md"
 VERSION_HISTORY="$ROOT/native/Sources/Presentation/VersionHistory/VersionHistoryViewController.swift"
 INSTALL_APP_PATH="${TYPESPEAKER_INSTALL_APP_PATH:-/Applications/TypeWhale.app}"
 
+mode="full-version"
+for arg in "$@"; do
+  case "$arg" in
+    --build-only) mode="build-only" ;;
+    --full-version) mode="full-version" ;;
+    *) echo "Unknown argument: $arg" >&2; exit 2 ;;
+  esac
+done
+
+if [[ "${TYPEWHALE_BUILD_ONLY:-0}" == "1" ]]; then
+  mode="build-only"
+fi
+
 current_version="$(perl -ne 'print "$1\n" if m{<key>CFBundleShortVersionString</key><string>([^<]+)}' "$BUILD_SCRIPT" | head -1)"
 current_build="$(perl -ne 'print "$1\n" if m{<key>CFBundleVersion</key><string>([^<]+)}' "$BUILD_SCRIPT" | head -1)"
 
@@ -24,7 +37,15 @@ fi
 
 next_patch=$((patch + 1))
 next_build=$((current_build + 1))
-next_version="${TYPEWHALE_NEXT_VERSION:-${major}.${minor}.${next_patch}}"
+if [[ -n "${TYPEWHALE_NEXT_VERSION:-}" ]]; then
+  mode="full-version"
+fi
+
+if [[ "$mode" == "build-only" ]]; then
+  next_version="$current_version"
+else
+  next_version="${TYPEWHALE_NEXT_VERSION:-${major}.${minor}.${next_patch}}"
+fi
 
 if [[ -n "${TYPEWHALE_NEXT_VERSION:-}" && ! "$TYPEWHALE_NEXT_VERSION" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then
   echo "Unexpected TYPEWHALE_NEXT_VERSION format: $TYPEWHALE_NEXT_VERSION" >&2
@@ -42,7 +63,9 @@ EOF
   exit 1
 fi
 
-perl -0pi -e "s{(<key>CFBundleShortVersionString</key><string>)\\Q$current_version\\E}{\${1}$next_version}" "$BUILD_SCRIPT"
+if [[ "$next_version" != "$current_version" ]]; then
+  perl -0pi -e "s{(<key>CFBundleShortVersionString</key><string>)\\Q$current_version\\E}{\${1}$next_version}" "$BUILD_SCRIPT"
+fi
 perl -0pi -e "s{(<key>CFBundleVersion</key><string>)\\Q$current_build\\E}{\${1}$next_build}" "$BUILD_SCRIPT"
 
 if [[ -f "$README" ]]; then
@@ -54,7 +77,11 @@ if [[ -f "$MACOS_README" ]]; then
   perl -0pi -e 's{当前本地发布版本：`[^`]+`}{当前本地发布版本：`'"$next_version ($next_build)"'`}' "$MACOS_README"
 fi
 
-echo "Bumped TypeWhale to $next_version ($next_build)"
+if [[ "$mode" == "build-only" ]]; then
+  echo "Bumped TypeWhale build to $next_version ($next_build)"
+else
+  echo "Bumped TypeWhale version to $next_version ($next_build)"
+fi
 "$BUILD_SCRIPT"
 sleep 0.8
 if ! open "$INSTALL_APP_PATH"; then

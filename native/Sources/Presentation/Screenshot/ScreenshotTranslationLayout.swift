@@ -21,7 +21,7 @@ enum ScreenshotTranslationLayout {
         let measuredHeight = textHeight(text, width: width, fontSize: fontSize, selectionSize: selectionSize)
         let height = min(max(measuredHeight, sourceRect.height + 2, 16), maxHeight)
 
-        let x = min(leadingMargin, max(0, selectionSize.width - width))
+        let x = min(max(sourceRect.minX, 0), max(0, selectionSize.width - width))
         let y = min(max(sourceRect.midY - height / 2, 0), max(0, selectionSize.height - height))
         return NSRect(x: x, y: y, width: width, height: height)
     }

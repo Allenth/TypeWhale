@@ -32,7 +32,6 @@ final class SpeechInputCoordinator {
 
     private let controller: MainViewController
     private let showMainWindow: () -> Void
-    private let hideMainWindow: () -> Void
     private let recorder = AudioRecorder()
     private var popup: PreviewPresenting = RecordingPanel()
     private let hotkey = HotkeyMonitor()
@@ -45,16 +44,16 @@ final class SpeechInputCoordinator {
     private let smartEngine = SelectedSmartAITextEngine()
     private lazy var asr = SenseVoiceRouter(runtimeName: "final", native: nativeASR)
     private lazy var realtimeASR = SenseVoiceRouter(runtimeName: "realtime", native: nativeASR)
+    private lazy var finalRecognitionUseCase = FinalRecognitionUseCase(transcriber: asr)
     private lazy var smartInputRouter = SmartInputRouter(engine: smartEngine)
     private lazy var screenshotCoordinator = ScreenshotCoordinator { [weak self] status, detail, tone in
         self?.controller.setPrimaryStatus(status, detail: detail, tone: tone, resetWaveform: true)
     }
     private let pasteCoordinator = PasteCoordinator()
     private var inputState: SpeechInputState = .idle
+    private var workflowState = SpeechWorkflowState()
     private var activeSession: SpeechSession?
     private var pendingPasteResults: [PendingPasteResult] = []
-    private var latestSubmittedTaskID: UUID?
-    private var completedFinalTaskIDs: Set<UUID> = []
     private var realtimeBusy = false
     private var pendingRealtimeSnapshot: RealtimeSnapshotRequest?
     /// 块最终快照的待处理队列：绝不丢弃（丢了会整块预览文本消失），优先于普通中间快照处理。
@@ -108,12 +107,10 @@ final class SpeechInputCoordinator {
 
     init(
         controller: MainViewController,
-        showMainWindow: @escaping () -> Void,
-        hideMainWindow: @escaping () -> Void
+        showMainWindow: @escaping () -> Void
     ) {
         self.controller = controller
         self.showMainWindow = showMainWindow
-        self.hideMainWindow = hideMainWindow
     }
 
     func start() {
@@ -222,6 +219,7 @@ final class SpeechInputCoordinator {
         recorder.cancel()
         clearActiveRecording()
         pendingPasteResults.removeAll()
+        workflowState.cancelActiveTask()
         inputState = .idle
         stopObservingTargetApplicationChanges()
         asr.stop()
@@ -366,6 +364,7 @@ final class SpeechInputCoordinator {
             clearActiveRecording()
             trackedTargetTaskID = nil
             trackedTargetApp = nil
+            workflowState.cancelActiveTask()
             inputState = .idle
             drainPendingPasteResultsIfPossible()
             controller.setPrimaryStatus(
@@ -676,8 +675,7 @@ final class SpeechInputCoordinator {
         longPressWorkItem?.cancel()
         longPressWorkItem = nil
         hotkeyIsPressed = false
-        LaunchDiagnostics.mark("screenshot_hotkey_hide_main_window")
-        hideMainWindow()
+        LaunchDiagnostics.mark("screenshot_hotkey_begin keep_main_window_state=true")
         if translateAfterSelection {
             screenshotCoordinator.beginTranslation()
         } else {
@@ -713,6 +711,7 @@ final class SpeechInputCoordinator {
         activeSession = session
         trackedTargetTaskID = taskID
         trackedTargetApp = initialTargetApp
+        workflowState.startRecording(taskID: taskID)
         inputState = .recording(taskID)
         controller.updateRealtimeDraft(realtimeEnabled
             ? "正在等待第一段实时文本…"
@@ -790,6 +789,8 @@ final class SpeechInputCoordinator {
             LaunchDiagnostics.mark("recording_start_failed error=\(error.localizedDescription)")
             cancelAutoFinishTimer()
             clearActiveRecording()
+            workflowState.cancelActiveTask()
+            inputState = .idle
             controller.setPrimaryStatus("无法开始录音", detail: error.localizedDescription, tone: .error, resetWaveform: true)
             popup.show(state: "录音失败")
         }
@@ -811,6 +812,8 @@ final class SpeechInputCoordinator {
         } catch {
             LaunchDiagnostics.mark("recording_stop_failed task_id=\(taskID.uuidString) error=\(error.localizedDescription)")
             clearActiveRecording()
+            workflowState.cancelActiveTask()
+            inputState = .idle
             controller.setPrimaryStatus("保存录音失败", detail: error.localizedDescription, tone: .error, resetWaveform: true)
             popup.show(state: "保存失败", draft: "")
             return
@@ -818,6 +821,7 @@ final class SpeechInputCoordinator {
         clearActiveRecording()
         guard let (url, duration) = result else {
             LaunchDiagnostics.mark("recording_finish_empty task_id=\(taskID.uuidString)")
+            workflowState.finishTask(taskID)
             inputState = .idle
             drainPendingPasteResultsIfPossible()
             showEmptyRecording()
@@ -837,7 +841,7 @@ final class SpeechInputCoordinator {
             finishRequestedAt: Date()
         )
         inputState = .finalizing(task)
-        latestSubmittedTaskID = taskID
+        workflowState.submitFinalTask(taskID)
         drainPendingPasteResultsIfPossible()
         controller.setPrimaryStatus(
             "正在检测人声",
@@ -911,11 +915,14 @@ final class SpeechInputCoordinator {
             )
             popup.show(state: "识别中", draft: "")
         }
-        asr.transcribe(
-            audio: task.audioURL,
-            configuration: task.configuration
-        ) { [weak self] response in
-            DispatchQueue.main.async { self?.handle(response, task: task) }
+        let request = FinalRecognitionRequest(
+            taskID: task.id,
+            audioURL: task.audioURL,
+            configuration: task.configuration,
+            audioDuration: task.duration
+        )
+        finalRecognitionUseCase.recognize(request: request) { [weak self] outcome in
+            DispatchQueue.main.async { self?.handle(outcome, task: task) }
         }
     }
 
@@ -947,6 +954,7 @@ final class SpeechInputCoordinator {
         clearActiveRecording()
         trackedTargetTaskID = nil
         trackedTargetApp = nil
+        workflowState.cancelActiveTask()
         inputState = .idle
         drainPendingPasteResultsIfPossible()
         releaseASRResourcesIfMemoryElevated()
@@ -978,7 +986,8 @@ final class SpeechInputCoordinator {
     }
 
     private func receiveRealtimeSnapshot(taskID: UUID, url: URL, chunkIndex: Int, isChunkFinal: Bool) {
-        guard let session = activeSession, taskID == session.id else {
+        guard let session = activeSession,
+              workflowState.canAcceptRealtimeCallback(taskID: taskID, activeSessionID: session.id) else {
             try? FileManager.default.removeItem(at: url)
             return
         }
@@ -1029,7 +1038,8 @@ final class SpeechInputCoordinator {
     /// 把某个块快照的识别结果合并进预览：committedPreviewText（冻结前缀）+ 当前块尾巴。
     /// 块最终快照会把尾巴冻结进 committedPreviewText，从此不再变动（稳定、不跳变）。
     private func applyRealtimePreview(request: RealtimeSnapshotRequest, response: Result<[String: Any], Error>) {
-        guard var session = activeSession, request.taskID == session.id else { return }
+        guard var session = activeSession,
+              workflowState.canAcceptRealtimeCallback(taskID: request.taskID, activeSessionID: session.id) else { return }
         // 已提交块的滞后快照直接丢弃，不污染显示。
         guard request.chunkIndex >= session.currentChunkIndex else { return }
 
@@ -1089,109 +1099,97 @@ final class SpeechInputCoordinator {
     }
 
     private func dispatchPendingRealtime(_ request: RealtimeSnapshotRequest) {
-        if request.taskID == activeSession?.id {
+        if workflowState.canAcceptRealtimeCallback(taskID: request.taskID, activeSessionID: activeSession?.id) {
             transcribeRealtime(request)
         } else {
             try? FileManager.default.removeItem(at: request.audioURL)
         }
     }
 
-    private func handle(_ response: Result<[String: Any], Error>, task: RecordingTask) {
+    private func handle(_ outcome: FinalRecognitionOutcome, task: RecordingTask) {
         let shouldUpdateInterface = shouldUpdateInterface(for: task.id)
-        switch response {
-        case .failure(let error):
+        switch outcome {
+        case .failed(let message):
             if shouldUpdateInterface {
-                controller.setPrimaryStatus("识别失败", detail: error.localizedDescription, tone: .error, resetWaveform: true)
+                controller.setPrimaryStatus("识别失败", detail: message, tone: .error, resetWaveform: true)
                 popup.show(state: "识别失败", draft: "")
             }
             finishFinalTask(task)
-        case .success(let value):
-            if let error = value["error"] as? String, !error.isEmpty {
-                if shouldUpdateInterface {
-                    controller.setPrimaryStatus("识别失败", detail: error, tone: .error, resetWaveform: true)
-                    popup.show(state: "识别失败", draft: "")
-                }
+        case .recognized(let result):
+            LaunchDiagnostics.mark(
+                "final_asr_result task_id=\(task.id.uuidString) audio_duration_ms=\(Int(task.duration * 1000)) recognition_ms=\(Int(result.recognitionSeconds * 1000)) chars=\(result.text.count) engine=\(result.engine)"
+            )
+            guard markFinalTaskForSubmission(task.id) else {
                 finishFinalTask(task)
                 return
             }
-            let text = cleanRecognitionText(value["text"] as? String ?? "", languageMode: task.configuration.languageMode)
-            let elapsed = value["duration_sec"] as? Double ?? 0
-            let engine = value["engine"] as? String ?? "--"
-            LaunchDiagnostics.mark(
-                "final_asr_result task_id=\(task.id.uuidString) audio_duration_ms=\(Int(task.duration * 1000)) recognition_ms=\(Int(elapsed * 1000)) chars=\(text.count) engine=\(engine)"
-            )
-            if isMeaningfulRecognitionText(text) {
-                guard markFinalTaskForSubmission(task.id) else {
-                    finishFinalTask(task)
-                    return
-                }
-                if shouldUpdateInterface {
-                    controller.updateRealtimeDraft(text)
-                    let preference = controller.smartRewritePreference
-                    let context = SmartInputContext(targetApp: currentTargetApp(for: task))
-                    let progress = smartInputRouter.progressInfo(preference: preference, context: context)
-                    if controller.autoTranslateEnabled {
-                        if controller.translationDirection.usesRawSourceTextForTranslation {
-                            controller.setPrimaryStatus(
-                                "AI 翻译中",
-                                detail: smartTranslationProgressDetail(
-                                    direction: controller.translationDirection,
-                                    modelName: smartEngine.displayName
-                                ),
-                                tone: .processing,
-                                resetWaveform: true
-                            )
-                            popup.show(state: "翻译中", draft: "")
-                        } else if progress.shouldRewrite {
-                            controller.setPrimaryStatus(
-                                "AI 整理中",
-                                detail: "整理后继续\(controller.translationDirection.displayName) · \(smartEngine.displayName)",
-                                tone: .processing,
-                                resetWaveform: true
-                            )
-                            popup.show(state: "整理中", draft: "")
-                        } else {
-                            controller.setPrimaryStatus(
-                                "AI 翻译中",
-                                detail: smartTranslationProgressDetail(
-                                    direction: controller.translationDirection,
-                                    modelName: smartEngine.displayName
-                                ),
-                                tone: .processing,
-                                resetWaveform: true
-                            )
-                            popup.show(state: "翻译中", draft: "")
-                        }
-                    } else {
-                        if progress.shouldRewrite {
-                            controller.setPrimaryStatus(
-                                "AI 整理中",
-                                detail: smartRewriteProgressDetail(progress),
-                                tone: .processing,
-                                resetWaveform: true
-                            )
-                            popup.show(state: "整理中", draft: "")
-                        } else {
-                            controller.setPrimaryStatus(
-                                "识别完成",
-                                detail: String(format: "原文模式 · 本地识别耗时 %.2f 秒", elapsed),
-                                tone: .success,
-                                resetWaveform: true
-                            )
-                        }
-                    }
-                }
+            if shouldUpdateInterface {
+                controller.updateRealtimeDraft(result.text)
+                let preference = controller.smartRewritePreference
+                let context = SmartInputContext(targetApp: currentTargetApp(for: task))
+                let progress = smartInputRouter.progressInfo(preference: preference, context: context)
                 if controller.autoTranslateEnabled {
-                    rewriteTranslateAndSubmit(text, elapsed: elapsed, task: task)
+                    if controller.translationDirection.usesRawSourceTextForTranslation {
+                        controller.setPrimaryStatus(
+                            "AI 翻译中",
+                            detail: smartTranslationProgressDetail(
+                                direction: controller.translationDirection,
+                                modelName: smartEngine.displayName
+                            ),
+                            tone: .processing,
+                            resetWaveform: true
+                        )
+                        popup.show(state: "翻译中", draft: "")
+                    } else if progress.shouldRewrite {
+                        controller.setPrimaryStatus(
+                            "AI 整理中",
+                            detail: "整理后继续\(controller.translationDirection.displayName) · \(smartEngine.displayName)",
+                            tone: .processing,
+                            resetWaveform: true
+                        )
+                        popup.show(state: "整理中", draft: "")
+                    } else {
+                        controller.setPrimaryStatus(
+                            "AI 翻译中",
+                            detail: smartTranslationProgressDetail(
+                                direction: controller.translationDirection,
+                                modelName: smartEngine.displayName
+                            ),
+                            tone: .processing,
+                            resetWaveform: true
+                        )
+                        popup.show(state: "翻译中", draft: "")
+                    }
+                } else if progress.shouldRewrite {
+                    controller.setPrimaryStatus(
+                        "AI 整理中",
+                        detail: smartRewriteProgressDetail(progress),
+                        tone: .processing,
+                        resetWaveform: true
+                    )
+                    popup.show(state: "整理中", draft: "")
                 } else {
-                    rewriteAndSubmit(text, elapsed: elapsed, task: task)
+                    controller.setPrimaryStatus(
+                        "识别完成",
+                        detail: String(format: "原文模式 · 本地识别耗时 %.2f 秒", result.recognitionSeconds),
+                        tone: .success,
+                        resetWaveform: true
+                    )
                 }
-            } else if shouldUpdateInterface {
-                showEmptyRecording()
-                finishFinalTask(task)
-            } else {
-                finishFinalTask(task)
             }
+            if controller.autoTranslateEnabled {
+                rewriteTranslateAndSubmit(result.text, elapsed: result.recognitionSeconds, task: task)
+            } else {
+                rewriteAndSubmit(result.text, elapsed: result.recognitionSeconds, task: task)
+            }
+        case .empty(let result):
+            LaunchDiagnostics.mark(
+                "final_asr_empty task_id=\(task.id.uuidString) audio_duration_ms=\(Int(task.duration * 1000)) recognition_ms=\(Int(result.recognitionSeconds * 1000)) chars=\(result.text.count) engine=\(result.engine)"
+            )
+            if shouldUpdateInterface {
+                showEmptyRecording()
+            }
+            finishFinalTask(task)
         }
     }
 
@@ -1393,6 +1391,12 @@ final class SpeechInputCoordinator {
     }
 
     private func submitPasteResult(_ result: PendingPasteResult) {
+        guard workflowState.canSubmitProcessedResult(taskID: result.task.id) else {
+            SmartUsageLedgerStore.record(result.usage)
+            LaunchDiagnostics.mark("paste_result_ignored_stale task_id=\(result.task.id.uuidString)")
+            finishFinalTask(result.task)
+            return
+        }
         addRecentTranscription(for: result, completedAt: Date())
         saveBacklogIfRequested(result)
         SmartUsageLedgerStore.record(result.usage)
@@ -1456,6 +1460,7 @@ final class SpeechInputCoordinator {
             return
         }
         inputState = .pasting(result.task)
+        workflowState.startPasting(taskID: result.task.id)
         pasteCoordinator.enqueue(text: result.text, targetApp: pasteTarget) { [weak self] outcome in
             self?.handlePasteOutcome(outcome, result: result)
         }
@@ -1477,6 +1482,7 @@ final class SpeechInputCoordinator {
             hidePopup(after: 0, task: task)
         }
         inputState = .idle
+        workflowState.finishTask(task.id)
         endTargetTrackingIfNeeded(task.id)
         drainPendingPasteResultsIfPossible()
         releaseASRResourcesIfMemoryElevated()
@@ -1486,6 +1492,7 @@ final class SpeechInputCoordinator {
         if case .finalizing(let current) = inputState, current.id == task.id {
             inputState = .idle
         }
+        workflowState.finishTask(task.id)
         endTargetTrackingIfNeeded(task.id)
         drainPendingPasteResultsIfPossible()
         releaseASRResourcesIfMemoryElevated()
@@ -1539,6 +1546,7 @@ final class SpeechInputCoordinator {
         if activeSession == nil, !recorder.isRecording {
             inputState = .idle
         }
+        workflowState.finishTask(task.id)
         endTargetTrackingIfNeeded(task.id)
         drainPendingPasteResultsIfPossible()
         releaseASRResourcesIfMemoryElevated()
@@ -1634,17 +1642,13 @@ final class SpeechInputCoordinator {
     }
 
     private func shouldUpdateInterface(for taskID: UUID) -> Bool {
-        taskID == latestSubmittedTaskID && !recorder.isRecording
+        workflowState.shouldUpdateInterface(for: taskID, isRecording: recorder.isRecording)
     }
 
     private func markFinalTaskForSubmission(_ taskID: UUID) -> Bool {
-        if completedFinalTaskIDs.contains(taskID) {
+        guard workflowState.markFinalTaskForSubmission(taskID) else {
             LaunchDiagnostics.mark("final task ignored duplicate task_id=\(taskID.uuidString)")
             return false
-        }
-        completedFinalTaskIDs.insert(taskID)
-        if completedFinalTaskIDs.count > 20, let first = completedFinalTaskIDs.first {
-            completedFinalTaskIDs.remove(first)
         }
         return true
     }
@@ -1699,6 +1703,7 @@ final class SpeechInputCoordinator {
             clearActiveRecording()
             trackedTargetTaskID = nil
             trackedTargetApp = nil
+            workflowState.cancelActiveTask()
             inputState = .idle
             drainPendingPasteResultsIfPossible()
             return
@@ -1763,6 +1768,7 @@ final class SpeechInputCoordinator {
         clearActiveRecording()
         trackedTargetTaskID = nil
         trackedTargetApp = nil
+        workflowState.cancelActiveTask()
         inputState = .idle
         drainPendingPasteResultsIfPossible()
         releaseASRResourcesIfMemoryElevated()

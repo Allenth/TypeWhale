@@ -167,7 +167,7 @@ final class HotkeyMonitor {
         tap = nil
     }
 
-    private func handleFlagsChanged(event: CGEvent) -> Bool {
+    func handleFlagsChanged(event: CGEvent) -> Bool {
         let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
         let eventFlags = event.flags
         if HotkeyKeyCodes.modifierKeyCodes.contains(keyCode) {
@@ -368,13 +368,14 @@ final class HotkeyMonitor {
         action: () -> Void
     ) -> Bool {
         guard let binding, binding.kind == .function || binding.kind == .modifier else { return false }
+        guard !screenshotConflictsWithSpeechBinding(binding) else { return false }
         let isDown = isBindingDown(binding, keyCode: keyCode, eventFlags: eventFlags)
         guard isDown != triggerDown else { return false }
         triggerDown = isDown
         if !isDown {
-            return registerScreenshotTap(lastTapAt: &lastTapAt, action: action) || screenshotConflictsWithSpeechBinding(binding)
+            return registerScreenshotTap(lastTapAt: &lastTapAt, action: action)
         }
-        return screenshotConflictsWithSpeechBinding(binding)
+        return false
     }
 
     private func handleScreenshotKey(
@@ -390,6 +391,7 @@ final class HotkeyMonitor {
               binding.keyCode == eventKeyCode else {
             return false
         }
+        guard !screenshotConflictsWithSpeechBinding(binding) else { return false }
         if !isDown {
             guard triggerDown else { return false }
             triggerDown = false
@@ -408,6 +410,7 @@ final class HotkeyMonitor {
 
     private func handleScreenshotMedia(binding: HotkeyBinding?, isDown: Bool, triggerDown: inout Bool, action: () -> Void) -> Bool {
         guard let binding, binding.kind == .mediaPlay else { return false }
+        guard !screenshotConflictsWithSpeechBinding(binding) else { return false }
         guard isDown != triggerDown else { return true }
         triggerDown = isDown
         if isDown {

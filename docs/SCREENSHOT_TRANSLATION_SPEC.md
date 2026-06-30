@@ -9,7 +9,7 @@
 
 ## 背景
 
-当前截图功能已经支持选区、窗口对齐、标注、OCR、复制和保存，但「翻译」按钮仍是占位状态。截图翻译的目标是让用户选中一块包含英文文字的区域后，TypeWhale 自动 OCR 识别英文内容，翻译成中文，并把中文译文直接贴入截图选区中。
+当前截图功能已经支持选区、窗口对齐、标注、OCR、复制、保存和截图翻译。截图翻译的目标是让用户选中一块包含英文文字的区域后，TypeWhale 自动 OCR 识别英文内容，翻译成中文，并把中文译文直接贴入截图选区中。
 
 本版本只做「英文识别 -> 中文翻译 -> 原文遮盖 -> 译文贴入截图」。不做中文转英文，不做双向自动判断。
 
@@ -23,6 +23,8 @@
 | `renderedSelectionImage()` | 已能把截图选区和 `markups` 一起渲染成复制/保存图片。 |
 | `DeepSeekRewriteEngine.translate` | 已有语音翻译链路，可复用英译中方向。 |
 | `SmartTranslationDirection.englishToChinese` | 已有英译中方向和默认提示词。 |
+| `ScreenshotTranslationLayout` | 当前截图翻译排版策略的唯一代码入口。 |
+| `ScreenshotTranslationLayoutCheck` | 当前截图翻译排版策略的轻量回归检查。 |
 
 ## 目标行为
 
@@ -69,9 +71,9 @@
 
 ### OCR
 
-第一版可复用现有 `ScreenshotOCRRecognizer.recognize(image:) -> String`。
+当前实现复用 `ScreenshotOCRRecognizer.recognize(image:)`，返回完整文本与 OCR 行级坐标。
 
-后续如果要做逐行覆盖，再扩展为：
+当前行级坐标结构为：
 
 ```swift
 struct ScreenshotOCRResult {
@@ -85,7 +87,7 @@ struct ScreenshotOCRLine {
 }
 ```
 
-本版不要求逐行坐标。
+截图翻译必须使用行级坐标贴回译文；不要回退到全局底部卡片或选区统一左边距。
 
 ### 翻译
 
@@ -122,13 +124,13 @@ triggeredBy: "screenshot_translation"
 
 ### 译文贴入截图
 
-在 `ScreenshotOverlayView.Markup` 中新增译文类型：
+`ScreenshotOverlayView.Markup` 中的译文类型当前使用 translation group：
 
 ```swift
-case translation(String, NSRect, [TranslationPatch])
+case translation(TranslationGroup)
 ```
 
-默认插入策略：
+早期默认插入策略（历史上下文，已被当前行级贴回策略取代）：
 
 - 放在选区内底部。
 - 左右边距 16pt。
@@ -140,9 +142,11 @@ case translation(String, NSRect, [TranslationPatch])
 当前行级贴回策略：
 
 - 每个 OCR 行生成一个译文块，贴回该行附近。
+- 译文块左边缘应与对应 OCR 原文行的起始 x 坐标左对齐；只有靠近选区右边界会溢出时，才允许向左回退到可见范围内。
 - 译文背景按中文实际文字宽度和原 OCR 行宽温和扩展，不能设置大号固定最小宽。
 - 短 label 的背景应保持紧凑，避免覆盖相邻按钮、菜单项或正文。
 - 原英文行使用本地平均背景色做小范围遮盖，译文 label 只覆盖自身需要的区域。
+- `ScreenshotTranslationLayoutCheck` 必须覆盖原文起点左对齐、右边界回退、越界空 rect、背景范围不越界和字体高度约束。
 
 译文层应参与：
 
@@ -180,9 +184,10 @@ case translation(String, NSRect, [TranslationPatch])
 | 层级 | 测试内容 |
 |---|---|
 | 单元 | 英译中方向固定，不走自动判断。 |
-| 单元 | 译文卡片 bounds 计算不越出选区。 |
+| 单元 | `ScreenshotTranslationLayoutCheck` 覆盖译文块左对齐、右边界回退、越界空 rect、背景范围不越界和字体高度约束。 |
 | 集成 | OCR 成功后调用英译中翻译并插入 `translation` markup。 |
 | 集成 | OCR 空文本时不调用翻译。 |
+| 手动 | 按 `docs/SCREENSHOT_OVERLAY_QA.md` 走真实安装版截图浮层验证。 |
 | 手动 | 英文网页截图 -> 翻译 -> 双击复制 -> 粘贴检查图片含中文译文。 |
 | 手动 | 英文截图 -> 翻译 -> 保存本地 -> 打开 PNG 检查含中文译文。 |
 | 回归 | 标注、撤销、复制、保存、取消继续可用。 |
@@ -190,6 +195,6 @@ case translation(String, NSRect, [TranslationPatch])
 ## 风险与后续
 
 - Vision OCR 对小字号、低对比度、倾斜文本的识别质量有限；本版失败时应保留用户可重试路径。
-- 译文卡片可能遮挡原文；这是本版取舍，优先保证可读和可保存。
+- 译文 label 仍可能遮挡复杂底图；这是本版取舍，优先保证可读和可保存。
 - DeepSeek 成本需要通过 `screenshot_translation` 单独审计，避免和语音翻译混在一起。
-- 后续商业化增强应优先评估逐行 OCR 坐标、自动遮罩和背景修复。
+- 后续商业化增强应优先评估更完整的自动遮罩、背景修复和仿原字体排版。

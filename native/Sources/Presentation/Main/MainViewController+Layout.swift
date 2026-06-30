@@ -184,7 +184,7 @@ extension MainViewController {
         case .warn: memoryLabel.textColor = .systemOrange
         case .high: memoryLabel.textColor = .systemRed
         }
-        // 升到预警档位（默认 1GB）时弹一次提示。
+        // 升到动态预警档位时弹一次提示，具体阈值由 MemoryMonitor.warnThresholdMB 计算。
         if level != .normal, lastMemoryLevel == .normal {
             detail.stringValue = "内存达到 \(megabytes) MB（预警阈值 \(MemoryMonitor.warnThresholdMB) MB）。可重启 App 释放，或避免超长录音。"
         }

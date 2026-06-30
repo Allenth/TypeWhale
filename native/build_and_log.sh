@@ -1,16 +1,18 @@
 #!/bin/zsh
-# TypeWhale 固定构建动作：构建 → 覆盖安装本地 → 打开 → 写构建日志，按节奏打大包。
+# TypeWhale 固定构建动作：构建 → 覆盖安装本地 → 打开 → 写构建日志。
 #
 # 用法：
-#   ./native/build_and_log.sh            # 源码有变更才构建；每第 N 次自动打大包(DMG)
-#   ./native/build_and_log.sh --package  # 强制构建并立即打大包，忽略变更检测与计数节奏
+#   ./native/build_and_log.sh                # 源码有变更才构建；默认只递增 build
+#   ./native/build_and_log.sh --full-version # 强制递增短版本号 + build
+#   ./native/build_and_log.sh --package      # 完整版本构建并立即打大包，忽略变更检测
 #   ./native/build_and_log.sh --auto     # Stop hook 兜底用：无 native 源码变更则静默跳过
 #
 # 设计：
 # - 变更检测：对 native/ 下的 .swift/.c/.h 内容做哈希，与上次成功构建的哈希比对；
 #   --auto 模式下无变更则直接跳过，避免每轮对话结束都空跑一次构建。
-# - 主路径（我在对话里手动跑）会更新哈希；之后 Stop hook 再触发时哈希一致 → 秒跳过，不重复构建。
-# - 打大包节奏：每累计 N 次（默认 4）本地构建，或显式 --package，生成 dist/ 下 DMG。
+# - 普通代码验证构建只递增 build，保持短版本号不变。
+# - 每累计 N 次（默认 3）本地构建，或显式 --full-version/--package，执行完整版本构建。
+# - 打大包只在显式 --package 时执行；如需恢复自动打包，可设置 TYPEWHALE_PACKAGE_EVERY。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -20,18 +22,22 @@ PACKAGE_SCRIPT="$ROOT/native/package_dmg.sh"
 BUILD_LOG="$ROOT/docs/构建日志.md"
 STATE_DIR="$ROOT/.runtime"
 STATE_FILE="$STATE_DIR/build_state"
-PACKAGE_EVERY="${TYPEWHALE_PACKAGE_EVERY:-4}"
+FULL_VERSION_EVERY="${TYPEWHALE_FULL_VERSION_EVERY:-3}"
+PACKAGE_EVERY="${TYPEWHALE_PACKAGE_EVERY:-0}"
 
 mode_auto=0
 force_package=0
+force_full_version=0
 for arg in "$@"; do
   case "$arg" in
     --auto) mode_auto=1 ;;
-    --package) force_package=1 ;;
+    --full-version) force_full_version=1 ;;
+    --package) force_package=1; force_full_version=1 ;;
     *) echo "Unknown argument: $arg" >&2; exit 2 ;;
   esac
 done
 [[ "${TYPEWHALE_FORCE_PACKAGE:-0}" == "1" ]] && force_package=1
+[[ "$force_package" == "1" ]] && force_full_version=1
 
 mkdir -p "$STATE_DIR"
 
@@ -70,13 +76,20 @@ fi
 trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
 
 echo "==> TypeWhale build_and_log: 构建并覆盖安装本地…"
-"$RELEASE_SCRIPT"
+next_build_count=$((build_count + 1))
+release_mode="--build-only"
+if [[ "$force_full_version" == "1" ]]; then
+  release_mode="--full-version"
+elif [[ "$FULL_VERSION_EVERY" =~ ^[1-9][0-9]*$ ]] && (( next_build_count % FULL_VERSION_EVERY == 0 )); then
+  release_mode="--full-version"
+fi
+"$RELEASE_SCRIPT" "$release_mode"
 
 # 读取本次构建后的版本号 / build 号
 ver="$(perl -ne 'print "$1" if m{<key>CFBundleShortVersionString</key><string>([^<]+)}' "$BUILD_SCRIPT" | head -1)"
 bld="$(perl -ne 'print "$1" if m{<key>CFBundleVersion</key><string>([^<]+)}' "$BUILD_SCRIPT" | head -1)"
 
-build_count=$((build_count + 1))
+build_count=$next_build_count
 ts="$(date '+%Y-%m-%d %H:%M:%S')"
 branch="$(git -C "$ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '-')"
 sha="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo '-')"
@@ -87,14 +100,22 @@ git -C "$ROOT" diff --quiet 2>/dev/null || dirty="+dirty"
 do_package=0
 if [[ "$force_package" == "1" ]]; then
   do_package=1
-elif (( build_count % PACKAGE_EVERY == 0 )); then
+elif [[ "$PACKAGE_EVERY" =~ ^[1-9][0-9]*$ ]] && (( build_count % PACKAGE_EVERY == 0 )); then
   do_package=1
 fi
 
-action="覆盖安装+打开"
+if [[ "$release_mode" == "--full-version" ]]; then
+  action="完整版本构建+覆盖安装+打开"
+else
+  action="build-only覆盖安装+打开"
+fi
 dmg_note=""
 if [[ "$do_package" == "1" ]]; then
-  echo "==> 触发打大包（第 $build_count 次 / 每 $PACKAGE_EVERY 次）…"
+  if [[ "$force_package" == "1" ]]; then
+    echo "==> 触发打大包（显式 --package）…"
+  else
+    echo "==> 触发打大包（第 $build_count 次 / 每 $PACKAGE_EVERY 次）…"
+  fi
   dmg_path="$("$PACKAGE_SCRIPT")"
   action="覆盖安装+打开+打大包"
   dmg_note=" · 包：\`$(basename "$dmg_path")\`"
@@ -122,5 +143,5 @@ echo "| $ts | $ver ($bld) | $branch@$sha$dirty | $action$dmg_note | #$build_coun
 
 echo "==> 完成：$ver ($bld) · $action · 累计 #$build_count"
 if [[ "$do_package" == "1" ]]; then
-  echo "==> 已打大包（第 $build_count 次节奏）：请同步更新 docs/开发日志.md 与应用内版本历史。"
+  echo "==> 已打大包：请同步更新 docs/开发日志.md 与应用内版本历史。"
 fi

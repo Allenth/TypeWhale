@@ -16,8 +16,6 @@ extension MainViewController {
         screenshotSaveLocationButton.setAccessibilityLabel("截图保存位置")
         backlogDirectoryButton.setAccessibilityLabel("需求池目录")
         realtime.setAccessibilityLabel("胶囊实时预览")
-        previewThemeNotch.setAccessibilityLabel("刘海预览主题")
-        previewThemeNotch.toolTip = "开启后实时预览改为刘海主题：左侧目标应用图标、右侧脉冲效果，刘海下方半透明小窗显示实时预览。关闭则使用默认胶囊预览。"
         autoFinish.setAccessibilityLabel("停顿自动完成")
         duckSystemAudio.setAccessibilityLabel("录音时降低系统音量")
         audioInputDeviceMode.setAccessibilityLabel("麦克风输入设备")
