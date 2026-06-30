@@ -9,6 +9,14 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.5.76 (Build 435)",
+            date: "2026-06-30",
+            changes: [
+                "按 build-only 发布规则递增构建号：版本号保持 1.5.76，仅将 Build 434 更新为 Build 435。",
+                "本 build 用于覆盖安装并打开本地测试版，产品行为沿用 1.5.76。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.5.76 (Build 434)",
             date: "2026-06-30",
             changes: [
