@@ -178,55 +178,90 @@ final class BrandSwitch: NSButton {
     }
 }
 
-/// A compact 7-band waveform that echoes the recording capsule, shown in the main window's status panel.
-final class MiniWaveformView: NSView {
-    private var bands = Array(repeating: Float(0.10), count: 7)
+/// 共享的波形频段状态：非对称平滑（起声快、收声慢）。胶囊与主窗口共用同一份，避免两处各写一遍。
+struct WaveformBands {
+    private(set) var values: [Float]
+    private let baseline: Float
+    private let attack: Float
+    private let release: Float
 
-    override var isOpaque: Bool { false }
+    init(count: Int = 7, baseline: Float = 0.08, attack: Float = 0.52, release: Float = 0.16) {
+        self.values = Array(repeating: baseline, count: count)
+        self.baseline = baseline
+        self.attack = attack
+        self.release = release
+    }
 
-    func update(_ newBands: [Float]) {
-        for index in bands.indices {
-            let target = index < newBands.count ? newBands[index] : 0.08
-            let smoothing: Float = target > bands[index] ? 0.62 : 0.22
-            bands[index] += (target - bands[index]) * smoothing
+    mutating func apply(_ newBands: [Float]) {
+        for index in values.indices {
+            let target = index < newBands.count ? newBands[index] : baseline
+            let smoothing = target > values[index] ? attack : release
+            values[index] += (target - values[index]) * smoothing
         }
-        needsDisplay = true
     }
 
-    func reset() {
-        bands = Array(repeating: Float(0.10), count: bands.count)
-        needsDisplay = true
+    mutating func reset() {
+        for index in values.indices { values[index] = baseline }
     }
+}
 
-    override func draw(_ dirtyRect: NSRect) {
-        // 一条水平直线：静音时保持平直，有人声时按声纹强度剧烈上下波动。
-        let midY = bounds.midY
-        let maxAmplitude = bounds.height / 2 - 1
+/// 1.4 验证过的折线机制：一条水平折线，静音（振幅低于门限）时保持平直，
+/// 有人声时整条线一起按声纹强度上下波动。直线段连接，两端钉在中线。
+/// 用振幅门限（0.16）区分安静/出声，不依赖 Silero VAD，避免 VAD 门控带来的不可用感。
+enum WaveformRenderer {
+    /// 把频段映射成折线路径，并返回峰值活跃度（0...1）供调用方调节颜色。
+    static func makePath(bands: [Float], in rect: NSRect) -> (path: NSBezierPath, activity: CGFloat) {
         let count = bands.count
+        guard count > 1 else { return (NSBezierPath(), 0) }
+        let midY = rect.midY
+        let maxAmplitude = rect.height / 2 - 1
+        let half = CGFloat(count - 1) / 2
         var peakActivity: CGFloat = 0
 
-        var points: [NSPoint] = [NSPoint(x: 0, y: midY)]
+        var points: [NSPoint] = [NSPoint(x: rect.minX, y: midY)]
         for (index, band) in bands.enumerated() {
-            let centerDistance = abs(CGFloat(index) - CGFloat(count - 1) / 2) / (CGFloat(count - 1) / 2)
-            // 各点权重接近一致，说话时整条线一起波动；噪声门限保证安静时是一条平直线。
+            let centerDistance = abs(CGFloat(index) - half) / half
+            // 各点权重接近一致，说话时整条线一起波动；门限保证安静时是一条平直线。
             let centerWeight = 0.86 + (1 - centerDistance) * 0.22
             let activeBand = max(0, (CGFloat(band) - 0.16) / 0.84)
             peakActivity = max(peakActivity, activeBand)
             let emphasized = activeBand <= 0 ? 0 : pow(activeBand, 0.62)
             let direction: CGFloat = index % 2 == 0 ? 1 : -1
             let offset = emphasized * centerWeight * maxAmplitude * direction
-            let x = bounds.width * (CGFloat(index) + 0.5) / CGFloat(count)
+            let x = rect.minX + rect.width * (CGFloat(index) + 0.5) / CGFloat(count)
             points.append(NSPoint(x: x, y: midY + offset))
         }
-        points.append(NSPoint(x: bounds.width, y: midY))
+        points.append(NSPoint(x: rect.maxX, y: midY))
 
         let path = NSBezierPath()
         path.move(to: points[0])
         points.dropFirst().forEach { path.line(to: $0) }
+        return (path, min(1, peakActivity))
+    }
+}
+
+final class MiniWaveformView: NSView {
+    private var bands = WaveformBands(attack: 0.62, release: 0.22)
+
+    override var isOpaque: Bool { false }
+
+    func update(_ newBands: [Float]) {
+        bands.apply(newBands)
+        needsDisplay = true
+    }
+
+    func reset() {
+        bands.reset()
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        // 与录音胶囊统一：静音平直、出声时整条线上下波动（详见 WaveformRenderer，1.4 折线机制）。
+        let (path, activity) = WaveformRenderer.makePath(bands: bands.values, in: bounds)
         path.lineWidth = 2
         path.lineCapStyle = .round
         path.lineJoinStyle = .round
-        UITheme.brandTeal.withAlphaComponent(0.5 + 0.5 * min(1, Double(peakActivity))).setStroke()
+        UITheme.brandTeal.withAlphaComponent(0.5 + 0.5 * Double(activity)).setStroke()
         path.stroke()
     }
 }

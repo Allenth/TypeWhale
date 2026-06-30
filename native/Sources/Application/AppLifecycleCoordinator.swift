@@ -257,11 +257,6 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
         window?.orderOut(nil)
     }
 
-    func shouldKeepMainWindowVisibleForScreenshot() -> Bool {
-        guard let window, window.isVisible else { return false }
-        return !window.isMiniaturized
-    }
-
     @objc private func openMainWindowFromStatusItem() {
         showMainWindow()
     }

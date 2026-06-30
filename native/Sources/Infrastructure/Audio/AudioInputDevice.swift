@@ -15,11 +15,26 @@ struct AudioInputDevice: Equatable {
     }
 
     static func saveSelectedUID(_ uid: String) {
-        UserDefaults.standard.set(uid, forKey: selectionStorageKey)
+        if uid.isEmpty {
+            UserDefaults.standard.removeObject(forKey: selectionStorageKey)
+        } else {
+            UserDefaults.standard.set(uid, forKey: selectionStorageKey)
+        }
     }
 }
 
 enum AudioInputDeviceProvider {
+    struct ManualSelectionResolution {
+        let deviceID: AudioDeviceID?
+        let selectedUID: String
+        let matchedDeviceName: String?
+        let didDowngradeToSystemDefault: Bool
+
+        var isFollowingSystemDefault: Bool {
+            selectedUID.isEmpty || deviceID == nil
+        }
+    }
+
     static func devices() -> [AudioInputDevice] {
         let defaultID = defaultInputDeviceID()
         return allAudioDeviceIDs().compactMap { id in
@@ -51,6 +66,33 @@ enum AudioInputDeviceProvider {
         let selectedUID = AudioInputDevice.selectedUID
         guard !selectedUID.isEmpty else { return nil }
         return devices().first { $0.uid == selectedUID }?.id
+    }
+
+    static func resolveSelectedManualDevice() -> ManualSelectionResolution {
+        let selectedUID = AudioInputDevice.selectedUID
+        guard !selectedUID.isEmpty else {
+            return ManualSelectionResolution(
+                deviceID: nil,
+                selectedUID: selectedUID,
+                matchedDeviceName: nil,
+                didDowngradeToSystemDefault: false
+            )
+        }
+        if let device = devices().first(where: { $0.uid == selectedUID }) {
+            return ManualSelectionResolution(
+                deviceID: device.id,
+                selectedUID: selectedUID,
+                matchedDeviceName: device.name,
+                didDowngradeToSystemDefault: false
+            )
+        }
+        AudioInputDevice.saveSelectedUID(AudioInputDevice.systemDefaultUID)
+        return ManualSelectionResolution(
+            deviceID: nil,
+            selectedUID: selectedUID,
+            matchedDeviceName: nil,
+            didDowngradeToSystemDefault: true
+        )
     }
 
     static func defaultInputDeviceName() -> String? {
@@ -148,6 +190,15 @@ enum AudioInputRouteChangeReason {
             return "系统默认麦克风已变化。"
         case .deviceList:
             return "麦克风设备列表已变化。"
+        }
+    }
+
+    var logName: String {
+        switch self {
+        case .defaultInputDevice:
+            return "default_input_device"
+        case .deviceList:
+            return "device_list"
         }
     }
 }

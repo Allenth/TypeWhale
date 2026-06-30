@@ -7,10 +7,13 @@ import Vision
 @MainActor
 final class ScreenshotCoordinator {
     private var overlays: [ScreenshotOverlayWindow] = []
+    private var escapeKeyLocalMonitor: Any?
+    private var escapeKeyGlobalMonitor: Any?
     private var operationGeneration = 0
     private let ocrRecognizer = ScreenshotOCRRecognizer()
-    private let translationEngine = DeepSeekRewriteEngine()
+    private let translationEngine = SelectedSmartAITextEngine()
     private let onStatus: (String, String, MainViewController.PrimaryStatusTone) -> Void
+    private static let escapeKeyCode: UInt16 = 53
 
     init(onStatus: @escaping (String, String, MainViewController.PrimaryStatusTone) -> Void) {
         self.onStatus = onStatus
@@ -58,6 +61,7 @@ final class ScreenshotCoordinator {
             return
         }
         overlays = screenOverlays
+        installEscapeKeyMonitors()
         overlays.forEach { $0.orderFrontRegardless() }
         // 只让截图覆盖层接收键盘事件，不激活 TypeWhale App，避免把已在后方的主页窗口推到最前。
         overlays.first?.makeKeyAndOrderFront(nil)
@@ -73,7 +77,7 @@ final class ScreenshotCoordinator {
     private func focusWindowThenBeginScreenshot(_ candidate: ScreenshotWindowCandidate, autoTranslateAfterSelection: Bool) {
         operationGeneration += 1
         let generation = operationGeneration
-        closeAll()
+        overlays.forEach { $0.setWindowRecapturePending(true) }
         onStatus("正在置顶窗口", "将选中的窗口移到最前后重新截图", .processing)
         raiseWindow(candidate)
         Task { [weak self] in
@@ -87,7 +91,24 @@ final class ScreenshotCoordinator {
                 }
                 return
             }
-            self.begin(preselectedWindowFrame: candidate.frame, autoTranslateAfterSelection: autoTranslateAfterSelection)
+            let refreshedCandidates = Self.visibleWindowCandidates()
+            let refreshedCandidate = refreshedCandidates.first { $0.windowID == candidate.windowID } ?? candidate
+            var didRefreshAnyOverlay = false
+            for overlay in self.overlays {
+                guard let image = self.captureFullScreen(overlay.displayID, below: overlay) else { continue }
+                didRefreshAnyOverlay = true
+                overlay.replaceScreenshot(
+                    image,
+                    windowCandidates: refreshedCandidates,
+                    preselectedWindowFrame: refreshedCandidate.frame
+                )
+            }
+            guard didRefreshAnyOverlay else {
+                self.overlays.forEach { $0.setWindowRecapturePending(false) }
+                self.onStatus("无法更新截图", "未能读取置顶后的屏幕内容，请检查屏幕录制权限", .error)
+                return
+            }
+            self.onStatus("窗口已置顶", "边框已自动对齐窗口，可复制、OCR、标注或保存", .processing)
         }
     }
 
@@ -234,11 +255,41 @@ final class ScreenshotCoordinator {
     }
 
     private func closeAll() {
+        removeEscapeKeyMonitors()
         overlays.forEach {
             ($0.contentView as? ScreenshotOverlayView)?.discardActiveTextField()
             $0.orderOut(nil)
         }
         overlays.removeAll()
+    }
+
+    private func installEscapeKeyMonitors() {
+        removeEscapeKeyMonitors()
+        escapeKeyLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard event.keyCode == Self.escapeKeyCode, self?.isActive == true else {
+                return event
+            }
+            self?.cancel()
+            return nil
+        }
+        escapeKeyGlobalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard event.keyCode == Self.escapeKeyCode else { return }
+            DispatchQueue.main.async { [weak self] in
+                guard self?.isActive == true else { return }
+                self?.cancel()
+            }
+        }
+    }
+
+    private func removeEscapeKeyMonitors() {
+        if let escapeKeyLocalMonitor {
+            NSEvent.removeMonitor(escapeKeyLocalMonitor)
+        }
+        if let escapeKeyGlobalMonitor {
+            NSEvent.removeMonitor(escapeKeyGlobalMonitor)
+        }
+        escapeKeyLocalMonitor = nil
+        escapeKeyGlobalMonitor = nil
     }
 
     private func invalidatePendingOperations() {
@@ -264,6 +315,19 @@ final class ScreenshotCoordinator {
 
     private func captureFullScreen(_ displayID: CGDirectDisplayID) -> CGImage? {
         CGDisplayCreateImage(displayID)
+    }
+
+    private func captureFullScreen(_ displayID: CGDirectDisplayID, below overlay: ScreenshotOverlayWindow) -> CGImage? {
+        let overlayWindowID = CGWindowID(overlay.windowNumber)
+        guard overlayWindowID != 0 else {
+            return captureFullScreen(displayID)
+        }
+        return CGWindowListCreateImage(
+            CGDisplayBounds(displayID),
+            [.optionOnScreenBelowWindow],
+            overlayWindowID,
+            [.bestResolution]
+        ) ?? captureFullScreen(displayID)
     }
 
     private static func visibleWindowCandidates() -> [ScreenshotWindowCandidate] {
@@ -343,6 +407,8 @@ private struct ScreenshotWindowCandidate: Equatable {
 }
 
 private final class ScreenshotOverlayWindow: NSWindow {
+    let displayID: CGDirectDisplayID
+
     init(
         screen: NSScreen,
         displayID: CGDirectDisplayID,
@@ -358,6 +424,7 @@ private final class ScreenshotOverlayWindow: NSWindow {
         onCancel: @escaping () -> Void,
         onStatus: @escaping (String, String, MainViewController.PrimaryStatusTone) -> Void
     ) {
+        self.displayID = displayID
         let content = ScreenshotOverlayView(
             screen: screen,
             displayID: displayID,
@@ -387,10 +454,27 @@ private final class ScreenshotOverlayWindow: NSWindow {
         self.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         self.hasShadow = false
         self.acceptsMouseMovedEvents = true
+        self.sharingType = .none
         self.makeFirstResponder(content)
     }
 
     override var canBecomeKey: Bool { true }
+
+    func setWindowRecapturePending(_ isPending: Bool) {
+        (contentView as? ScreenshotOverlayView)?.setWindowRecapturePending(isPending)
+    }
+
+    func replaceScreenshot(
+        _ screenshot: CGImage,
+        windowCandidates: [ScreenshotWindowCandidate],
+        preselectedWindowFrame: CGRect?
+    ) {
+        (contentView as? ScreenshotOverlayView)?.replaceScreenshot(
+            screenshot,
+            windowCandidates: windowCandidates,
+            preselectedWindowFrame: preselectedWindowFrame
+        )
+    }
 }
 
 private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
@@ -477,12 +561,17 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         let patches: [TranslationPatch]
     }
 
+    private struct TranslationGroup {
+        let backdrop: TranslationPatch
+        let blocks: [TranslationBlock]
+    }
+
     private enum Markup {
         case rectangle(NSRect)
         case arrow(NSPoint, NSPoint)
         case pen([NSPoint])
         case text(String, NSPoint)
-        case translation([TranslationBlock])
+        case translation(TranslationGroup)
     }
 
     private enum SelectionHandle: CaseIterable {
@@ -508,8 +597,8 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     private let screen: NSScreen
     private let displayID: CGDirectDisplayID
     private let displayBounds: CGRect
-    private let screenshot: CGImage
-    private let windowCandidates: [ScreenshotWindowCandidate]
+    private var screenshot: CGImage
+    private var windowCandidates: [ScreenshotWindowCandidate]
     private let autoTranslateAfterSelection: Bool
     private let onSelectWindow: (ScreenshotWindowCandidate) -> Void
     private let onCopy: (NSImage) -> Void
@@ -522,6 +611,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     private var dragMode: DragMode?
     private var selection: NSRect = .zero
     private var hoveredAction: ToolAction?
+    private var pressedToolbarAction: ToolAction?
     private var hoveredHandle: SelectionHandle?
     private var hoveredWindowCandidate: ScreenshotWindowCandidate?
     private var lastToolbarRects: [ToolAction: NSRect] = [:]
@@ -536,6 +626,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     private var activeTextField: NSTextField?
     private var activeTextOrigin: NSPoint?
     private var isTranslating = false
+    private var isWindowRecapturePending = false
     private var hasAutoTranslatedSelection = false
     private var isSelectionLocked = false
     private let clickDragThreshold: CGFloat = 4
@@ -626,6 +717,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     }
 
     override func mouseDown(with event: NSEvent) {
+        guard !isWindowRecapturePending else { return }
         let point = convert(event.locationInWindow, from: nil)
         if event.clickCount >= 2, hasUsableSelection, selection.contains(point) {
             if activeTextField != nil {
@@ -634,12 +726,14 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             copySelection()
             return
         }
+        if let action = action(at: point), hasUsableSelection {
+            pressedToolbarAction = action
+            hoveredAction = action
+            needsDisplay = true
+            return
+        }
         if activeTextField != nil {
             commitActiveTextField()
-        }
-        if let action = action(at: point), hasUsableSelection {
-            perform(action)
-            return
         }
         if isAnnotating, hasUsableSelection, selection.contains(point) {
             let localPoint = localPoint(from: point)
@@ -687,6 +781,17 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     }
 
     override func mouseDragged(with event: NSEvent) {
+        guard !isWindowRecapturePending else { return }
+        if let pressedToolbarAction {
+            let point = convert(event.locationInWindow, from: nil)
+            let action = action(at: point)
+            let nextHoveredAction = action == pressedToolbarAction ? action : nil
+            if hoveredAction != nextHoveredAction {
+                hoveredAction = nextHoveredAction
+                needsDisplay = true
+            }
+            return
+        }
         guard let dragStart else { return }
         let current = clamped(convert(event.locationInWindow, from: nil))
         switch dragMode {
@@ -724,6 +829,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     }
 
     override func mouseMoved(with event: NSEvent) {
+        guard !isWindowRecapturePending else { return }
         let point = convert(event.locationInWindow, from: nil)
         let action = action(at: point)
         let handle = isSelectionLocked ? nil : handle(at: point)
@@ -737,6 +843,19 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     }
 
     override func mouseUp(with event: NSEvent) {
+        guard !isWindowRecapturePending else { return }
+        if let pressedToolbarAction {
+            let point = convert(event.locationInWindow, from: nil)
+            let releasedAction = action(at: point)
+            self.pressedToolbarAction = nil
+            hoveredAction = releasedAction
+            if releasedAction == pressedToolbarAction {
+                perform(pressedToolbarAction)
+            } else {
+                needsDisplay = true
+            }
+            return
+        }
         guard let startPoint = dragStart else { return }
         let point = clamped(convert(event.locationInWindow, from: nil))
         if case .pendingWindowSelect(let candidate) = dragMode,
@@ -763,6 +882,12 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     }
 
     override func keyDown(with event: NSEvent) {
+        if isWindowRecapturePending {
+            if event.keyCode == 53 {
+                onCancel()
+            }
+            return
+        }
         if activeTextField != nil {
             super.keyDown(with: event)
             return
@@ -942,6 +1067,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     private func drawToolbarButton(_ action: ToolAction, in rect: NSRect) {
         let isEffectivelyEnabled = action.isEnabled && !(isTranslating && action == .translate)
         let isHovered = isEffectivelyEnabled && hoveredAction == action
+        let isPressed = isHovered && pressedToolbarAction == action
         let isSelectedAnnotationTool =
             isAnnotating && (
                 (action == .rectangle && annotationTool == .rectangle) ||
@@ -953,6 +1079,8 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             NSColor.white.withAlphaComponent(0.06)
         } else if isSelectedAnnotationTool {
             NSColor.white.withAlphaComponent(0.92)
+        } else if isPressed {
+            NSColor.white.withAlphaComponent(0.34)
         } else if isHovered {
             NSColor.white.withAlphaComponent(0.26)
         } else {
@@ -1063,13 +1191,12 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
                     self.needsDisplay = true
                     return
                 }
-                let blocks = self.translationBlocks(for: translation.translatedLines)
-                guard !blocks.isEmpty else {
+                guard let group = self.translationGroup(for: translation.translatedLines) else {
                     self.onStatus("截图翻译失败", "未能定位原文位置，请稍后重试", .warning)
                     self.needsDisplay = true
                     return
                 }
-                self.markups.append(.translation(blocks))
+                self.markups.append(.translation(group))
                 self.selectedMarkupIndex = self.markups.indices.last
                 self.isAnnotating = true
                 self.onStatus("翻译已覆盖", "已按原文位置贴入中文译文", .success)
@@ -1228,6 +1355,50 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         return localRect
     }
 
+    func setWindowRecapturePending(_ isPending: Bool) {
+        isWindowRecapturePending = isPending
+        if isPending {
+            pressedToolbarAction = nil
+            dragStart = nil
+            dragMode = nil
+        }
+    }
+
+    func replaceScreenshot(
+        _ screenshot: CGImage,
+        windowCandidates: [ScreenshotWindowCandidate],
+        preselectedWindowFrame: CGRect?
+    ) {
+        discardActiveTextField()
+        self.screenshot = screenshot
+        self.windowCandidates = windowCandidates
+        selection = preselectedWindowFrame.flatMap { localWindowRect(for: $0) } ?? .zero
+        isSelectionLocked = hasUsableSelection
+        isWindowRecapturePending = false
+        isAnnotating = false
+        annotationTool = .rectangle
+        markups.removeAll()
+        selectedMarkupIndex = nil
+        activeMarkupStart = nil
+        activeMarkupPoint = nil
+        activePenPoints = []
+        activeTextOrigin = nil
+        hoveredAction = nil
+        pressedToolbarAction = nil
+        hoveredHandle = nil
+        hoveredWindowCandidate = nil
+        dragStart = nil
+        dragMode = nil
+        isTranslating = false
+        hasAutoTranslatedSelection = false
+        needsDisplay = true
+        if autoTranslateAfterSelection, hasUsableSelection {
+            DispatchQueue.main.async { [weak self] in
+                self?.translateSelectionIfNeeded()
+            }
+        }
+    }
+
     private func pngData(from image: CGImage) -> Data? {
         let representation = NSBitmapImageRep(cgImage: image)
         return representation.representation(using: .png, properties: [:])
@@ -1367,12 +1538,13 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             path.lineJoinStyle = .round
             path.lineCapStyle = .round
             path.lineWidth = 3
-            NSColor.white.setStroke()
+            NSColor.systemRed.setStroke()
             path.stroke()
         case .text(let text, let point):
             drawText(text, at: transformPoint(point))
-        case .translation(let blocks):
-            for block in blocks {
+        case .translation(let group):
+            drawTranslationBackdrop(group.backdrop, transformRect: transformRect)
+            for block in group.blocks {
                 drawTranslation(block.text, in: transformRect(block.rect), patches: block.patches.map {
                     TranslationPatch(rect: transformRect($0.rect), color: $0.color)
                 })
@@ -1426,19 +1598,23 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         text.draw(at: NSPoint(x: rect.minX + padding, y: rect.minY + padding * 0.55), withAttributes: attributes)
     }
 
+    private func drawTranslationBackdrop(_ patch: TranslationPatch, transformRect: (NSRect) -> NSRect) {
+        let rect = transformRect(patch.rect)
+        fillFeathered(rect, radius: 7, color: patch.color, coreAlpha: 0.96)
+    }
+
     private func drawTranslation(_ text: String, in rect: NSRect, patches: [TranslationPatch]) {
         for patch in patches {
-            patch.color.withAlphaComponent(0.94).setFill()
-            NSBezierPath(roundedRect: patch.rect, xRadius: 3, yRadius: 3).fill()
+            fillFeathered(patch.rect, radius: 3, color: patch.color, coreAlpha: 0.94)
         }
 
         let backgroundColor = patches.last?.color ?? NSColor(calibratedWhite: 0.96, alpha: 1)
-        backgroundColor.withAlphaComponent(0.88).setFill()
-        NSBezierPath(roundedRect: rect, xRadius: 5, yRadius: 5).fill()
+        fillFeathered(rect, radius: 5, color: backgroundColor, coreAlpha: 0.88)
 
         let inset = translationTextInset(for: rect)
         let textRect = rect.insetBy(dx: inset, dy: inset)
         let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .left
         paragraph.lineBreakMode = .byWordWrapping
         paragraph.lineSpacing = rect.height < 90 ? 0.5 : 1.5
         let attributes: [NSAttributedString.Key: Any] = [
@@ -1453,31 +1629,59 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         )
     }
 
-    private func translationBlocks(for translatedLines: [ScreenshotTranslatedLine]) -> [TranslationBlock] {
-        translatedLines.compactMap { line in
-            guard !line.text.isEmpty, !line.rect.isEmpty else { return nil }
-            let rect = translationRect(alignedWith: line.rect, text: line.text)
-            let patches = translationPatches(for: [line.rect], translationRect: rect)
-            return TranslationBlock(text: line.text, rect: rect, patches: patches)
+    /// 用多层同心圆角矩形模拟“边缘渐变到全透明”的羽化背景：
+    /// 中心保持实心保证译文可读，越靠近边缘越透明，消除生硬的方框边缘、自然融入截图。
+    private func fillFeathered(_ rect: NSRect, radius: CGFloat, color: NSColor, coreAlpha: CGFloat) {
+        let feather = min(7, min(rect.width, rect.height) * 0.45)
+        guard feather > 0.5 else {
+            color.withAlphaComponent(coreAlpha).setFill()
+            NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
+            return
+        }
+        let steps = 8
+        // 从最内层（实心）向外逐层扩大并降低透明度：合成后中心保持 coreAlpha，最外缘趋近全透明。
+        for index in 0..<steps {
+            let progress = CGFloat(index) / CGFloat(steps - 1) // 0 → 内层, 1 → 外缘
+            let inset = feather * (1 - progress)
+            let inner = rect.insetBy(dx: inset, dy: inset)
+            guard inner.width > 0, inner.height > 0 else { continue }
+            let cornerRadius = max(0, radius - inset)
+            color.withAlphaComponent(coreAlpha * (1 - progress)).setFill()
+            NSBezierPath(roundedRect: inner, xRadius: cornerRadius, yRadius: cornerRadius).fill()
         }
     }
 
+    private func translationGroup(for translatedLines: [ScreenshotTranslatedLine]) -> TranslationGroup? {
+        let pairs: [(sourceRect: NSRect, block: TranslationBlock)] = translatedLines.compactMap { line in
+            guard !line.text.isEmpty, !line.rect.isEmpty else { return nil }
+            let rect = translationRect(alignedWith: line.rect, text: line.text)
+            let patches = translationPatches(for: [line.rect], translationRect: rect)
+            return (line.rect, TranslationBlock(text: line.text, rect: rect, patches: patches))
+        }
+        guard !pairs.isEmpty else { return nil }
+        let backdropRect = ScreenshotTranslationLayout.backdropRect(
+            sourceRects: pairs.map { $0.sourceRect },
+            blockRects: pairs.map { $0.block.rect },
+            selectionSize: selection.size
+        )
+        guard !backdropRect.isEmpty else { return nil }
+        return TranslationGroup(
+            backdrop: TranslationPatch(rect: backdropRect, color: averageScreenshotColor(in: backdropRect)),
+            blocks: pairs.map { $0.block }
+        )
+    }
+
     private func translationRect(alignedWith lineRect: NSRect, text: String) -> NSRect {
-        let paddedLine = lineRect.insetBy(dx: -4, dy: -3).intersection(NSRect(origin: .zero, size: selection.size))
-        let minimumWidth: CGFloat = min(selection.width, 96)
-        let width = min(selection.width, max(paddedLine.width, minimumWidth))
-        let maxHeight = max(18, min(selection.height, paddedLine.height * 2.1 + 10))
-        let fontSize = translationFontSize(fitting: text, width: width, maxHeight: maxHeight)
-        let measuredHeight = translationTextHeight(text, width: width, fontSize: fontSize)
-        let height = min(max(measuredHeight, paddedLine.height, 22), maxHeight)
-        let x = min(max(paddedLine.minX, 0), max(0, selection.width - width))
-        let y = min(max(paddedLine.midY - height / 2, 0), max(0, selection.height - height))
-        return NSRect(x: x, y: y, width: width, height: height)
+        ScreenshotTranslationLayout.blockRect(
+            alignedWith: lineRect,
+            text: text,
+            selectionSize: selection.size
+        )
     }
 
     private func translationPatches(for lineRects: [NSRect], translationRect: NSRect) -> [TranslationPatch] {
         let paddedLines = lineRects.map {
-            $0.insetBy(dx: -3, dy: -2).intersection(NSRect(origin: .zero, size: selection.size))
+            $0.insetBy(dx: -2, dy: -1).intersection(NSRect(origin: .zero, size: selection.size))
         }.filter { !$0.isEmpty }
         let coverRects = paddedLines + [translationRect]
         return coverRects.map { rect in
@@ -1517,38 +1721,25 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     }
 
     private func translationFontSize(fitting text: String, width: CGFloat, maxHeight: CGFloat) -> CGFloat {
-        let baseSize: CGFloat = selection.width < 320 || selection.height < 180 ? 12 : 14
-        var size = baseSize
-        while size >= 8 {
-            if translationTextHeight(text, width: width, fontSize: size) <= maxHeight {
-                return size
-            }
-            size -= 1
-        }
-        return 8
+        ScreenshotTranslationLayout.fontSize(
+            fitting: text,
+            width: width,
+            maxHeight: maxHeight,
+            selectionSize: selection.size
+        )
     }
 
     private func translationTextHeight(_ text: String, width: CGFloat, fontSize: CGFloat) -> CGFloat {
-        let measuringRect = NSRect(x: 0, y: 0, width: width, height: max(1, selection.height))
-        let inset = translationTextInset(for: measuringRect)
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.lineBreakMode = .byWordWrapping
-        paragraph.lineSpacing = selection.height < 90 ? 0.5 : 1.5
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: fontSize, weight: .semibold),
-            .paragraphStyle: paragraph,
-        ]
-        let textWidth = max(1, width - inset * 2)
-        let measured = (text as NSString).boundingRect(
-            with: NSSize(width: textWidth, height: .greatestFiniteMagnitude),
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: attributes
+        ScreenshotTranslationLayout.textHeight(
+            text,
+            width: width,
+            fontSize: fontSize,
+            selectionSize: selection.size
         )
-        return ceil(measured.height) + inset * 2
     }
 
     private func translationTextInset(for rect: NSRect) -> CGFloat {
-        rect.width < 180 || rect.height < 80 ? 6 : 8
+        ScreenshotTranslationLayout.textInset(for: rect)
     }
 
     private static func averageColor(in image: CGImage) -> NSColor? {
@@ -1691,8 +1882,8 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             ]
             let size = text.size(withAttributes: attributes)
             return NSRect(x: point.x, y: point.y, width: size.width + 16, height: size.height + 12)
-        case .translation(let blocks):
-            let rects = blocks.flatMap { [$0.rect] + $0.patches.map(\.rect) }
+        case .translation(let group):
+            let rects = [group.backdrop.rect] + group.blocks.flatMap { [$0.rect] + $0.patches.map(\.rect) }
             return rects.dropFirst().reduce(rects.first ?? .zero) { $0.union($1) }
         }
     }
@@ -1721,14 +1912,17 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             return .pen(points.map(movedPoint))
         case .text(let text, let point):
             return .text(text, movedPoint(point))
-        case .translation(let blocks):
-            return .translation(blocks.map { block in
-                TranslationBlock(
-                    text: block.text,
-                    rect: movedRect(block.rect),
-                    patches: block.patches.map { TranslationPatch(rect: movedRect($0.rect), color: $0.color) }
-                )
-            })
+        case .translation(let group):
+            return .translation(TranslationGroup(
+                backdrop: TranslationPatch(rect: movedRect(group.backdrop.rect), color: group.backdrop.color),
+                blocks: group.blocks.map { block in
+                    TranslationBlock(
+                        text: block.text,
+                        rect: movedRect(block.rect),
+                        patches: block.patches.map { TranslationPatch(rect: movedRect($0.rect), color: $0.color) }
+                    )
+                }
+            ))
         }
     }
 

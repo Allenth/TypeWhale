@@ -2,6 +2,8 @@ import Foundation
 
 protocol SmartRewriteEngine {
     var displayName: String { get }
+    var logName: String { get }
+    var usesLocalCostGuard: Bool { get }
 
     func rewrite(
         rawText: String,
@@ -11,8 +13,27 @@ protocol SmartRewriteEngine {
     ) async throws -> SmartRewriteEngineOutput
 }
 
+extension SmartRewriteEngine {
+    var logName: String { "ai" }
+    var usesLocalCostGuard: Bool { true }
+}
+
+protocol SmartTranslationEngine {
+    var displayName: String { get }
+
+    func translate(
+        rawText: String,
+        direction: SmartTranslationDirection,
+        context: SmartInputContext,
+        triggeredBy: String
+    ) async throws -> SmartTranslationOutput
+}
+
+protocol SmartAITextEngine: SmartRewriteEngine, SmartTranslationEngine {}
+
 final class NoopRewriteEngine: SmartRewriteEngine {
     let displayName = "原文"
+    let usesLocalCostGuard = false
 
     func rewrite(
         rawText: String,

@@ -7,8 +7,9 @@ CONTENTS="$APP/Contents"
 SHERPA_ROOT="${TYPESPEAKER_SHERPA_ROOT:-/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/sherpa_onnx}"
 NATIVE_ASR="$CONTENTS/Resources/NativeASR"
 NATIVE_ASR_LIB="$NATIVE_ASR/lib"
-NATIVE_ASR_OBJECT="$ROOT/native/.TypeSpeakerNativeASR.o"
-LAUNCH_PROBE_OBJECT="$ROOT/native/.LaunchProbe.o"
+BUILD_TEMP_DIR="$(mktemp -d /tmp/typewhale-native-build.XXXXXX)"
+NATIVE_ASR_OBJECT="$BUILD_TEMP_DIR/TypeSpeakerNativeASR.o"
+LAUNCH_PROBE_OBJECT="$BUILD_TEMP_DIR/LaunchProbe.o"
 BUNDLED_MODELS="$CONTENTS/Resources/Models"
 BUNDLED_SENSEVOICE="$BUNDLED_MODELS/sensevoice-native"
 BUNDLED_VAD="$BUNDLED_MODELS/vad"
@@ -35,7 +36,7 @@ if [[ -n "$MODEL_SOURCE" && "$MODEL_SOURCE" == "$APP/"* ]]; then
   cp "$MODEL_SOURCE/tokens.txt" "$MODEL_SOURCE_TEMP/tokens.txt"
   MODEL_SOURCE="$MODEL_SOURCE_TEMP"
 fi
-trap '[[ -n "${MODEL_SOURCE_TEMP:-}" ]] && rm -rf "$MODEL_SOURCE_TEMP"' EXIT
+trap '[[ -n "${MODEL_SOURCE_TEMP:-}" ]] && rm -rf "$MODEL_SOURCE_TEMP"; [[ -n "${BUILD_TEMP_DIR:-}" ]] && rm -rf "$BUILD_TEMP_DIR"' EXIT
 
 rm -rf "$APP"
 mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources"
@@ -163,8 +164,8 @@ cat > "$CONTENTS/Info.plist" <<'PLIST'
 <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
 <key>CFBundleName</key><string>TypeWhale</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>1.5.32</string>
-<key>CFBundleVersion</key><string>390</string>
+<key>CFBundleShortVersionString</key><string>1.5.76</string>
+<key>CFBundleVersion</key><string>434</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSMicrophoneUsageDescription</key><string>TypeWhale 需要使用麦克风进行本地语音转文字。</string>

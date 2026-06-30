@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_SCRIPT="$ROOT/native/build_native_app.sh"
 README="$ROOT/README.md"
 MACOS_README="$ROOT/macos/README.md"
+VERSION_HISTORY="$ROOT/native/Sources/Presentation/VersionHistory/VersionHistoryViewController.swift"
 INSTALL_APP_PATH="${TYPESPEAKER_INSTALL_APP_PATH:-/Applications/TypeWhale.app}"
 
 current_version="$(perl -ne 'print "$1\n" if m{<key>CFBundleShortVersionString</key><string>([^<]+)}' "$BUILD_SCRIPT" | head -1)"
@@ -27,6 +28,17 @@ next_version="${TYPEWHALE_NEXT_VERSION:-${major}.${minor}.${next_patch}}"
 
 if [[ -n "${TYPEWHALE_NEXT_VERSION:-}" && ! "$TYPEWHALE_NEXT_VERSION" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then
   echo "Unexpected TYPEWHALE_NEXT_VERSION format: $TYPEWHALE_NEXT_VERSION" >&2
+  exit 1
+fi
+
+if [[ -f "$VERSION_HISTORY" ]] && ! grep -Fq "版本 $next_version (Build $next_build)" "$VERSION_HISTORY"; then
+  cat >&2 <<EOF
+Missing app version history entry for $next_version (Build $next_build).
+Add it to:
+  $VERSION_HISTORY
+
+Every local release build changes the installed app version, so the in-app version history must explain why that build exists.
+EOF
   exit 1
 fi
 

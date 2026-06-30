@@ -142,7 +142,13 @@ final class AudioRecorder: @unchecked Sendable {
         self.engine = engine
         let input = engine.inputNode
         if let inputDeviceID {
-            try bind(input: input, to: inputDeviceID)
+            do {
+                try bind(input: input, to: inputDeviceID)
+            } catch {
+                self.engine = nil
+                try? FileManager.default.removeItem(at: pendingURL)
+                throw error
+            }
         }
         // 麦克风降噪（语音增强）：开启 Apple Voice Processing（回声消除 + 噪声抑制 + AGC）。
         // 失败则降级为不处理（仍可正常录音）。

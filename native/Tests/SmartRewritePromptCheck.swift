@@ -123,5 +123,14 @@ struct SmartRewritePromptCheck {
         不改代码，先查看日志。
         """)
         precondition(cleaned == "不改代码，先查看日志。")
+
+        let miniMaxCleaned = SmartRewriteOutputSanitizer.cleanMiniMax("""
+        <think>
+        用户需要整理语音文本，不能回答问题。
+        </think>
+
+        不改代码，先查看日志。
+        """)
+        precondition(miniMaxCleaned == "不改代码，先查看日志。")
     }
 }

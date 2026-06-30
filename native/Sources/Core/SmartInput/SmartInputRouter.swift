@@ -112,26 +112,28 @@ final class SmartInputRouter {
             context: rewriteContext,
             preference: preference
         )
-        switch SmartRewriteCostGuard.check(
-            rawText: rewriteText,
-            prompt: prompt,
-            triggeredBy: "final_smart_rewrite"
-        ) {
-        case .allowed:
-            break
-        case .blocked(let reason):
-            LaunchDiagnostics.mark(
-                "deepseek request_skipped triggered_by=final_smart_rewrite mode=\(profile.mode.displayName) reason=\(reason) rawText_length=\(rewriteText.count) prompt_length=\(prompt.count)"
-            )
-            return SmartRewriteResult(
-                text: normalizedText.isEmpty ? trimmed : normalizedText,
-                rawText: rawText,
-                mode: profile.mode,
-                didFallback: true,
-                normalizedText: normalizedText,
-                termReplacements: normalization.replacements,
-                fallbackReason: Self.userFacingFallback(for: reason)
-            )
+        if engine.usesLocalCostGuard {
+            switch SmartRewriteCostGuard.check(
+                rawText: rewriteText,
+                prompt: prompt,
+                triggeredBy: "final_smart_rewrite"
+            ) {
+            case .allowed:
+                break
+            case .blocked(let reason):
+                LaunchDiagnostics.mark(
+                    "\(engine.logName) request_skipped triggered_by=final_smart_rewrite mode=\(profile.mode.displayName) reason=\(reason) rawText_length=\(rewriteText.count) prompt_length=\(prompt.count)"
+                )
+                return SmartRewriteResult(
+                    text: normalizedText.isEmpty ? trimmed : normalizedText,
+                    rawText: rawText,
+                    mode: profile.mode,
+                    didFallback: true,
+                    normalizedText: normalizedText,
+                    termReplacements: normalization.replacements,
+                    fallbackReason: Self.userFacingFallback(for: reason)
+                )
+            }
         }
 
         do {

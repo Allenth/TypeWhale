@@ -10,7 +10,7 @@ This is a public test build. It is not notarized with Developer ID yet, so macOS
 
 中文用户可以直接点击上面的链接下载安装包。如果浏览器没有开始下载，请右键链接选择“链接另存为”，或打开 [TypeWhale 1.3.0 (208) Test Release](https://github.com/Allenth/TypeWhale/releases/tag/v1.3.0-build208) 页面，在 **Assets** 区域下载 `TypeWhale-1.3.0-208.dmg`。
 
-Current local release build in this repository is `1.5.32 (390)`. It has been built and installed locally from source. The public GitHub DMG link above still points to the last uploaded public test artifact; local DMG artifacts are created only when a packaging step is run explicitly.
+Current local release build in this repository is `1.5.76 (434)`. It has been built and installed locally from source. The public GitHub DMG link above still points to the last uploaded public test artifact; local DMG artifacts are created only when a packaging step is run explicitly.
 
 The current macOS baseline is:
 
@@ -36,7 +36,7 @@ Realtime preview is only used as feedback. The final inserted text comes from th
 
 ## Repository Scope
 
-This open-source repository contains source code, build scripts, icons, notices, and architecture notes.
+This open-source repository contains source code, build scripts, icons, notices, and the current architecture reference in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 It intentionally does not include:
 

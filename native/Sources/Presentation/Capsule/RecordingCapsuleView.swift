@@ -23,7 +23,7 @@ final class RecordingCapsuleView: NSView {
     private var fadeTimer: Timer?
     private var fadeStartIndex: Int?
     private var fadeStartedAt: Date?
-    private var smoothedBands = Array(repeating: Float(0.08), count: 7)
+    private var smoothedBands = WaveformBands()
     private var retainedPreviewWidth = Metrics.compactSize.width
     private let fadeDuration: TimeInterval = 0.25
     private let draftStepInterval: TimeInterval = 0.075
@@ -87,11 +87,7 @@ final class RecordingCapsuleView: NSView {
             setDraftTarget(draft)
         }
         if let bands {
-            for index in smoothedBands.indices {
-                let target = index < bands.count ? bands[index] : 0.08
-                let smoothing: Float = target > smoothedBands[index] ? 0.52 : 0.16
-                smoothedBands[index] += (target - smoothedBands[index]) * smoothing
-            }
+            smoothedBands.apply(bands)
         }
         needsDisplay = true
     }
@@ -309,23 +305,13 @@ final class RecordingCapsuleView: NSView {
     }
 
     private func drawWaveform(in rect: NSRect, color: NSColor) {
-        let barWidth: CGFloat = 3
-        let spacing: CGFloat = 6.5
-        color.setFill()
-
-        for (index, band) in smoothedBands.enumerated() {
-            let centerDistance = abs(CGFloat(index) - 3) / 3
-            let centerWeight = 0.62 + (1 - centerDistance) * 0.48
-            let activeBand = max(0, (CGFloat(band) - 0.10) / 0.90)
-            let emphasized = pow(activeBand, 0.40)
-            let height = max(4, min(rect.height, rect.height * (0.16 + emphasized * centerWeight * 0.88)))
-            let x = rect.minX + CGFloat(index) * (barWidth + spacing)
-            let bar = NSBezierPath(
-                roundedRect: NSRect(x: x, y: rect.midY - height / 2, width: barWidth, height: height),
-                xRadius: 1.5,
-                yRadius: 1.5
-            )
-            bar.fill()
-        }
+        // 与主程序统一：静音平直、出声时整条线上下波动（详见 WaveformRenderer，1.4 折线机制）。
+        let (line, activity) = WaveformRenderer.makePath(bands: smoothedBands.values, in: rect)
+        line.lineWidth = 2.0
+        line.lineCapStyle = .round
+        line.lineJoinStyle = .round
+        // 出声越强折线越亮。
+        color.withAlphaComponent(0.5 + 0.5 * Double(activity)).setStroke()
+        line.stroke()
     }
 }

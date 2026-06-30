@@ -16,11 +16,94 @@ extension MainViewController {
         screenshotSaveLocationButton.setAccessibilityLabel("截图保存位置")
         backlogDirectoryButton.setAccessibilityLabel("需求池目录")
         realtime.setAccessibilityLabel("胶囊实时预览")
+        previewThemeNotch.setAccessibilityLabel("刘海预览主题")
+        previewThemeNotch.toolTip = "开启后实时预览改为刘海主题：左侧目标应用图标、右侧脉冲效果，刘海下方半透明小窗显示实时预览。关闭则使用默认胶囊预览。"
         autoFinish.setAccessibilityLabel("停顿自动完成")
         duckSystemAudio.setAccessibilityLabel("录音时降低系统音量")
+        audioInputDeviceMode.setAccessibilityLabel("麦克风输入设备")
+        audioInputRefreshButton.setAccessibilityLabel("刷新麦克风输入设备")
         micNoiseReduction.setAccessibilityLabel("麦克风降噪（语音增强）")
         micNoiseReduction.toolTip = "开启 Apple 语音增强（回声消除+噪声抑制），嘈杂环境识别更稳；但会增加每次开始录音的延迟，建议仅在嘈杂时临时开启。默认关闭。"
         launchAtLogin.setAccessibilityLabel("开机自动启动")
+    }
+
+    func configureAudioInputDeviceControls(selectedUID: String) {
+        audioInputDeviceMode.bezelStyle = .rounded
+        audioInputDeviceMode.controlSize = .small
+        audioInputDeviceMode.font = .systemFont(ofSize: 11, weight: .medium)
+        audioInputDeviceMode.toolTip = "默认跟随系统输入；通话场景录不到音时可手动锁定正在使用的麦克风。"
+        refreshAudioInputDeviceMenu(selectedUID: selectedUID)
+
+        let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)
+        audioInputRefreshButton.image = NSImage(
+            systemSymbolName: "arrow.clockwise",
+            accessibilityDescription: "刷新麦克风输入设备"
+        )?.withSymbolConfiguration(config)
+        audioInputRefreshButton.imagePosition = .imageOnly
+        audioInputRefreshButton.imageScaling = .scaleProportionallyDown
+        audioInputRefreshButton.bezelStyle = .rounded
+        audioInputRefreshButton.controlSize = .small
+        audioInputRefreshButton.toolTip = "刷新麦克风输入设备列表"
+        audioInputRefreshButton.target = self
+        audioInputRefreshButton.action = #selector(refreshAudioInputDevicesFromButton)
+    }
+
+    func refreshAudioInputDeviceMenu(selectedUID: String? = nil) {
+        let targetUID = selectedUID ?? selectedAudioInputDeviceUID
+        let defaultName = AudioInputDeviceProvider.defaultInputDeviceName() ?? "系统默认"
+        let devices = AudioInputDeviceProvider.devices()
+        audioInputDeviceMode.removeAllItems()
+
+        audioInputDeviceMode.addItem(withTitle: "跟随系统（\(defaultName)）")
+        audioInputDeviceMode.lastItem?.representedObject = AudioInputDevice.systemDefaultUID
+
+        for device in devices {
+            let suffix = device.isDefault ? " · 当前系统" : ""
+            audioInputDeviceMode.addItem(withTitle: "\(device.name)\(suffix)")
+            audioInputDeviceMode.lastItem?.representedObject = device.uid
+        }
+
+        let hasTarget = devices.contains { $0.uid == targetUID }
+        let resolvedUID = targetUID.isEmpty || hasTarget ? targetUID : AudioInputDevice.systemDefaultUID
+        if !targetUID.isEmpty, !hasTarget {
+            AudioInputDevice.saveSelectedUID(AudioInputDevice.systemDefaultUID)
+            detail.stringValue = "已找不到上次选择的麦克风，已回到跟随系统。"
+            LaunchDiagnostics.mark("audio_input_selection_downgrade reason=device_missing selected_uid=\(targetUID)")
+        }
+        selectAudioInputDeviceMenuItem(uid: resolvedUID)
+        audioInputDeviceMode.toolTip = resolvedUID.isEmpty
+            ? "跟随 macOS 当前系统输入：\(defaultName)"
+            : "录音时锁定选中的麦克风；如果设备消失会自动回到跟随系统。"
+    }
+
+    func selectAudioInputDeviceMenuItem(uid: String) {
+        for item in audioInputDeviceMode.itemArray {
+            if (item.representedObject as? String) == uid {
+                audioInputDeviceMode.select(item)
+                return
+            }
+        }
+        audioInputDeviceMode.selectItem(at: 0)
+    }
+
+    @objc func refreshAudioInputDevicesFromButton() {
+        refreshAudioInputDeviceMenu()
+        detail.stringValue = "麦克风输入设备列表已刷新"
+        LaunchDiagnostics.mark("audio_input_selection_refresh source=button")
+    }
+
+    func startAudioInputRouteObserver() {
+        guard audioInputRouteObserver == nil else { return }
+        let observer = AudioInputRouteObserver { [weak self] reason in
+            self?.refreshAudioInputDevicesAfterRouteChange(reason)
+        }
+        observer.start()
+        audioInputRouteObserver = observer
+    }
+
+    func refreshAudioInputDevicesAfterRouteChange(_ reason: AudioInputRouteChangeReason) {
+        refreshAudioInputDeviceMenu()
+        LaunchDiagnostics.mark("audio_input_selection_refresh source=route_change reason=\(reason.logName)")
     }
 
     func configureSmartRewriteModeMenu(_ preference: SmartRewritePreference) {
@@ -143,6 +226,11 @@ extension MainViewController {
                 .foregroundColor: hasKey ? UITheme.brandYellow : NSColor.secondaryLabelColor,
             ]
         )
+    }
+
+    func refreshSmartAIUsageVisibility() {
+        smartAIUsageRow?.isHidden = false
+        deepSeekBalanceButton.isHidden = false
     }
 
     func toggleAutoTranslateFromShortcut() {

@@ -31,10 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var speechInput = SpeechInputCoordinator(
         controller: controller,
         showMainWindow: { [weak self] in self?.lifecycle.showMainWindow() },
-        hideMainWindow: { [weak self] in self?.lifecycle.hideMainWindow() },
-        shouldKeepMainWindowVisibleForScreenshot: { [weak self] in
-            self?.lifecycle.shouldKeepMainWindowVisibleForScreenshot() ?? false
-        }
+        hideMainWindow: { [weak self] in self?.lifecycle.hideMainWindow() }
     )
 
     override init() {
@@ -74,6 +71,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         LaunchDiagnostics.mark("speechInput.start begin")
         speechInput.start()
         LaunchDiagnostics.mark("speechInput.start done")
+        LaunchDiagnostics.mark("launch_show_main_window begin")
+        lifecycle.showMainWindow()
+        LaunchDiagnostics.mark("launch_show_main_window done")
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

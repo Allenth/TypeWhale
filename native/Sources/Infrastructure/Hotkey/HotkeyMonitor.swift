@@ -51,8 +51,9 @@ final class HotkeyMonitor {
     var onScreenshotTranslation: (() -> Void)?
     var onMainWindow: (() -> Void)?
 
-    func start() {
-        guard tap == nil || !isTapEnabled else { return }
+    @discardableResult
+    func start() -> Bool {
+        guard tap == nil || !isTapEnabled else { return true }
         stopEventTap()
         let mask = CGEventMask(
             (1 << CGEventType.flagsChanged.rawValue) |
@@ -86,10 +87,16 @@ final class HotkeyMonitor {
             },
             userInfo: context
         )
-        guard let tap else { return }
+        guard let tap else {
+            LaunchDiagnostics.mark("hotkey_tap_create_failed accessibility_trusted=\(AXIsProcessTrusted())")
+            return false
+        }
         source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
+        let enabled = CGEvent.tapIsEnabled(tap: tap)
+        LaunchDiagnostics.mark("hotkey_tap_started enabled=\(enabled) accessibility_trusted=\(AXIsProcessTrusted())")
+        return enabled
     }
 
     var isGlobalListening: Bool {
@@ -240,7 +247,7 @@ final class HotkeyMonitor {
         return false
     }
 
-    private func handleKey(event: CGEvent, isDown: Bool) -> Bool {
+    func handleKey(event: CGEvent, isDown: Bool) -> Bool {
         let eventKeyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
         if handleActionKey(
             binding: autoTranslateBinding,
@@ -296,6 +303,15 @@ final class HotkeyMonitor {
             action: { [weak self] in self?.onScreenshotTranslation?() }
         ) {
             return true
+        }
+
+        if !isDown,
+           triggerDown,
+           let activeChannel,
+           let activeBinding,
+           activeBinding.kind == .combo,
+           activeBinding.keyCode == eventKeyCode {
+            return updateTrigger(isDown: false, channel: activeChannel, binding: activeBinding)
         }
 
         guard let binding = bindings.first(where: { binding in
@@ -371,16 +387,21 @@ final class HotkeyMonitor {
     ) -> Bool {
         guard let binding,
               binding.kind == .combo,
-              binding.keyCode == eventKeyCode,
-              requiredModifiersAreActive(for: binding, eventFlags: eventFlags) else {
+              binding.keyCode == eventKeyCode else {
+            return false
+        }
+        if !isDown {
+            guard triggerDown else { return false }
+            triggerDown = false
+            return true
+        }
+        guard requiredModifiersAreActive(for: binding, eventFlags: eventFlags) else {
             return false
         }
         // 修饰键+普通键的组合：单击即触发（区别于纯修饰键的双击）。
         if isDown != triggerDown {
             triggerDown = isDown
-            if isDown {
-                action()
-            }
+            action()
         }
         return true
     }
@@ -436,15 +457,20 @@ final class HotkeyMonitor {
     ) -> Bool {
         guard let binding,
               binding.kind == .combo,
-              binding.keyCode == eventKeyCode,
-              requiredModifiersAreActive(for: binding, eventFlags: eventFlags) else {
+              binding.keyCode == eventKeyCode else {
+            return false
+        }
+        if !isDown {
+            guard triggerDown else { return false }
+            triggerDown = false
+            return true
+        }
+        guard requiredModifiersAreActive(for: binding, eventFlags: eventFlags) else {
             return false
         }
         if isDown != triggerDown {
             triggerDown = isDown
-            if isDown {
-                triggerAction(binding: binding, actionKey: actionKey, action: action)
-            }
+            triggerAction(binding: binding, actionKey: actionKey, action: action)
         }
         return true
     }

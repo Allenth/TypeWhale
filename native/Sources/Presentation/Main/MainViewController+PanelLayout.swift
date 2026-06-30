@@ -154,11 +154,48 @@ extension MainViewController {
 
     private func buildPanels() -> [NSView] {
         [
+            panel("预览主题", width: 200, buildPreviewThemeContent()),
             panel("整理设置", width: 250, buildComboQuickSmartContent()),
             panel("快捷键", width: 300, buildHotkeysPanelContent()),
-            panel("更多设置", width: 236, buildMiscSettingsContent()),
+            panel("更多设置", width: 276, buildMiscSettingsContent()),
             panel("状态", width: 204, buildStatusPanelContent()),
         ]
+    }
+
+    // 第二列：预览主题。两张程序绘制的迷你预览，点击切换主题。
+    private func buildPreviewThemeContent() -> NSView {
+        let classicTile = ThemePreviewTile(kind: .classic, title: "默认胶囊")
+        let notchTile = ThemePreviewTile(kind: .notch, title: "刘海主题")
+        previewThemeClassicTile = classicTile
+        previewThemeNotchTile = notchTile
+        classicTile.onSelect = { [weak self] in self?.selectPreviewTheme(.classic) }
+        notchTile.onSelect = { [weak self] in self?.selectPreviewTheme(.notch) }
+        let current = AppSettingsStore.loadMainViewSettings().previewTheme
+        classicTile.isSelected = current == .classic
+        notchTile.isSelected = current == .notch
+
+        let stack = NSStackView(views: [classicTile, notchTile])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 12
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        for tile in [classicTile, notchTile] {
+            tile.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        }
+        return stack
+    }
+
+    /// 点击预览瓦片切换主题：同步「更多设置」里的开关并存盘，刷新选中高亮。
+    func selectPreviewTheme(_ theme: PreviewTheme) {
+        previewThemeNotch.state = theme == .notch ? .on : .off
+        saveSettings()
+        refreshPreviewThemeTiles()
+    }
+
+    func refreshPreviewThemeTiles() {
+        let current = previewTheme
+        previewThemeClassicTile?.isSelected = current == .classic
+        previewThemeNotchTile?.isSelected = current == .notch
     }
 
     // 子分区：在一列里用小标题 + 分隔线划清边界。
@@ -198,10 +235,19 @@ extension MainViewController {
     private func buildMiscSettingsContent() -> NSView {
         translationPromptButton.widthAnchor.constraint(equalToConstant: 92).isActive = true
         screenshotSaveLocationButton.widthAnchor.constraint(equalToConstant: 120).isActive = true
+        audioInputDeviceMode.widthAnchor.constraint(equalToConstant: 142).isActive = true
+        audioInputRefreshButton.widthAnchor.constraint(equalToConstant: 30).isActive = true
+        audioInputRefreshButton.heightAnchor.constraint(equalToConstant: 24).isActive = true
+        let audioInputControls = NSStackView(views: [audioInputDeviceMode, audioInputRefreshButton])
+        audioInputControls.orientation = .horizontal
+        audioInputControls.alignment = .centerY
+        audioInputControls.spacing = 4
         let translation = subSection("翻译", [optionRow("翻译提示词", translationPromptButton)])
         let screenshot = subSection("截图", [optionRow("保存位置", screenshotSaveLocationButton)])
         let system = subSection("系统", [
+            optionRow("输入设备", audioInputControls),
             optionRow("胶囊实时预览", realtime),
+            optionRow("刘海预览主题", previewThemeNotch),
             optionRow("停顿自动完成", autoFinish),
             optionRow("录音时降低系统音量", duckSystemAudio),
             optionRow("麦克风降噪（增强·略慢）", micNoiseReduction),
@@ -294,12 +340,15 @@ extension MainViewController {
         developerTermsButton.widthAnchor.constraint(equalToConstant: 92).isActive = true
         deepSeekKeyButton.widthAnchor.constraint(equalToConstant: 92).isActive = true
         deepSeekBalanceButton.widthAnchor.constraint(equalToConstant: 92).isActive = true
+        let usageRow = optionRow("费用 / 余额", deepSeekBalanceButton)
+        smartAIUsageRow = usageRow
+        refreshSmartAIUsageVisibility()
         return rowStack([
             optionRow("自动范围", autoScopeButton),
             optionRow("整理提示词", promptSettingsButton),
             optionRow("开发术语", developerTermsButton),
             optionRow("DeepSeek Key", deepSeekKeyButton),
-            optionRow("余额 / 消费", deepSeekBalanceButton),
+            usageRow,
         ])
     }
 

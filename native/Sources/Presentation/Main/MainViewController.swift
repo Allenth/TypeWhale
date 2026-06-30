@@ -86,9 +86,14 @@ final class MainViewController: NSViewController {
     let modelProgress = NSProgressIndicator()
     let modelInstallButton = NSButton(title: "安装模型", target: nil, action: nil)
     let realtime = BrandSwitch()
+    let previewThemeNotch = BrandSwitch()
+    weak var previewThemeClassicTile: ThemePreviewTile?
+    weak var previewThemeNotchTile: ThemePreviewTile?
     let autoFinish = BrandSwitch()
     let duckSystemAudio = BrandSwitch()
     let micNoiseReduction = BrandSwitch()
+    let audioInputDeviceMode = NSPopUpButton()
+    let audioInputRefreshButton = NSButton(title: "", target: nil, action: nil)
     let launchAtLogin = BrandSwitch()
     let asrBackendMode = NSPopUpButton()
     let smartRewriteMode = NSPopUpButton()
@@ -134,6 +139,8 @@ final class MainViewController: NSViewController {
     var testLogsPopover: NSPopover?
     var modelDetailPopover: NSPopover?
     var deepSeekBalancePopover: NSPopover?
+    var audioInputRouteObserver: AudioInputRouteObserver?
+    var smartAIUsageRow: NSView?
     let deepSeekBalanceClient = DeepSeekBalanceClient()
     lazy var versionHistoryViewController = VersionHistoryViewController()
     lazy var testLogsViewController = TestLogsViewController()
@@ -182,12 +189,16 @@ final class MainViewController: NSViewController {
         let settings = AppSettingsStore.loadMainViewSettings()
         realtime.state = settings.realtimePreviewEnabled ? .on : .off
         realtime.target = self; realtime.action = #selector(saveSettings)
+        previewThemeNotch.state = settings.previewTheme == .notch ? .on : .off
+        previewThemeNotch.target = self; previewThemeNotch.action = #selector(saveSettings)
         autoFinish.state = settings.autoFinishAfterPauseEnabled ? .on : .off
         autoFinish.target = self; autoFinish.action = #selector(saveSettings)
         duckSystemAudio.state = settings.duckSystemAudioWhileRecordingEnabled ? .on : .off
         duckSystemAudio.target = self; duckSystemAudio.action = #selector(saveSettings)
         micNoiseReduction.state = settings.micVoiceProcessingEnabled ? .on : .off
         micNoiseReduction.target = self; micNoiseReduction.action = #selector(saveSettings)
+        configureAudioInputDeviceControls(selectedUID: settings.audioInputDeviceUID)
+        audioInputDeviceMode.target = self; audioInputDeviceMode.action = #selector(saveSettings)
         configureASRBackendMenu(settings.asrBackend)
         asrBackendMode.target = self; asrBackendMode.action = #selector(saveSettings)
         configureSmartRewriteModeMenu(settings.smartRewritePreference)
@@ -230,7 +241,11 @@ final class MainViewController: NSViewController {
         )
         DispatchQueue.main.async { [weak self] in
             _ = self?.versionHistoryViewController.view
+            self?.startAudioInputRouteObserver()
         }
     }
 
+    deinit {
+        audioInputRouteObserver?.stop()
+    }
 }

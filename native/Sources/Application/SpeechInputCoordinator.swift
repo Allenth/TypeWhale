@@ -18,6 +18,7 @@ final class SpeechInputCoordinator {
         static let memorySafetyCheckSeconds: TimeInterval = 30
         static let wakeRecoveryGraceSeconds: TimeInterval = 3
         static let realtimeSnapshotTimeoutSeconds: TimeInterval = 3
+        static let startupHotkeyRecoveryDelays: [TimeInterval] = [0.5, 1.5, 3, 6, 10]
     }
 
     private var recordingStartedAt: Date?
@@ -32,9 +33,8 @@ final class SpeechInputCoordinator {
     private let controller: MainViewController
     private let showMainWindow: () -> Void
     private let hideMainWindow: () -> Void
-    private let shouldKeepMainWindowVisibleForScreenshot: () -> Bool
     private let recorder = AudioRecorder()
-    private let popup = RecordingPanel()
+    private var popup: PreviewPresenting = RecordingPanel()
     private let hotkey = HotkeyMonitor()
     private let modelInstaller = SenseVoiceModelInstaller()
     private let nativeASR = NativeSenseVoiceBridge(runtimeName: "shared")
@@ -42,7 +42,7 @@ final class SpeechInputCoordinator {
     /// 不再和慢速 SenseVoice 重识别抢同一条队列被饿死；全局 g_cached_vad 也因此只被一条队列访问，无竞争。
     private let vadBridge = NativeSenseVoiceBridge(runtimeName: "vad")
     private let outputAudioDucker = OutputAudioDucker()
-    private let smartEngine = DeepSeekRewriteEngine()
+    private let smartEngine = SelectedSmartAITextEngine()
     private lazy var asr = SenseVoiceRouter(runtimeName: "final", native: nativeASR)
     private lazy var realtimeASR = SenseVoiceRouter(runtimeName: "realtime", native: nativeASR)
     private lazy var smartInputRouter = SmartInputRouter(engine: smartEngine)
@@ -72,6 +72,7 @@ final class SpeechInputCoordinator {
     private var backgroundHealthTimer: Timer?
     private var recordingSafetyTimer: Timer?
     private var capsuleStatusTimer: Timer?
+    private var startupHotkeyRecoveryWorkItems: [DispatchWorkItem] = []
     private var lastMemorySafetyCheckAt = Date.distantPast
     private var lastASRArenaFlushAt: Date?
     private var wakeRecoveryUntil: Date?
@@ -108,13 +109,11 @@ final class SpeechInputCoordinator {
     init(
         controller: MainViewController,
         showMainWindow: @escaping () -> Void,
-        hideMainWindow: @escaping () -> Void,
-        shouldKeepMainWindowVisibleForScreenshot: @escaping () -> Bool
+        hideMainWindow: @escaping () -> Void
     ) {
         self.controller = controller
         self.showMainWindow = showMainWindow
         self.hideMainWindow = hideMainWindow
-        self.shouldKeepMainWindowVisibleForScreenshot = shouldKeepMainWindowVisibleForScreenshot
     }
 
     func start() {
@@ -162,7 +161,7 @@ final class SpeechInputCoordinator {
         hotkey.onScreenshot = { [weak self] in self?.beginScreenshotFromHotkey() }
         hotkey.onScreenshotTranslation = { [weak self] in self?.beginScreenshotTranslationFromHotkey() }
         hotkey.onMainWindow = { [weak self] in self?.showMainWindowFromHotkey() }
-        popup.onCycleMode = { [weak self] in self?.cycleSmartRewriteModeFromCapsule() }
+        wirePreviewCallbacks()
         modelInstaller.onStateChange = { [weak self] state in
             self?.controller.updateModelState(state)
             if case .ready = state {
@@ -196,13 +195,12 @@ final class SpeechInputCoordinator {
                 autoTranslate: autoTranslate,
                 mainWindow: mainWindow
             )
-            LaunchDiagnostics.mark("hotkey_update")
-            self?.hotkey.start()
+            self?.startHotkey(reason: "hotkey_update")
             self?.refreshPermissions()
         }
         modelInstaller.refresh()
-        LaunchDiagnostics.mark("hotkey_start reason=app_start")
-        hotkey.start()
+        startHotkey(reason: "app_start")
+        scheduleStartupHotkeyRecovery()
         asr.start()
         realtimeASR.start()
         releaseASRResourcesIfMemoryElevated()
@@ -216,6 +214,7 @@ final class SpeechInputCoordinator {
     func stop() {
         stopBackgroundHealthTimer()
         stopRecordingSafetyTimer()
+        cancelStartupHotkeyRecovery()
         longPressWorkItem?.cancel()
         cancelAutoFinishTimer()
         cancelInitialSilenceTimer()
@@ -256,8 +255,7 @@ final class SpeechInputCoordinator {
             LaunchDiagnostics.mark(self.backgroundStateLogLine(event: "wake_recovery_check"))
             self.refreshPermissions()
             if !self.hotkey.isGlobalListening {
-                LaunchDiagnostics.mark("hotkey_start reason=wake_recovery")
-                self.hotkey.start()
+                self.startHotkey(reason: "wake_recovery")
             }
             self.controller.updateMemoryReadout()
             self.startBackgroundHealthTimer()
@@ -265,8 +263,45 @@ final class SpeechInputCoordinator {
     }
 
     func refreshUserVisibleDiagnostics() {
+        if !hotkey.isGlobalListening, PermissionDiagnosticsProvider.current().accessibilityTrusted {
+            startHotkey(reason: "visible_diagnostics")
+        }
         refreshPermissions()
         controller.updateMemoryReadout()
+    }
+
+    private func startHotkey(reason: String) {
+        let listening = hotkey.start()
+        LaunchDiagnostics.mark(
+            "hotkey_start_result reason=\(reason) listening=\(listening) accessibility_trusted=\(PermissionDiagnosticsProvider.current().accessibilityTrusted)"
+        )
+    }
+
+    private func scheduleStartupHotkeyRecovery() {
+        cancelStartupHotkeyRecovery()
+        startupHotkeyRecoveryWorkItems = Timing.startupHotkeyRecoveryDelays.enumerated().map { index, delay in
+            let item = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                if self.hotkey.isGlobalListening {
+                    LaunchDiagnostics.mark("hotkey_startup_recovery_check attempt=\(index + 1) listening=true")
+                    self.cancelStartupHotkeyRecovery()
+                    return
+                }
+                self.startHotkey(reason: "app_start_recovery_\(index + 1)")
+                self.refreshPermissions()
+                if self.hotkey.isGlobalListening {
+                    self.cancelStartupHotkeyRecovery()
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
+            return item
+        }
+        LaunchDiagnostics.mark("hotkey_startup_recovery_scheduled attempts=\(startupHotkeyRecoveryWorkItems.count)")
+    }
+
+    private func cancelStartupHotkeyRecovery() {
+        startupHotkeyRecoveryWorkItems.forEach { $0.cancel() }
+        startupHotkeyRecoveryWorkItems.removeAll()
     }
 
     private func startBackgroundHealthTimer() {
@@ -583,6 +618,30 @@ final class SpeechInputCoordinator {
         popup.updateModeName(next.displayName)
     }
 
+    /// 重连预览回调（主题切换换实现后需重设）。
+    private func wirePreviewCallbacks() {
+        popup.onCycleMode = { [weak self] in self?.cycleSmartRewriteModeFromCapsule() }
+    }
+
+    /// 按设置切换实时预览主题（默认胶囊 / 刘海）。在录音开始前调用，切换下次录音生效。
+    /// 仅当目标主题与当前实现不一致时才替换，避免无谓重建。
+    private func applyPreviewTheme(_ theme: PreviewTheme) {
+        let isNotch = popup is NotchPreviewPresenter
+        LaunchDiagnostics.mark("preview_theme_apply requested=\(theme.rawValue) current=\(isNotch ? "notch" : "classic")")
+        switch theme {
+        case .classic where isNotch:
+            popup.hideAnimated()
+            popup = RecordingPanel()
+            wirePreviewCallbacks()
+        case .notch where !isNotch:
+            popup.hideAnimated()
+            popup = NotchPreviewPresenter()
+            wirePreviewCallbacks()
+        default:
+            break
+        }
+    }
+
     private func refreshCapsuleStatusIfNeeded() {
         let now = Date()
         if let lastCapsuleStatusUpdateAt,
@@ -617,9 +676,8 @@ final class SpeechInputCoordinator {
         longPressWorkItem?.cancel()
         longPressWorkItem = nil
         hotkeyIsPressed = false
-        if !shouldKeepMainWindowVisibleForScreenshot() {
-            hideMainWindow()
-        }
+        LaunchDiagnostics.mark("screenshot_hotkey_hide_main_window")
+        hideMainWindow()
         if translateAfterSelection {
             screenshotCoordinator.beginTranslation()
         } else {
@@ -660,6 +718,7 @@ final class SpeechInputCoordinator {
             ? "正在等待第一段实时文本…"
             : (resolvedBackend == .qwen3ASR ? "Qwen3-ASR 模式下实时预览暂不启用" : "胶囊实时预览已关闭"))
         controller.setPrimaryStatus("录音中", detail: instructions, tone: .listening)
+        applyPreviewTheme(controller.previewTheme)
         popup.show(state: "录音中", draft: "")
         popup.setContext(
             appIcon: frontmostApp?.icon,
@@ -670,14 +729,52 @@ final class SpeechInputCoordinator {
         outputAudioDucker.duckIfNeeded(enabled: controller.duckSystemAudioWhileRecordingEnabled)
         do {
             let startBegin = Date()
-            try recorder.start(
-                taskID: taskID,
-                realtimeEnabled: realtimeEnabled,
-                inputDeviceID: AudioInputDeviceProvider.selectedDeviceID(),
-                voiceProcessingEnabled: controller.micVoiceProcessingEnabled
-            )
+            var inputDeviceResolution = AudioInputDeviceProvider.resolveSelectedManualDevice()
+            if inputDeviceResolution.didDowngradeToSystemDefault {
+                controller.refreshAudioInputDeviceMenu(selectedUID: AudioInputDevice.systemDefaultUID)
+                controller.detail.stringValue = "上次选择的麦克风不可用，已改为跟随系统输入。"
+                LaunchDiagnostics.mark(
+                    "audio_input_selection_downgrade reason=start_missing selected_uid=\(inputDeviceResolution.selectedUID)"
+                )
+            }
+            do {
+                try recorder.start(
+                    taskID: taskID,
+                    realtimeEnabled: realtimeEnabled,
+                    inputDeviceID: inputDeviceResolution.deviceID,
+                    voiceProcessingEnabled: controller.micVoiceProcessingEnabled
+                )
+            } catch {
+                if inputDeviceResolution.deviceID != nil {
+                    LaunchDiagnostics.mark(
+                        "audio_input_selection_downgrade reason=bind_failed selected_uid=\(inputDeviceResolution.selectedUID) error=\(error.localizedDescription)"
+                    )
+                    AudioInputDevice.saveSelectedUID(AudioInputDevice.systemDefaultUID)
+                    controller.refreshAudioInputDeviceMenu(selectedUID: AudioInputDevice.systemDefaultUID)
+                    controller.detail.stringValue = "选中的麦克风无法使用，已改为跟随系统输入。"
+                    inputDeviceResolution = AudioInputDeviceProvider.ManualSelectionResolution(
+                        deviceID: nil,
+                        selectedUID: AudioInputDevice.systemDefaultUID,
+                        matchedDeviceName: nil,
+                        didDowngradeToSystemDefault: true
+                    )
+                    try recorder.start(
+                        taskID: taskID,
+                        realtimeEnabled: realtimeEnabled,
+                        inputDeviceID: nil,
+                        voiceProcessingEnabled: controller.micVoiceProcessingEnabled
+                    )
+                } else {
+                    throw error
+                }
+            }
             let startMs = Int(Date().timeIntervalSince(startBegin) * 1000)
-            LaunchDiagnostics.mark("recorder_start_ms=\(startMs) voice_processing=\(controller.micVoiceProcessingEnabled)")
+            LaunchDiagnostics.mark([
+                "recorder_start_ms=\(startMs)",
+                "voice_processing=\(controller.micVoiceProcessingEnabled)",
+                "audio_input=\(inputDeviceResolution.deviceID == nil ? "system_default" : "manual")",
+                "audio_input_name=\(inputDeviceResolution.matchedDeviceName ?? "-")",
+            ].joined(separator: " "))
             recordingStartedAt = Date()
             lastCapsuleStatusUpdateAt = nil
             updateCapsuleStatus()
@@ -703,6 +800,8 @@ final class SpeechInputCoordinator {
         guard let session = activeSession else { return }
         let taskID = session.id
         let configuration = session.configuration
+        let realtimePreviewTextAtFinish = session.committedPreviewText + session.latestPreviewText
+        let realtimeVoiceDetectedAtFinish = voiceEverDetected
         refreshTrackedTargetFromFrontmost()
         let targetApp = currentTargetApp(taskID: taskID, fallback: session.targetApp)
         let result: (URL, TimeInterval)?
@@ -761,39 +860,62 @@ final class SpeechInputCoordinator {
                 let shouldUpdateInterface = self.shouldUpdateInterface(for: taskID)
                 switch response {
                 case .failure(let error):
-                    if shouldUpdateInterface {
-                        self.controller.setPrimaryStatus(
-                            "人声检测失败",
-                            detail: error.localizedDescription,
-                            tone: .error,
-                            resetWaveform: true
-                        )
-                        self.popup.show(state: "检测失败", draft: "")
-                    }
-                    self.finishFinalTask(task)
-                case .success(false):
-                    if shouldUpdateInterface {
-                        self.showEmptyRecording()
-                    }
-                    self.finishFinalTask(task)
-                case .success(true):
+                    LaunchDiagnostics.mark(
+                        "vad_final_unavailable_run_asr task_id=\(taskID.uuidString.prefix(8)) error=\(error.localizedDescription)"
+                    )
                     if shouldUpdateInterface {
                         self.controller.setPrimaryStatus(
                             "正在识别",
-                            detail: String(format: "已完整录制 %.1f 秒", duration),
+                            detail: "人声检测未完成，改用完整录音识别",
                             tone: .processing,
                             resetWaveform: true
                         )
                         self.popup.show(state: "识别中", draft: "")
                     }
-                    self.asr.transcribe(
-                        audio: task.audioURL,
-                        configuration: task.configuration
-                    ) { [weak self] response in
-                        DispatchQueue.main.async { self?.handle(response, task: task) }
+                    self.startFinalRecognition(task, duration: duration, shouldUpdateInterface: shouldUpdateInterface)
+                case .success(false):
+                    let shouldRunFinalASR = FinalSpeechGate.shouldRunFinalASR(
+                        finalVADDetectedSpeech: false,
+                        realtimeVoiceDetected: realtimeVoiceDetectedAtFinish,
+                        realtimePreviewText: realtimePreviewTextAtFinish
+                    )
+                    if shouldRunFinalASR {
+                        LaunchDiagnostics.mark(
+                            "vad_final_override task_id=\(taskID.uuidString.prefix(8)) reason=realtime_evidence preview_chars=\(realtimePreviewTextAtFinish.count) realtime_voice=\(realtimeVoiceDetectedAtFinish)"
+                        )
+                        self.startFinalRecognition(task, duration: duration, shouldUpdateInterface: shouldUpdateInterface)
+                    } else {
+                        if shouldUpdateInterface {
+                            self.showEmptyRecording()
+                        }
+                        self.finishFinalTask(task)
                     }
+                case .success(true):
+                    self.startFinalRecognition(task, duration: duration, shouldUpdateInterface: shouldUpdateInterface)
                 }
             }
+        }
+    }
+
+    private func startFinalRecognition(
+        _ task: RecordingTask,
+        duration: TimeInterval,
+        shouldUpdateInterface: Bool
+    ) {
+        if shouldUpdateInterface {
+            controller.setPrimaryStatus(
+                "正在识别",
+                detail: String(format: "已完整录制 %.1f 秒", duration),
+                tone: .processing,
+                resetWaveform: true
+            )
+            popup.show(state: "识别中", draft: "")
+        }
+        asr.transcribe(
+            audio: task.audioURL,
+            configuration: task.configuration
+        ) { [weak self] response in
+            DispatchQueue.main.async { self?.handle(response, task: task) }
         }
     }
 

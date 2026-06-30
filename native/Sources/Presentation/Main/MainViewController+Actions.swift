@@ -2,6 +2,8 @@ import AppKit
 
 extension MainViewController {
     @objc func saveSettings() {
+        let previousAudioInputUID = AppSettingsStore.loadMainViewSettings().audioInputDeviceUID
+        let nextAudioInputUID = selectedAudioInputDeviceUID
         if autoFinish.state == .on {
             realtime.state = .on
             realtime.needsDisplay = true
@@ -15,12 +17,22 @@ extension MainViewController {
             autoFinishAfterPauseEnabled: autoFinish.state == .on,
             duckSystemAudioWhileRecordingEnabled: duckSystemAudio.state == .on,
             micVoiceProcessingEnabled: micNoiseReduction.state == .on,
+            audioInputDeviceUID: selectedAudioInputDeviceUID,
             asrBackend: asrBackend,
             smartRewritePreference: smartRewritePreference,
             autoTranslateEnabled: autoTranslate.state == .on,
-            translationDirection: translationDirection
+            translationDirection: translationDirection,
+            previewTheme: previewThemeNotch.state == .on ? .notch : .classic
         ))
+        if previousAudioInputUID != nextAudioInputUID {
+            let mode = nextAudioInputUID.isEmpty ? "system_default" : "manual"
+            LaunchDiagnostics.mark("audio_input_selection_save mode=\(mode) uid=\(nextAudioInputUID)")
+            detail.stringValue = nextAudioInputUID.isEmpty
+                ? "麦克风输入已改为跟随系统"
+                : "麦克风输入已锁定为：\(audioInputDeviceMode.titleOfSelectedItem ?? "手动选择")"
+        }
         refreshDisplayedModelState()
+        refreshPreviewThemeTiles()
     }
 
     @objc func configureSmartRewritePrompts() {
@@ -371,6 +383,10 @@ extension MainViewController {
         realtime.state == .on
     }
 
+    var previewTheme: PreviewTheme {
+        previewThemeNotch.state == .on ? .notch : .classic
+    }
+
     var autoFinishAfterPauseEnabled: Bool {
         autoFinish.state == .on
     }
@@ -381,6 +397,13 @@ extension MainViewController {
 
     var micVoiceProcessingEnabled: Bool {
         micNoiseReduction.state == .on
+    }
+
+    var selectedAudioInputDeviceUID: String {
+        guard let representedObject = audioInputDeviceMode.selectedItem?.representedObject as? String else {
+            return AudioInputDevice.systemDefaultUID
+        }
+        return representedObject
     }
 
     var asrBackend: ASRBackend {

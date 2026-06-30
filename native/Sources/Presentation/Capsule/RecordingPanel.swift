@@ -1,7 +1,7 @@
 import AppKit
 import QuartzCore
 
-final class RecordingPanel: NSPanel {
+final class RecordingPanel: NSPanel, PreviewPresenting {
     private let visualBackground = NSVisualEffectView()
     private let capsule = RecordingCapsuleView()
     private let infoBar = NSStackView()

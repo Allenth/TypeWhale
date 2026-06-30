@@ -1,0 +1,828 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>TypeWhale 付费 Beta - Mac 语音输入、整理和翻译</title>
+    <link rel="icon" href="../../assets/TypeWhaleMinimalLogo.png">
+    <meta
+      name="description"
+      content="TypeWhale 是一个本地优先的 macOS 语音输入工具。按下快捷键说话，本机识别，可选 AI 整理和翻译，并把最终文本粘贴回当前应用。"
+    >
+    <style>
+      :root {
+        --bg: #15140f;
+        --panel: #242116;
+        --panel-2: #33301f;
+        --text: #f7f3e8;
+        --muted: #c9c0ad;
+        --subtle: #9b927c;
+        --line: rgba(255, 255, 255, 0.14);
+        --brand: #ffd044;
+        --brand-ink: #16120a;
+        --mint: #80d1a1;
+        --coral: #ff8f70;
+        --sky: #8bbcff;
+        --shadow: rgba(0, 0, 0, 0.42);
+        color-scheme: dark;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.6;
+      }
+
+      img {
+        display: block;
+        max-width: 100%;
+      }
+
+      a {
+        color: inherit;
+      }
+
+      .site-header {
+        position: fixed;
+        z-index: 10;
+        top: 0;
+        right: 0;
+        left: 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(21, 20, 15, 0.84);
+        backdrop-filter: blur(18px);
+      }
+
+      .nav {
+        width: min(1180px, calc(100% - 40px));
+        height: 64px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        text-decoration: none;
+        font-weight: 750;
+      }
+
+      .brand img {
+        width: 30px;
+        height: 30px;
+        border-radius: 7px;
+      }
+
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .nav-links a {
+        text-decoration: none;
+      }
+
+      .nav-links a:hover {
+        color: var(--text);
+      }
+
+      .button {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        padding: 0 18px;
+        font-weight: 750;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+
+      .button.primary {
+        background: var(--brand);
+        color: var(--brand-ink);
+        box-shadow: 0 12px 30px rgba(255, 210, 74, 0.22);
+      }
+
+      .button.secondary {
+        border-color: var(--line);
+        background: rgba(255, 255, 255, 0.07);
+        color: var(--text);
+      }
+
+      .hero {
+        position: relative;
+        min-height: 88svh;
+        padding: 112px 0 54px;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        background: #17150f;
+      }
+
+      .hero-media,
+      .hero-media::after {
+        position: absolute;
+        inset: 0;
+      }
+
+      .hero-media img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: 50% 50%;
+        opacity: 0.54;
+        filter: saturate(0.95) contrast(1.02);
+      }
+
+      .hero-media::after {
+        content: "";
+        background:
+          linear-gradient(90deg, rgba(16, 15, 10, 0.84) 0%, rgba(16, 15, 10, 0.68) 42%, rgba(16, 15, 10, 0.76) 100%),
+          rgba(5, 5, 3, 0.26);
+      }
+
+      .hero-inner {
+        position: relative;
+        width: min(1180px, calc(100% - 40px));
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: minmax(0, 720px) minmax(260px, 360px);
+        gap: 56px;
+        align-items: end;
+      }
+
+      .eyebrow {
+        width: fit-content;
+        margin: 0 0 18px;
+        border: 1px solid rgba(255, 210, 74, 0.4);
+        border-radius: 999px;
+        padding: 7px 12px;
+        color: var(--brand);
+        background: rgba(255, 210, 74, 0.1);
+        font-size: 13px;
+        font-weight: 750;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin-top: 0;
+      }
+
+      h1 {
+        max-width: 780px;
+        margin-bottom: 22px;
+        font-size: clamp(46px, 7vw, 92px);
+        line-height: 0.96;
+        letter-spacing: 0;
+      }
+
+      .lead {
+        max-width: 690px;
+        margin-bottom: 30px;
+        color: #e5ded2;
+        font-size: 20px;
+      }
+
+      .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 28px;
+      }
+
+      .hero-note {
+        max-width: 680px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .beta-panel {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 22px;
+        background: rgba(38, 35, 24, 0.78);
+        box-shadow: 0 22px 80px var(--shadow);
+        backdrop-filter: blur(20px);
+      }
+
+      .price {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+
+      .price strong {
+        font-size: 44px;
+        line-height: 1;
+      }
+
+      .price span {
+        color: var(--muted);
+      }
+
+      .slots {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin: 18px 0;
+      }
+
+      .slot-item {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 10px;
+        background: rgba(255, 255, 255, 0.06);
+      }
+
+      .slot-item b {
+        display: block;
+        font-size: 18px;
+      }
+
+      .slot-item span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .panel-list {
+        margin: 16px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .panel-list li {
+        display: flex;
+        gap: 9px;
+        margin: 9px 0;
+        color: #e9e0d2;
+        font-size: 14px;
+      }
+
+      .panel-list li::before {
+        content: "";
+        width: 7px;
+        height: 7px;
+        flex: 0 0 auto;
+        margin-top: 8px;
+        border-radius: 999px;
+        background: var(--mint);
+      }
+
+      main {
+        background: var(--bg);
+      }
+
+      .section {
+        padding: 86px 0;
+      }
+
+      .section.alt {
+        background: #1d1b13;
+      }
+
+      .wrap {
+        width: min(1180px, calc(100% - 40px));
+        margin: 0 auto;
+      }
+
+      .section-head {
+        max-width: 760px;
+        margin-bottom: 34px;
+      }
+
+      .section-head h2 {
+        margin-bottom: 14px;
+        font-size: clamp(30px, 4vw, 52px);
+        line-height: 1.08;
+        letter-spacing: 0;
+      }
+
+      .section-head p {
+        color: var(--muted);
+        font-size: 18px;
+      }
+
+      .fit-grid,
+      .feature-grid,
+      .faq-grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .fit-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .feature-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .faq-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .card {
+        min-height: 100%;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 22px;
+        background: var(--panel);
+      }
+
+      .card h3 {
+        margin-bottom: 10px;
+        font-size: 20px;
+        line-height: 1.25;
+      }
+
+      .card p {
+        margin-bottom: 0;
+        color: var(--muted);
+      }
+
+      .tag {
+        width: fit-content;
+        margin-bottom: 14px;
+        border-radius: 999px;
+        padding: 5px 9px;
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--sky);
+        font-size: 12px;
+        font-weight: 750;
+      }
+
+      .tag.good {
+        color: var(--mint);
+      }
+
+      .tag.warn {
+        color: var(--coral);
+      }
+
+      .product-shot {
+        margin-top: 40px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #1b1911;
+        box-shadow: 0 24px 80px var(--shadow);
+      }
+
+      .product-shot img {
+        width: 100%;
+        height: auto;
+      }
+
+      .workflow {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      .step {
+        padding: 24px;
+        background: var(--panel);
+        border-right: 1px solid var(--line);
+      }
+
+      .step:last-child {
+        border-right: 0;
+      }
+
+      .step-num {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        margin-bottom: 18px;
+        border-radius: 999px;
+        background: var(--brand);
+        color: var(--brand-ink);
+        font-weight: 800;
+      }
+
+      .step h3 {
+        margin-bottom: 8px;
+        font-size: 18px;
+      }
+
+      .step p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .deal {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
+        gap: 36px;
+        align-items: center;
+      }
+
+      .deal-list {
+        margin: 20px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .deal-list li {
+        display: flex;
+        gap: 10px;
+        padding: 12px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        color: #eee6d9;
+      }
+
+      .deal-list li::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        flex: 0 0 auto;
+        margin-top: 9px;
+        border-radius: 999px;
+        background: var(--brand);
+      }
+
+      .apply-box {
+        border: 1px solid rgba(255, 210, 74, 0.32);
+        border-radius: 8px;
+        padding: 24px;
+        background: #272216;
+      }
+
+      .apply-box h3 {
+        margin-bottom: 10px;
+        font-size: 24px;
+      }
+
+      .apply-box p {
+        color: var(--muted);
+      }
+
+      .notice {
+        border-left: 4px solid var(--coral);
+        padding: 4px 0 4px 18px;
+        color: #ead7cf;
+      }
+
+      .footer {
+        padding: 34px 0;
+        border-top: 1px solid var(--line);
+        color: var(--subtle);
+        font-size: 14px;
+      }
+
+      .footer-inner {
+        width: min(1180px, calc(100% - 40px));
+        margin: 0 auto;
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+      }
+
+      @media (max-width: 940px) {
+        .nav-links {
+          display: none;
+        }
+
+        .hero {
+          min-height: auto;
+          padding-top: 104px;
+        }
+
+        .hero-inner,
+        .deal {
+          grid-template-columns: 1fr;
+        }
+
+        .beta-panel {
+          max-width: 460px;
+        }
+
+        .fit-grid,
+        .feature-grid,
+        .faq-grid,
+        .workflow {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .step:nth-child(2) {
+          border-right: 0;
+        }
+
+        .step:nth-child(1),
+        .step:nth-child(2) {
+          border-bottom: 1px solid var(--line);
+        }
+      }
+
+      @media (max-width: 620px) {
+        .nav {
+          width: min(100% - 28px, 1180px);
+        }
+
+        .brand span {
+          display: none;
+        }
+
+        .hero-inner,
+        .wrap,
+        .footer-inner {
+          width: min(100% - 28px, 1180px);
+        }
+
+        .hero-media img {
+          object-position: 36% 50%;
+          opacity: 0.48;
+        }
+
+        .hero-media::after {
+          background:
+            linear-gradient(180deg, rgba(16, 15, 10, 0.78) 0%, rgba(16, 15, 10, 0.76) 44%, rgba(16, 15, 10, 0.88) 100%),
+            rgba(5, 5, 3, 0.22);
+        }
+
+        .hero {
+          padding-bottom: 42px;
+        }
+
+        .hero .beta-panel {
+          display: none;
+        }
+
+        h1 {
+          font-size: 44px;
+        }
+
+        .lead {
+          font-size: 18px;
+        }
+
+        .button {
+          width: 100%;
+        }
+
+        .slots,
+        .fit-grid,
+        .feature-grid,
+        .faq-grid,
+        .workflow {
+          grid-template-columns: 1fr;
+        }
+
+        .step,
+        .step:nth-child(2) {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+
+        .step:last-child {
+          border-bottom: 0;
+        }
+
+        .section {
+          padding: 62px 0;
+        }
+
+        .footer-inner {
+          flex-direction: column;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <nav class="nav" aria-label="主导航">
+        <a class="brand" href="#top" aria-label="TypeWhale 首页">
+          <img src="../../assets/TypeWhaleMinimalLogo.png" alt="">
+          <span>TypeWhale</span>
+        </a>
+        <div class="nav-links">
+          <a href="#fit">适合谁</a>
+          <a href="#workflow">怎么用</a>
+          <a href="#beta">早鸟</a>
+          <a href="#faq">FAQ</a>
+        </div>
+        <a class="button primary" href="#apply">申请早鸟</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-media" aria-hidden="true">
+          <img src="assets/typewhale-current-ui.png" alt="">
+        </div>
+        <div class="hero-inner">
+          <div>
+            <p class="eyebrow">Mac 付费 Beta · 前 30 个早鸟席位</p>
+            <h1 id="hero-title">TypeWhale</h1>
+            <p class="lead">
+              在任何 Mac 应用里，按下快捷键说话。TypeWhale 在本机完成语音识别，
+              把最终文本粘贴回你正在使用的输入框；需要时再用 AI 帮你整理和翻译。
+            </p>
+            <div class="hero-actions">
+              <a class="button primary" href="#apply">99 元加入早鸟</a>
+              <a class="button secondary" href="#workflow">看看工作流</a>
+            </div>
+            <p class="hero-note">
+              当前是付费 Beta，不是正式商业稳定版。适合愿意参与早期反馈的高频输入用户。
+            </p>
+          </div>
+
+          <aside class="beta-panel" aria-label="早鸟信息">
+            <div class="price">
+              <strong>¥99</strong>
+              <span>/ 人</span>
+            </div>
+            <p>当前 Beta 使用权、正式个人版权益、1 年更新和优先反馈通道。</p>
+            <div class="slots" aria-label="早鸟权益摘要">
+              <div class="slot-item">
+                <b>30</b>
+                <span>首批名额</span>
+              </div>
+              <div class="slot-item">
+                <b>7 天</b>
+                <span>可退款</span>
+              </div>
+              <div class="slot-item">
+                <b>macOS 14+</b>
+                <span>推荐系统</span>
+              </div>
+            </div>
+            <ul class="panel-list">
+              <li>本地优先语音识别，默认不上传语音。</li>
+              <li>不抢焦点的录音胶囊，结果回到当前应用。</li>
+              <li>可选 AI 整理、翻译和截图翻译。</li>
+            </ul>
+          </aside>
+        </div>
+      </section>
+
+      <section class="section" id="fit">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>不是会议转写，是桌面输入。</h2>
+            <p>
+              TypeWhale 面向每天在 Mac 上写大量文字的人。它解决的是“我正在这里输入，
+              但我更想直接说出来”的时刻。
+            </p>
+          </div>
+          <div class="fit-grid">
+            <article class="card">
+              <div class="tag good">高频</div>
+              <h3>AI 协作用户</h3>
+              <p>给 Codex、Claude、ChatGPT 口述需求、bug、复盘和提示词，减少长篇打字。</p>
+            </article>
+            <article class="card">
+              <div class="tag good">工作流</div>
+              <h3>产品和开发者</h3>
+              <p>把零散想法快速落到 issue、文档、聊天窗口里，保留语义和约束。</p>
+            </article>
+            <article class="card">
+              <div class="tag">沟通</div>
+              <h3>运营和销售</h3>
+              <p>快速写微信、飞书、邮件和客户回复，让口语变成更可发送的表达。</p>
+            </article>
+            <article class="card">
+              <div class="tag warn">不主打</div>
+              <h3>会议转写场景</h3>
+              <p>它不是长录音会议工具，也不是团队知识库。它先把桌面输入做稳。</p>
+            </article>
+          </div>
+
+          <figure class="product-shot">
+            <img
+              src="assets/typewhale-current-ui.png"
+              alt="TypeWhale macOS 主窗口界面截图"
+            >
+          </figure>
+        </div>
+      </section>
+
+      <section class="section alt" id="workflow">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>一次输入，四步完成。</h2>
+            <p>从说话到粘贴都围绕当前工作流，不要求你切到另一个转写页面。</p>
+          </div>
+          <div class="workflow" aria-label="TypeWhale 使用流程">
+            <article class="step">
+              <span class="step-num">1</span>
+              <h3>在当前应用按快捷键</h3>
+              <p>把光标放在微信、飞书、邮件、文档或 AI 工具里。</p>
+            </article>
+            <article class="step">
+              <span class="step-num">2</span>
+              <h3>直接说出想法</h3>
+              <p>录音胶囊给你确定感：应用正在听，也在理解。</p>
+            </article>
+            <article class="step">
+              <span class="step-num">3</span>
+              <h3>本机完成识别</h3>
+              <p>最终文本来自完整录音识别；预览只做反馈，不提前写入。</p>
+            </article>
+            <article class="step">
+              <span class="step-num">4</span>
+              <h3>自动回到输入框</h3>
+              <p>可选智能整理或翻译后，把结果粘贴回原来的地方。</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="beta">
+        <div class="wrap">
+          <div class="deal">
+            <div>
+              <div class="section-head">
+                <h2>早鸟买到的不是承诺，是参与一个正在成型的真实工具。</h2>
+                <p>
+                  当前版本已经可用于真实输入，但商业发行基础设施还在补齐。
+                  所以第一批只开放给能接受 Beta、也愿意给反馈的人。
+                </p>
+              </div>
+              <ul class="deal-list">
+                <li>当前 TypeWhale macOS Beta 使用权。</li>
+                <li>正式个人版上线后可继续使用。</li>
+                <li>1 年内个人版更新。</li>
+                <li>优先反馈通道。</li>
+                <li>7 天内没有进入你的真实工作流，可以退款。</li>
+              </ul>
+            </div>
+            <aside class="apply-box" id="apply">
+              <h3>加入早鸟</h3>
+              <p>
+                早鸟价 ¥99，前 30 人。通过你看到此页面的渠道私信申请，
+                我会发送下载链接、安装说明和首次测试步骤。
+              </p>
+              <a class="button primary" href="#faq">先看常见问题</a>
+              <p class="notice">
+                收钱前请确认发布包不是旧的 1.3.0 公开测试包。建议使用当前最新本地版本重新打包后私发。
+              </p>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <section class="section alt" id="faq">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>先把边界说清楚。</h2>
+            <p>TypeWhale 是 local-first 工具。Beta 阶段我们宁愿诚实，也不把风险藏起来。</p>
+          </div>
+          <div class="faq-grid">
+            <article class="card">
+              <h3>它会上传我的语音吗？</h3>
+              <p>语音识别默认在本机完成。智能整理、翻译和截图翻译属于可选增强能力，只有你主动启用并配置 API Key 后才会调用第三方模型。</p>
+            </article>
+            <article class="card">
+              <h3>为什么 macOS 会提示无法验证开发者？</h3>
+              <p>当前是 Beta，还没有完成 Developer ID 公证。首次打开可能需要在系统设置的隐私与安全性里手动允许。</p>
+            </article>
+            <article class="card">
+              <h3>付款后我买到什么？</h3>
+              <p>你买到的是 TypeWhale macOS 个人版早鸟席位：当前 Beta 使用权、正式个人版权益、1 年更新和优先反馈通道。</p>
+            </article>
+            <article class="card">
+              <h3>不好用能退吗？</h3>
+              <p>可以。7 天内如果没有进入你的真实工作流，或者安装后无法正常使用，可以退款。</p>
+            </article>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        <span>TypeWhale · macOS 语音输入付费 Beta</span>
+        <span>当前页面用于早鸟招募，正式隐私政策和 EULA 上线前不做大规模公开投放。</span>
+      </div>
+    </footer>
+  </body>
+</html>

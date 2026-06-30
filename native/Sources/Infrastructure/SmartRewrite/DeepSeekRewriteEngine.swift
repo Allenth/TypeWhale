@@ -1,9 +1,11 @@
 import Foundation
 
-final class DeepSeekRewriteEngine: SmartRewriteEngine {
+final class DeepSeekRewriteEngine: SmartAITextEngine {
     private let endpoint = URL(string: "https://api.deepseek.com/chat/completions")!
     private static let requiredModel = "deepseek-v4-flash"
     let displayName: String
+    let logName = "deepseek"
+    let usesLocalCostGuard = true
     private let model: String
     private let apiKeyProvider: () -> String?
     private let session: URLSession
@@ -60,26 +62,12 @@ final class DeepSeekRewriteEngine: SmartRewriteEngine {
         guard !source.isEmpty else {
             throw DeepSeekRewriteError.emptyContent
         }
-        let prompt = """
-        你是 TypeWhale 的语音翻译助手。
-
-        翻译方向：\(direction.displayName)
-        任务：\(direction.targetLanguageInstruction)
-
-        规则：
-        - 只输出译文，不要输出原文、解释、标签或 Markdown。
-        - 保留人名、产品名、模型名、代码、API、库名等必要专有名词。
-        - 修正明显的语音识别错误，但不要新增原文没有的信息。
-        - 语气自然，适合直接粘贴到当前输入框。
-
-        \(direction.toneInstruction)
-        \(translationLayoutInstruction(triggeredBy: triggeredBy))
-
-        目标应用：\(context.targetAppName ?? "未知")
-
-        原始语音文本：
-        \(source)
-        """
+        let prompt = SmartTranslationPromptBuilder.prompt(
+            source: source,
+            direction: direction,
+            context: context,
+            triggeredBy: triggeredBy
+        )
         switch SmartRewriteCostGuard.check(
             rawText: source,
             prompt: prompt,
@@ -111,17 +99,18 @@ final class DeepSeekRewriteEngine: SmartRewriteEngine {
         )
     }
 
-    private func translationLayoutInstruction(triggeredBy: String) -> String {
-        guard triggeredBy == "screenshot_translation" else { return "" }
-        return """
-
-        截图翻译版面规则：
-        - 原始文本来自 OCR 行，每行格式为 [[TW_LINE_n]] 原文。
-        - 必须逐行返回同样的 [[TW_LINE_n]]，并在其后输出该行对应的中文译文。
-        - 不要丢失、合并、重排或改写 line id。
-        - 不要额外添加标题、列表符号、解释或没有 line id 的文本。
-        - 输出示例：[[TW_LINE_1]] 这是第一行译文
-        """
+    static func translationPrompt(
+        source: String,
+        direction: SmartTranslationDirection,
+        context: SmartInputContext,
+        triggeredBy: String
+    ) -> String {
+        SmartTranslationPromptBuilder.prompt(
+            source: source,
+            direction: direction,
+            context: context,
+            triggeredBy: triggeredBy
+        )
     }
 
     private var rewriteSystemPrompt: String {

@@ -29,30 +29,29 @@
 - 如果无法完成视觉/动效验证，必须在最终回复中明确说明未验证的风险点，而不是让用户承担默认 QA。
 - 任何“为了修一个问题而砍掉原有好体验”的改动都必须被视为高风险，需要主动提出并复核替代方案。
 
-## 每次代码或文档变更后的固定动作
+## 构建动作（本侧负责 UI 代码 + review + 参与构建）
 
-只要对仓库内文件做了任何代码、配置、脚本或文档修改，完成修改后必须自动执行：
+职责（2026-06-30 用户重申）：本侧（Claude）负责**项目 UI 代码撰写 + 代码 review，并参与构建**。构建是交付 UI 工作的一部分——做完用户要测的 UI 改动后，**主动手动构建安装并让用户验证**，不再"只在被点名时才构建"。
+
+并发与稳定（仍然有效）：`codex/typewhale` 分支可能有另一个 agent 并发开发，自动构建曾导致 `modified during the build` 竞态与版本互相覆盖。因此：
+
+- **自动构建 `Stop` hook 不恢复**（仍用手动构建，避免每轮空跑与并发竞态）；不要往 `.claude/settings.local.json` 加构建 hook。
+- 构建前先**检查并发**（`pgrep` 构建进程、源码 mtime），并读取当前版本号；并发可能在检查后再次 bump 版本，构建被守卫拒绝时按其要求的版本号重写版本历史条目再重试。
+- 纯分析、或用户明确说「只分析/不要构建」时，才不构建。
+
+构建入口：
 
 ```bash
-./native/release_local_build.sh
+./native/build_and_log.sh            # 构建 → 覆盖安装 /Applications → 打开 → 写 docs/构建日志.md
+./native/build_and_log.sh --package  # 额外打可分发 DMG 到 dist/
 ```
 
-该脚本会：
-
-- 自动递增 `CFBundleShortVersionString` 的第三位版本号。
-- 自动递增 `CFBundleVersion` build 号。
-- 同步 README / macOS README 中的当前本地版本说明。
-- 执行 `./native/build_native_app.sh`。
-- 覆盖安装到 `/Applications/TypeWhale.app`。
-- 启动最新安装版，便于用户立即测试。
-- 打印安装版版本号和签名校验结果。
-
-除非用户明确要求“只分析、不修改”或“不要构建/不要打开 App”，否则不要跳过这一步。
+`build_and_log.sh` 是唯一入口：对 `native/` 源码哈希判断是否需要构建，调用 `release_local_build.sh`（递增版本号/build、同步 README、构建、覆盖安装、退出旧实例并打开、校验签名），追加构建日志，并按计数（每 4 次或 `--package`）调用 `package_dmg.sh` 打 DMG。手动构建/打大包前，必须先同步更新 `docs/开发日志.md` 与应用内版本历史等叙事性文档；`release_local_build.sh` 会检查即将发布的版本是否已写入 `VersionHistoryViewController`，缺失时直接停止，避免安装版版本号变化但版本历史没有说明。
 
 ## 发布与记录
 
 - 较大功能、交互、架构或发布动作完成后，继续更新 `docs/开发日志.md`。
-- 若行为语义会影响后续开发判断，更新 `docs/ARCHITECTURE_DECISIONS.md`。
+- 若行为语义会影响后续开发判断，更新 `docs/ARCHITECTURE.md`，并在 `docs/开发日志.md` 记录原因、影响和验证。
 - 不要只在聊天里声明流程；需要持久化到本文件或项目文档。
 
 ## 字体与素材授权

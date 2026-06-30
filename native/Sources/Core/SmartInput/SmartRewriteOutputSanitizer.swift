@@ -22,6 +22,36 @@ enum SmartRewriteOutputSanitizer {
         return kept.isEmpty ? trimmed : kept
     }
 
+    static func cleanMiniMax(_ text: String) -> String {
+        let withoutThink = removingThinkBlocks(from: text)
+        return clean(withoutThink)
+    }
+
+    private static func removingThinkBlocks(from text: String) -> String {
+        let fullRange = NSRange(text.startIndex..<text.endIndex, in: text)
+        guard let regex = try? NSRegularExpression(
+            pattern: #"(?is)<think\b[^>]*>.*?</think>"#,
+            options: []
+        ) else {
+            return text
+        }
+        var cleaned = regex.stringByReplacingMatches(
+            in: text,
+            options: [],
+            range: fullRange,
+            withTemplate: ""
+        )
+        let lowercased = cleaned.lowercased()
+        if let trailingClose = lowercased.range(of: "</think>", options: .backwards) {
+            cleaned = String(cleaned[trailingClose.upperBound...])
+        }
+        let trimmed = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.lowercased().hasPrefix("<think") {
+            return ""
+        }
+        return cleaned
+    }
+
     private static func isRewriteMarker(_ line: String) -> Bool {
         let normalized = line.trimmingCharacters(in: .whitespacesAndNewlines)
         return normalized == "整理后如下：" ||
