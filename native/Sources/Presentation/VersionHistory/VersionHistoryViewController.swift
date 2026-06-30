@@ -9,6 +9,15 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.6.7 (Build 457)",
+            date: "2026-06-30",
+            changes: [
+                "修复录音结束后 macOS 系统麦克风模式仍显示 TypeWhale 的资源释放风险。",
+                "AudioRecorder 停止或取消录音时会记录并执行显式输入会话释放，关闭输入 tap、停止 AVAudioEngine、重置引擎并在 0.8 秒后做一次 idle 兜底释放。",
+                "录音启动失败路径现在也会调用 recorder.cancel()，后台健康检查会在空闲时补一次输入会话释放，避免半初始化或系统状态卡住。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.6.6 (Build 456)",
             date: "2026-06-30",
             changes: [

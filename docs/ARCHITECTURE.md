@@ -245,6 +245,7 @@ Exit criteria for Version B:
 - Build 456 introduced `FinalRecognitionUseCase`, which owns the final ASR adapter call, raw ASR response parsing, recognition text cleanup, model-error handling, and empty-result classification.
 - `SpeechInputCoordinator` still owns final VAD gating, UI progress, smart rewrite/translation, paste submission, target app lookup, and memory safety. The final recognition boundary now returns only `recognized`, `empty`, or `failed`.
 - `FinalRecognitionUseCaseCheck` covers successful final recognition parsing, empty-result classification, model error propagation, and the fake-ASR callback path.
+- Build 457 tightened microphone input release: `AudioRecorder` now tracks tap installation, logs explicit input-session release reasons, performs delayed idle release after stop/cancel, and lets background health checks clear any idle residual input session.
 
 #### Version C Next Review Items
 

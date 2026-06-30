@@ -321,6 +321,9 @@ final class SpeechInputCoordinator {
 
     private func performBackgroundHealthCheck() {
         guard !isSystemSleeping else { return }
+        if activeSession == nil, !recorder.isRecording {
+            recorder.releaseIdleInputSession(reason: "background_idle")
+        }
         let now = Date()
         if now.timeIntervalSince(lastMemorySafetyCheckAt) >= Timing.memorySafetyCheckSeconds {
             lastMemorySafetyCheckAt = now
@@ -788,6 +791,7 @@ final class SpeechInputCoordinator {
         } catch {
             LaunchDiagnostics.mark("recording_start_failed error=\(error.localizedDescription)")
             cancelAutoFinishTimer()
+            recorder.cancel()
             clearActiveRecording()
             workflowState.cancelActiveTask()
             inputState = .idle

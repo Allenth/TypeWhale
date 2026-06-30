@@ -87,6 +87,8 @@ final class AudioRecorder: @unchecked Sendable {
     }
 
     private var engine: AVAudioEngine?
+    private var inputTapInstalled = false
+    private var inputReleaseGeneration = 0
     private let processingQueue = DispatchQueue(label: "com.waykingah.typespeaker.audio-processing", qos: .userInteractive)
     private let snapshotQueue = DispatchQueue(label: "com.waykingah.typespeaker.audio-snapshots", qos: .userInitiated)
     private let processingGroup = DispatchGroup()
@@ -133,6 +135,7 @@ final class AudioRecorder: @unchecked Sendable {
 
     func start(taskID: UUID, realtimeEnabled: Bool, inputDeviceID: AudioDeviceID?, voiceProcessingEnabled: Bool = false) throws {
         guard !isRecording else { return }
+        inputReleaseGeneration += 1
         let directory = latestURL.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let pendingURL = directory.appendingPathComponent(".recording-\(taskID.uuidString).wav")
@@ -249,6 +252,7 @@ final class AudioRecorder: @unchecked Sendable {
                 }
             }
         }
+        inputTapInstalled = true
         engine.prepare()
         do {
             try engine.start()
@@ -259,7 +263,7 @@ final class AudioRecorder: @unchecked Sendable {
             isRecording = false
             currentTaskID = nil
             currentPendingURL = nil
-            releaseInputNode()
+            releaseInputNode(reason: "start_failed")
             try? FileManager.default.removeItem(at: pendingURL)
             throw error
         }
@@ -295,7 +299,8 @@ final class AudioRecorder: @unchecked Sendable {
         guard isRecording, let taskID = currentTaskID, let pendingURL = currentPendingURL else { return nil }
         state.stopAccepting()
         isRecording = false
-        releaseInputNode()
+        releaseInputNode(reason: "stop")
+        scheduleIdleInputRelease(reason: "stop_delayed")
         let waitStart = Date()
         processingGroup.wait()
         let waitMs = Int(Date().timeIntervalSince(waitStart) * 1000)
@@ -335,12 +340,14 @@ final class AudioRecorder: @unchecked Sendable {
 
     func cancel() {
         guard isRecording else {
-            releaseInputNode()
+            releaseInputNode(reason: "cancel_idle")
+            scheduleIdleInputRelease(reason: "cancel_idle_delayed")
             return
         }
         state.stopAccepting()
         isRecording = false
-        releaseInputNode()
+        releaseInputNode(reason: "cancel")
+        scheduleIdleInputRelease(reason: "cancel_delayed")
         processingGroup.wait()
         if let currentPendingURL {
             try? FileManager.default.removeItem(at: currentPendingURL)
@@ -352,13 +359,38 @@ final class AudioRecorder: @unchecked Sendable {
         snapshotRequestedWhileBusy = false
     }
 
-    private func releaseInputNode() {
-        guard let engine else { return }
+    func releaseIdleInputSession(reason: String) {
+        guard !isRecording else { return }
+        releaseInputNode(reason: reason)
+    }
+
+    private func scheduleIdleInputRelease(reason: String) {
+        inputReleaseGeneration += 1
+        let generation = inputReleaseGeneration
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+            guard let self, self.inputReleaseGeneration == generation, !self.isRecording else { return }
+            self.releaseInputNode(reason: reason)
+        }
+    }
+
+    private func releaseInputNode(reason: String) {
         stopInputRouteMonitoring()
-        engine.inputNode.removeTap(onBus: 0)
+        guard let engine else {
+            if reason.contains("delayed") {
+                LaunchDiagnostics.mark("recorder_input_release reason=\(reason) had_engine=false")
+            }
+            return
+        }
+        let input = engine.inputNode
+        if inputTapInstalled {
+            input.removeTap(onBus: 0)
+            inputTapInstalled = false
+        }
+        try? input.setVoiceProcessingEnabled(false)
         engine.stop()
         engine.reset()
         self.engine = nil
+        LaunchDiagnostics.mark("recorder_input_release reason=\(reason) had_engine=true")
         DispatchQueue.main.async { [weak self] in self?.onBands?(Array(repeating: 0.1, count: 7)) }
     }
 
@@ -394,7 +426,8 @@ final class AudioRecorder: @unchecked Sendable {
         latestEmptyRecordingReason = "\(message)请重新开始录音。"
         state.stopAccepting()
         stopInputRouteMonitoring()
-        releaseInputNode()
+        releaseInputNode(reason: "input_route_changed")
+        scheduleIdleInputRelease(reason: "input_route_changed_delayed")
         onInputRouteChanged?(message)
     }
 
