@@ -121,8 +121,12 @@ Preview non-goals:
 ### Smart Rewrite
 
 - Developer requirement mode is designed for text that may be pasted directly into Codex, Cursor, Claude Code, ChatGPT, terminals, IDEs, or other coding agents.
+- Developer requirement mode defaults to lightweight task cleanup, not requirements-document generation. Structure is a tool for complex or explicitly requested cases, not the default output shape.
+- Developer requirement mode must understand product/technical meaning before rewriting. It should correct context-supported Chinese ASR homophones and near-sound errors instead of mechanically copying wrong characters after removing fillers.
+- Semantic correction is not only a fixed replacement list. When the ASR literal text is incoherent but the development-feedback context has an obvious homophone or near-sound candidate, restore the user's likely intent while preserving uncertain code, paths, commands, logs, and proper nouns.
 - Developer requirement output must preserve the user's speaking position. First-person and second-person expressions such as "我觉得", "我要求", "你看", "告诉我", "我们开始", and "给我" must not be rewritten into third-person summaries such as "用户要求" or "要求对方告知".
 - Short developer directions must stay short. If the raw text is a single brief direction, command, or intent, such as "先从模型段解决文同", rewrite only speech-recognition errors, terminology, punctuation, and word order; do not expand it into goal/context/constraints/completion-standard fields.
+- Multiple tasks may use short bullets. Full goal/context/constraints/completion-standard templates are allowed only when the user explicitly asks for a full requirement, acceptance criteria, or plan, or when the raw text already contains enough fields to justify that structure.
 - If the raw text itself contains a prompt, rule block, boundary note, or bullet list intended for a coding agent, preserve the original directive tone, bullet structure, and first/second-person stance. Do not collapse it into a generic summary like "用户要求优化提示词".
 - These guardrails apply both to manual developer requirement mode and to automatic mode when target/context rules choose developer requirement mode.
 

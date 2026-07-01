@@ -12,7 +12,9 @@ final class RecordingCapsuleView: NSView {
         static let firstPreviewMinimumCharacters = 3
         static let preExpandLookaheadCharacters = 2
         static let preExpandExtraWidth: CGFloat = 8
-        static let healthPulseSeconds: TimeInterval = 1.8
+        static let healthBreathSeconds: TimeInterval = 2.8
+        static let healthInnerGlowPixels: CGFloat = 5
+        static let healthOuterGlowPixels: CGFloat = 2
     }
 
     private var state = "录音中"
@@ -24,8 +26,8 @@ final class RecordingCapsuleView: NSView {
     private var fadeTimer: Timer?
     private var fadeStartIndex: Int?
     private var fadeStartedAt: Date?
-    private var healthPulseStartedAt = Date()
-    private var healthPulseTimer: Timer?
+    private var healthBreathStartedAt = Date()
+    private var healthBreathTimer: Timer?
     private var smoothedBands = WaveformBands()
     private var retainedPreviewWidth = Metrics.compactSize.width
     private let fadeDuration: TimeInterval = 0.25
@@ -46,11 +48,11 @@ final class RecordingCapsuleView: NSView {
         didSet {
             guard oldValue != ollamaHealthBorderActive else { return }
             if ollamaHealthBorderActive {
-                healthPulseStartedAt = Date()
-                startHealthPulseTimerIfNeeded()
+                healthBreathStartedAt = Date()
+                startHealthBreathTimerIfNeeded()
             } else {
-                healthPulseTimer?.invalidate()
-                healthPulseTimer = nil
+                healthBreathTimer?.invalidate()
+                healthBreathTimer = nil
             }
             needsDisplay = true
         }
@@ -61,7 +63,7 @@ final class RecordingCapsuleView: NSView {
     deinit {
         draftTimer?.invalidate()
         fadeTimer?.invalidate()
-        healthPulseTimer?.invalidate()
+        healthBreathTimer?.invalidate()
     }
 
     var preferredSize: NSSize {
@@ -163,19 +165,54 @@ final class RecordingCapsuleView: NSView {
     }
 
     private func drawOllamaHealthBorder(path: NSBezierPath) {
-        let elapsed = Date().timeIntervalSince(healthPulseStartedAt)
-        let wave = (sin(elapsed / Metrics.healthPulseSeconds * .pi * 2) + 1) / 2
-        let glowAlpha = 0.20 + wave * 0.22
-        let lineAlpha = 0.72 + wave * 0.18
+        let elapsed = Date().timeIntervalSince(healthBreathStartedAt)
+        let progress = CGFloat((elapsed.truncatingRemainder(dividingBy: Metrics.healthBreathSeconds)) / Metrics.healthBreathSeconds)
+        let breath = 0.5 - cos(progress * 2 * .pi) * 0.5
+        let intensity = 0.68 + breath * 0.32
         let green = NSColor(calibratedRed: 0.16, green: 0.92, blue: 0.54, alpha: 1)
 
-        green.withAlphaComponent(glowAlpha).setStroke()
-        path.lineWidth = 4.0 + CGFloat(wave) * 1.2
-        path.stroke()
+        drawOuterHealthGlow(path: path, color: green, intensity: intensity)
+        drawInnerHealthGlow(color: green, intensity: intensity)
 
-        green.withAlphaComponent(lineAlpha).setStroke()
+        green.withAlphaComponent(0.82 + 0.14 * intensity).setStroke()
         path.lineWidth = 1.45
         path.stroke()
+    }
+
+    private func drawOuterHealthGlow(path: NSBezierPath, color: NSColor, intensity: CGFloat) {
+        NSGraphicsContext.saveGraphicsState()
+        let outerGlow = NSShadow()
+        outerGlow.shadowColor = color.withAlphaComponent(0.38 * intensity)
+        outerGlow.shadowBlurRadius = Metrics.healthOuterGlowPixels
+        outerGlow.shadowOffset = .zero
+        outerGlow.set()
+        color.withAlphaComponent(0.22 * intensity).setStroke()
+        path.lineWidth = 2.4
+        path.stroke()
+        NSGraphicsContext.restoreGraphicsState()
+    }
+
+    private func drawInnerHealthGlow(color: NSColor, intensity: CGFloat) {
+        let rect = bounds.insetBy(dx: 1, dy: 1)
+        let radius: CGFloat = 20
+        let steps = Int(Metrics.healthInnerGlowPixels)
+        guard steps > 0 else { return }
+
+        for step in 1...steps {
+            let offset = CGFloat(step)
+            let falloff = 1 - (offset - 1) / Metrics.healthInnerGlowPixels
+            let alpha = 0.16 * intensity * falloff * falloff
+            let glowRect = rect.insetBy(dx: offset, dy: offset)
+            guard glowRect.width > 0, glowRect.height > 0 else { continue }
+            let glowPath = NSBezierPath(
+                roundedRect: glowRect,
+                xRadius: max(1, radius - offset),
+                yRadius: max(1, radius - offset)
+            )
+            color.withAlphaComponent(alpha).setStroke()
+            glowPath.lineWidth = 1.2
+            glowPath.stroke()
+        }
     }
 
     private var draftTextAttributes: [NSAttributedString.Key: Any] {
@@ -295,17 +332,17 @@ final class RecordingCapsuleView: NSView {
         }
     }
 
-    private func startHealthPulseTimerIfNeeded() {
-        guard healthPulseTimer == nil else { return }
-        healthPulseTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] timer in
+    private func startHealthBreathTimerIfNeeded() {
+        guard healthBreathTimer == nil else { return }
+        healthBreathTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] timer in
             guard let self, self.ollamaHealthBorderActive else {
                 timer.invalidate()
                 return
             }
             self.needsDisplay = true
         }
-        if let healthPulseTimer {
-            RunLoop.main.add(healthPulseTimer, forMode: .common)
+        if let healthBreathTimer {
+            RunLoop.main.add(healthBreathTimer, forMode: .common)
         }
     }
 

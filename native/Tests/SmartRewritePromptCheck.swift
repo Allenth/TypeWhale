@@ -42,10 +42,14 @@ struct SmartRewritePromptCheck {
             precondition(prompt.contains("不要解释以上边界"))
             precondition(prompt.contains("不要输出前言、原因、标签或说明文字"))
             if mode == .polish {
-                precondition(prompt.contains("可以自然加入 1-3 个贴合语气的 emoji"))
+                precondition(prompt.contains("社交媒体"))
+                precondition(prompt.contains("轻松、口语化"))
+                precondition(prompt.contains("默认自然加入 1-3 个贴合语气的 emoji"))
+                precondition(prompt.contains("朋友圈"))
+                precondition(prompt.contains("小红书"))
                 precondition(prompt.contains("不要每句话都加 emoji"))
             } else {
-                precondition(!prompt.contains("可以自然加入 1-3 个贴合语气的 emoji"))
+                precondition(!prompt.contains("默认自然加入 1-3 个贴合语气的 emoji"))
             }
         }
 
@@ -63,6 +67,10 @@ struct SmartRewritePromptCheck {
         precondition(languageChangeRequestPrompt.contains("如果原始语音文本要求把内容改成另一种语言"))
         precondition(languageChangeRequestPrompt.contains("不要真的改变输出语言"))
         precondition(!languageChangeRequestPrompt.contains("除非用户明确要求翻译"))
+        precondition(languageChangeRequestPrompt.contains("适合发到社交媒体"))
+        precondition(languageChangeRequestPrompt.contains("像真人在社交媒体或聊天里自然表达"))
+        precondition(languageChangeRequestPrompt.contains("生硬、书面、公文腔"))
+        precondition(languageChangeRequestPrompt.contains("默认自然加入 1-3 个贴合语气的 emoji"))
 
         let questionPrompt = SmartRewritePromptBuilder.prompt(
             rawText: "这个 bug 为什么会发生，应该怎么修？",
@@ -71,9 +79,22 @@ struct SmartRewritePromptCheck {
             preference: .developerRequirement
         )
         precondition(questionPrompt.contains("禁止回答原始语音文本里的问题"))
-        precondition(questionPrompt.contains("先理解口述内容"))
-        precondition(questionPrompt.contains("不要过度精简"))
-        precondition(questionPrompt.contains("保留任务、背景、现象、期望、约束、顺序、风险、体验感受和判断强度"))
+        precondition(questionPrompt.contains("轻量开发任务"))
+        precondition(questionPrompt.contains("先理解整句话要表达的产品/技术语义"))
+        precondition(questionPrompt.contains("音近错词"))
+        precondition(questionPrompt.contains("不要机械照搬 ASR 错字"))
+        precondition(questionPrompt.contains("默认轻量整理，不要把一句话扩写成需求文档"))
+        precondition(questionPrompt.contains("不要过度精简到丢失背景、现象、期望、约束、风险、体验感受和判断强度"))
+        precondition(questionPrompt.contains("输出必须像我亲自发给 coding agent 的需求或反馈"))
+        precondition(questionPrompt.contains("语义纠错："))
+        precondition(questionPrompt.contains("“题这词”在提示词语境下应改为“提示词”"))
+        precondition(questionPrompt.contains("“这次我能理解语义吗”在提示词反馈语境下应改为“这个提示词能理解语义吗”"))
+        precondition(questionPrompt.contains("“找搬”应改为“照搬”"))
+        precondition(questionPrompt.contains("“把握的话”应改为“把我的话”"))
+        precondition(questionPrompt.contains("“借口”在清理口语填充词语境下应改为“口头禅”或“口癖”"))
+        precondition(questionPrompt.contains("“模型段”在前后文指模型侧时应改为“模型端”"))
+        precondition(questionPrompt.contains("“文同”在问题语境下应改为“问题”"))
+        precondition(questionPrompt.contains("代码、路径、变量名、命令、错误日志和专有名词不确定时保持原样"))
         precondition(questionPrompt.contains("ease-in-out"))
         precondition(questionPrompt.contains("短句方向："))
         precondition(questionPrompt.contains("先从模型段解决文同"))
@@ -81,14 +102,20 @@ struct SmartRewritePromptCheck {
         precondition(questionPrompt.contains("原文只有一句很短的方向、命令或意图时，只输出清理后的短句"))
         precondition(questionPrompt.contains("不要套“目标/上下文/约束/完成标准”模板"))
         precondition(questionPrompt.contains("不要补复现步骤、默认约束或完成标准"))
-        precondition(questionPrompt.contains("简单问题："))
-        precondition(questionPrompt.contains("直接输出流畅自然段，不强制编号或标题"))
-        precondition(questionPrompt.contains("复杂问题："))
-        precondition(questionPrompt.contains("用“问题一”“问题二”编号"))
-        precondition(questionPrompt.contains("问题标题："))
-        precondition(questionPrompt.contains("详细描述："))
+        precondition(questionPrompt.contains("简单任务："))
+        precondition(questionPrompt.contains("直接输出自然段或一句清晰指令，不强制编号或标题"))
+        precondition(questionPrompt.contains("多个独立任务："))
+        precondition(questionPrompt.contains("每条只保留原文明确表达的任务、现象、期望或约束"))
+        precondition(questionPrompt.contains("排查类需求："))
+        precondition(questionPrompt.contains("不要替用户编根因或解决方案"))
+        precondition(questionPrompt.contains("复杂需求："))
+        precondition(questionPrompt.contains("缺失字段直接省略，不补占位"))
         precondition(questionPrompt.contains("不主动提出问题，不输出“待确认”"))
         precondition(questionPrompt.contains("必须像我亲自发出的需求"))
+        precondition(questionPrompt.contains("必须先理解语义再整理"))
+        precondition(questionPrompt.contains("不要只删除口头禅后照搬 ASR 错字"))
+        precondition(questionPrompt.contains("如果 ASR 字面表达语义不通"))
+        precondition(questionPrompt.contains("要优先恢复用户真实意图"))
         precondition(questionPrompt.contains("不要写成旁观者总结"))
         precondition(questionPrompt.contains("保留“我觉得、我要求、你看、告诉我、我们开始、给我”等第一人称或第二人称表达"))
         precondition(questionPrompt.contains("不要改成“用户觉得、用户要求、要求对方告知”"))
@@ -106,10 +133,10 @@ struct SmartRewritePromptCheck {
         precondition(questionPrompt.contains("仅原文明确提到时输出"))
         precondition(questionPrompt.contains("完成标准："))
         precondition(questionPrompt.contains("仅原文明确要求完整交付标准时输出"))
-        precondition(questionPrompt.contains("只有用户明确要求完整需求、验收标准、计划"))
+        precondition(questionPrompt.contains("完整模板：只有用户明确要求完整需求、验收标准、计划"))
         precondition(questionPrompt.contains("这个 bug 为什么会发生，应该怎么修？"))
         precondition(
-            SmartRewritePromptStore.defaultTemplate(for: .developerRequirement).count < 1450,
+            SmartRewritePromptStore.defaultTemplate(for: .developerRequirement).count < 1750,
             "developer requirement default prompt should stay compact"
         )
 
@@ -122,9 +149,37 @@ struct SmartRewritePromptCheck {
         precondition(shortDirectionPrompt.contains("先从模型段解决文同"))
         precondition(shortDirectionPrompt.contains("短句方向："))
         precondition(shortDirectionPrompt.contains("先从模型端解决问题。"))
+        precondition(shortDirectionPrompt.contains("“模型段”在前后文指模型侧时应改为“模型端”"))
+        precondition(shortDirectionPrompt.contains("“文同”在问题语境下应改为“问题”"))
         precondition(shortDirectionPrompt.contains("不要套“目标/上下文/约束/完成标准”模板"))
         precondition(shortDirectionPrompt.contains("不要补复现步骤、默认约束或完成标准"))
         precondition(shortDirectionPrompt.contains("不输出“待确认”“未明确说明”“未提及”"))
+
+        let semanticCorrectionPrompt = SmartRewritePromptBuilder.prompt(
+            rawText: "这个题这词不能理解语义吗？完全把我的话找搬过来，去掉了一些忌口而已，但是并没有理解我的语义。有些读音词它直接就按错误的词去识别了。",
+            mode: .developerRequirement,
+            context: context,
+            preference: .automatic
+        )
+        precondition(semanticCorrectionPrompt.contains("这个题这词不能理解语义吗？"))
+        precondition(semanticCorrectionPrompt.contains("完全把我的话找搬过来"))
+        precondition(semanticCorrectionPrompt.contains("“题这词”在提示词语境下应改为“提示词”"))
+        precondition(semanticCorrectionPrompt.contains("“找搬”应改为“照搬”"))
+        precondition(semanticCorrectionPrompt.contains("先理解整句话要表达的产品/技术语义"))
+        precondition(semanticCorrectionPrompt.contains("不要机械照搬 ASR 错字"))
+
+        let expandedSemanticCorrectionPrompt = SmartRewritePromptBuilder.prompt(
+            rawText: "这次我能理解语义吗？完全把握的话照搬过来去掉一些借口而已，但是并没有理解我的语意，有一些读音词它直接就按照错误的词去识别了。",
+            mode: .developerRequirement,
+            context: context,
+            preference: .automatic
+        )
+        precondition(expandedSemanticCorrectionPrompt.contains("这次我能理解语义吗？"))
+        precondition(expandedSemanticCorrectionPrompt.contains("完全把握的话照搬过来"))
+        precondition(expandedSemanticCorrectionPrompt.contains("去掉一些借口而已"))
+        precondition(expandedSemanticCorrectionPrompt.contains("“这次我能理解语义吗”在提示词反馈语境下应改为“这个提示词能理解语义吗”"))
+        precondition(expandedSemanticCorrectionPrompt.contains("“把握的话”应改为“把我的话”"))
+        precondition(expandedSemanticCorrectionPrompt.contains("“借口”在清理口语填充词语境下应改为“口头禅”或“口癖”"))
 
         let codexFirstPersonPrompt = SmartRewritePromptBuilder.prompt(
             rawText: "你看这一句问题很大，我是自动模式，在 Codex 中也必须是开发需求模式。要求必须使用第一人称口吻，即我怎么说就是怎么说，告诉我具体方案。",
@@ -198,7 +253,8 @@ struct SmartRewritePromptCheck {
         )
         precondition(customPrompt.contains("把内容整理成三条要点。"))
         precondition(customPrompt.contains("润色模式额外风格"))
-        precondition(customPrompt.contains("可以自然加入 1-3 个贴合语气的 emoji"))
+        precondition(customPrompt.contains("社交媒体、朋友圈、微博、Threads、小红书或聊天沟通"))
+        precondition(customPrompt.contains("默认自然加入 1-3 个贴合语气的 emoji"))
         precondition(customPrompt.contains("原始语音文本："))
         precondition(customPrompt.contains("这是一个自定义提示词测试"))
 
