@@ -3,7 +3,7 @@ import AppKit
 @MainActor
 enum StandardEditMenuFactory {
     static func makeMenuItem() -> NSMenuItem {
-        let item = NSMenuItem()
+        let item = NSMenuItem(title: "编辑", action: nil, keyEquivalent: "")
         item.submenu = makeMenu()
         return item
     }

@@ -9,6 +9,15 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.7.6 (Build 494)",
+            date: "2026-07-01",
+            changes: [
+                "修复标准编辑菜单的顶层标题，菜单栏会明确显示“编辑”，不再依赖 AppKit 默认菜单项名称。",
+                "加强标准编辑菜单回归检查，锁定顶层菜单标题和剪切、复制、粘贴、全选等 responder chain 命令。",
+                "让自定义开发需求提示词也继承不可变产品边界，继续保持第一人称、语义整理、反馈陈述和 UI 指代还原规则。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.7.6 (Build 493)",
             date: "2026-07-01",
             changes: [

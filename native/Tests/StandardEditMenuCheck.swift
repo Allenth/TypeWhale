@@ -9,6 +9,7 @@ struct StandardEditMenuCheck {
             return
         }
 
+        assert(editItem.title == "编辑", "top-level edit menu title must be localized")
         assert(menu.title == "编辑", "edit menu title must be localized")
         assertCommand(menu, title: "全选", action: "selectAll:", key: "a", modifiers: .command)
         assertCommand(menu, title: "复制", action: "copy:", key: "c", modifiers: .command)
