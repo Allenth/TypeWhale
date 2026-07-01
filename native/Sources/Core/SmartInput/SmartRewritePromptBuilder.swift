@@ -8,7 +8,7 @@ enum SmartRewritePromptBuilder {
         preference: SmartRewritePreference
     ) -> String {
         switch mode {
-        case .developerRequirement, .polish, .note, .chat, .exhaustiveSummary:
+        case .developerRequirement, .developerStatement, .codeCommit, .polish, .note, .chat, .exhaustiveSummary:
             return render(
                 template: SmartRewritePromptStore.template(for: mode),
                 rawText: rawText,
@@ -93,7 +93,7 @@ enum SmartRewritePromptBuilder {
             - 如果原文是正式通知、技术指令、开发需求、错误排查、合同/财务/医疗/法律等严肃内容，可以少加或不加 emoji。
             - 不要每句话都加 emoji，不要堆叠多个相同 emoji。
             """
-        case .raw, .note, .chat, .exhaustiveSummary, .command:
+        case .developerStatement, .codeCommit, .raw, .note, .chat, .exhaustiveSummary, .command:
             return ""
         }
     }

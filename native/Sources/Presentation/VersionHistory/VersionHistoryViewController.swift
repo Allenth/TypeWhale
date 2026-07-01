@@ -9,6 +9,15 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.7.8 (Build 498)",
+            date: "2026-07-01",
+            changes: [
+                "智能整理提示词新增“开发需求版”和“代码提交版”两个可编辑场景，便于把同一段口述分别整理成产品文档陈述或 Git Commit 描述。",
+                "自动模式范围也可选择这两个新整理场景，保留主面板常用模式不变，避免主输入入口过载。",
+                "Ollama 健康绿环显示时隐藏胶囊默认白边，避免白边和绿环叠成双层边框。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.7.7 (Build 497)",
             date: "2026-07-01",
             changes: [

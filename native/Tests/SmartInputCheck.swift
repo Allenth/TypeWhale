@@ -46,6 +46,8 @@ struct SmartInputCheck {
         SmartRewriteAutoRuleStore.reset()
         precondition(!SmartRewriteAutoRuleStore.selectableModes.contains(.note))
         precondition(!SmartRewriteAutoRuleStore.selectableModes.contains(.chat))
+        precondition(SmartRewriteAutoRuleStore.selectableModes.contains(.developerStatement))
+        precondition(SmartRewriteAutoRuleStore.selectableModes.contains(.codeCommit))
         precondition(!SmartRewriteAutoRuleStore.defaultConfiguration.rules.contains { $0.mode == .note || $0.mode == .chat })
         precondition(!SmartRewriteAutoRuleStore.defaultConfiguration.rules.contains { $0.id == "notes" || $0.id == "chat" })
 

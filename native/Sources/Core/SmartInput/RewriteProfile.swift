@@ -4,6 +4,8 @@ enum RewriteMode: String, CaseIterable, Codable {
     case raw
     case polish
     case developerRequirement
+    case developerStatement
+    case codeCommit
     case note
     case chat
     case exhaustiveSummary
@@ -14,6 +16,8 @@ enum RewriteMode: String, CaseIterable, Codable {
         case .raw: return "原文"
         case .polish: return "润色"
         case .developerRequirement: return "开发需求"
+        case .developerStatement: return "开发需求版"
+        case .codeCommit: return "代码提交版"
         case .note: return "笔记"
         case .chat: return "聊天"
         case .exhaustiveSummary: return "极致归纳"

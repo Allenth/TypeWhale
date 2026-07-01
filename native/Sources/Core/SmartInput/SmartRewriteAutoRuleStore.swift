@@ -71,6 +71,8 @@ enum SmartRewriteAutoRuleStore {
     static let selectableModes: [RewriteMode] = [
         .polish,
         .developerRequirement,
+        .developerStatement,
+        .codeCommit,
         .exhaustiveSummary,
         .raw,
     ]

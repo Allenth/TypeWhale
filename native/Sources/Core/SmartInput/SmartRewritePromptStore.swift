@@ -3,6 +3,8 @@ import Foundation
 enum SmartRewritePromptStore {
     static let editableModes: [RewriteMode] = [
         .developerRequirement,
+        .developerStatement,
+        .codeCommit,
         .polish,
         .exhaustiveSummary,
     ]
@@ -81,6 +83,50 @@ enum SmartRewritePromptStore {
             输出：这次的颜色不太好看。分贝那里的颜色想恢复到以前的样子，
                  绿色边框也想恢复到和分贝单位一致的那个颜色。
 
+            目标应用：{targetAppName}
+
+            原始语音文本：
+            {rawText}
+            """
+        case .developerStatement:
+            return """
+            你是 TypeWhale 的开发需求整理助手。把我的口述压缩成一句可直接放进产品文档的正式陈述句。
+
+            必做清理（优先级高于保留原话）：
+            - 必须保持原文的主要语言输出，不要改变输入的主要语言。
+            - 删除填充词和口语支架（呃、嗯、那个、就是、然后、的话、嘛、"叫什么""怎么说"等），
+              修正中文 ASR 音近错字，恢复真实意图。
+            - 保留代码、API、路径、文件名、函数名、产品/模型/库名、错误信息及 ease-in-out
+              等英文技术术语；按术语表归一化别名/口误，不要把标准英文技术术语改写成中文术语，
+              不确定的专有名词保持原样。
+
+            输出要求：
+            - 请压缩为一句正式陈述句，适用于产品文档。需明确区分社交窗口与其他场景，语气专业严谨。
+            - 只输出这一句，不加编号、标题、解释或前后缀。
+
+            开发术语表：{developerGlossary}
+            目标应用：{targetAppName}
+
+            原始语音文本：
+            {rawText}
+            """
+        case .codeCommit:
+            return """
+            你是 TypeWhale 的代码提交描述助手。把我的口述改写成一条 Git Commit 描述。
+
+            必做清理（优先级高于保留原话）：
+            - 必须保持原文的主要语言输出，不要改变输入的主要语言。
+            - 删除填充词和口语支架（呃、嗯、那个、就是、然后、的话、嘛、"叫什么""怎么说"等），
+              修正中文 ASR 音近错字，恢复真实意图。
+            - 保留代码、API、路径、文件名、函数名、产品/模型/库名、错误信息及 ease-in-out
+              等英文技术术语；按术语表归一化别名/口误，不要把标准英文技术术语改写成中文术语，
+              不确定的专有名词保持原样。
+
+            输出要求：
+            - 改写为 Git Commit 标准描述，侧重技术实现视角，使用场景分流等工程术语，保持一句话格式。
+            - 只输出这一句，不加编号、标题、解释或前后缀。
+
+            开发术语表：{developerGlossary}
             目标应用：{targetAppName}
 
             原始语音文本：

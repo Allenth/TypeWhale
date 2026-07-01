@@ -14,6 +14,8 @@ struct SmartRewritePromptCheck {
         SmartRewritePromptStore.resetAll()
         precondition(!SmartRewritePromptStore.editableModes.contains(.note))
         precondition(!SmartRewritePromptStore.editableModes.contains(.chat))
+        precondition(SmartRewritePromptStore.editableModes.contains(.developerStatement))
+        precondition(SmartRewritePromptStore.editableModes.contains(.codeCommit))
 
         let context = SmartInputContext(
             targetAppName: "Codex",
@@ -218,6 +220,26 @@ struct SmartRewritePromptCheck {
         precondition(summaryPrompt.contains("不要把“我表达的内容、这件事、这个情况、这段沟通”擅自改成“对方”"))
         precondition(summaryPrompt.contains("我的表达内容没有被准确理解和妥善处理"))
         precondition(summaryPrompt.contains("只有原文明确表达“不确定、需要确认”时，才加入待确认内容"))
+
+        let developerStatementPrompt = SmartRewritePromptBuilder.prompt(
+            rawText: "社交窗口和其他场景这里应该拆开说清楚",
+            mode: .developerStatement,
+            context: context,
+            preference: .automatic
+        )
+        precondition(developerStatementPrompt.contains("一句可直接放进产品文档的正式陈述句"))
+        precondition(developerStatementPrompt.contains("适用于产品文档"))
+        precondition(developerStatementPrompt.contains("需明确区分社交窗口与其他场景"))
+
+        let codeCommitPrompt = SmartRewritePromptBuilder.prompt(
+            rawText: "把社交窗口的智能整理和其他场景做分流",
+            mode: .codeCommit,
+            context: context,
+            preference: .automatic
+        )
+        precondition(codeCommitPrompt.contains("代码提交描述助手"))
+        precondition(codeCommitPrompt.contains("Git Commit 标准描述"))
+        precondition(codeCommitPrompt.contains("侧重技术实现视角"))
 
         let scopedGlossary = DeveloperLexiconStore.promptGlossary(
             matching: "比较一下 q wen asr 和 oppoingpo"

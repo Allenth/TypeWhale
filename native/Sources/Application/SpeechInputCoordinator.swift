@@ -1484,7 +1484,7 @@ final class SpeechInputCoordinator {
         switch result.mode {
         case .raw:
             return String(format: "原文模式 · 本地识别耗时 %.2f 秒", elapsed)
-        case .polish, .developerRequirement, .note, .chat, .exhaustiveSummary:
+        case .polish, .developerRequirement, .developerStatement, .codeCommit, .note, .chat, .exhaustiveSummary:
             let model = result.modelName.map { " · \($0)" } ?? ""
             return "已按\(result.mode.displayName)模式整理\(model)，准备粘贴"
         case .command:

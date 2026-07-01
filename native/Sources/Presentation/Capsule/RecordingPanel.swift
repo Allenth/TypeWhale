@@ -224,7 +224,10 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
     private func applyBorderState() {
         capsule.statusBorderColor = currentStatusBorderColor
         // 紧急状态边框（倒计时/内存）由胶囊绘制并优先；否则由置顶绿环显示健康呼吸。
-        healthBorderOverlay.isActive = ollamaHealthy && currentStatusBorderColor == nil
+        let healthActive = ollamaHealthy && currentStatusBorderColor == nil
+        healthBorderOverlay.isActive = healthActive
+        // 绿环激活时隐藏胶囊默认白边，避免白边+绿环的双层边框。
+        capsule.defaultBorderHidden = healthActive
     }
 
     private func updateTargetApp(appIcon: NSImage?, appName: String?, shouldResize: Bool) {
