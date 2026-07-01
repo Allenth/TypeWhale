@@ -20,6 +20,8 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
     private let fadeDuration: TimeInterval = 0.25
     private let resizeDuration: TimeInterval = 0.18
     private var visibilityGeneration = 0
+    private var currentStatusBorderColor: NSColor?
+    private var ollamaHealthy = false
 
     /// 点击胶囊上的模式标签时回调，用于手动切换整理模式。
     var onCycleMode: (() -> Void)?
@@ -202,8 +204,19 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
         statusBadge.textColor = badgeColor
         statusBadge.isHidden = !(hasStatus && hasContext)
         statusDotLabel.isHidden = !(hasStatus && hasContext)
-        capsule.statusBorderColor = hasStatus ? borderColor : nil
+        currentStatusBorderColor = hasStatus ? borderColor : nil
+        applyBorderState()
         if hasContext { resizeAndPosition() }
+    }
+
+    func updateOllamaHealth(isHealthy: Bool) {
+        ollamaHealthy = isHealthy
+        applyBorderState()
+    }
+
+    private func applyBorderState() {
+        capsule.statusBorderColor = currentStatusBorderColor
+        capsule.ollamaHealthBorderActive = ollamaHealthy && currentStatusBorderColor == nil
     }
 
     private func updateTargetApp(appIcon: NSImage?, appName: String?, shouldResize: Bool) {
@@ -250,6 +263,7 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
     func hideAnimated() {
         guard isVisible else { return }
         visibilityGeneration += 1
+        updateOllamaHealth(isHealthy: false)
         let generation = visibilityGeneration
         NSAnimationContext.runAnimationGroup { context in
             context.duration = fadeDuration

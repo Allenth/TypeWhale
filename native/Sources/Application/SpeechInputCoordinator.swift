@@ -15,6 +15,8 @@ final class SpeechInputCoordinator {
         static let backgroundHealthSeconds: TimeInterval = 30
         static let recordingSafetySeconds: TimeInterval = 1
         static let capsuleStatusSeconds: TimeInterval = 1
+        static let ollamaHealthProbeSeconds: TimeInterval = 3
+        static let ollamaOKToastCooldownSeconds: TimeInterval = 60
         static let memorySafetyCheckSeconds: TimeInterval = 30
         static let wakeRecoveryGraceSeconds: TimeInterval = 3
         static let realtimeSnapshotTimeoutSeconds: TimeInterval = 3
@@ -42,6 +44,7 @@ final class SpeechInputCoordinator {
     private let vadBridge = NativeSenseVoiceBridge(runtimeName: "vad")
     private let outputAudioDucker = OutputAudioDucker()
     private let smartEngine = SelectedSmartAITextEngine()
+    private let ollamaHealthProbe = OllamaServerHealthProbe()
     private lazy var asr = SenseVoiceRouter(runtimeName: "final", native: nativeASR)
     private lazy var realtimeASR = SenseVoiceRouter(runtimeName: "realtime", native: nativeASR)
     private lazy var finalRecognitionUseCase = FinalRecognitionUseCase(transcriber: asr)
@@ -72,6 +75,10 @@ final class SpeechInputCoordinator {
     private var capsuleStatusTimer: Timer?
     private var startupHotkeyRecoveryWorkItems: [DispatchWorkItem] = []
     private var lastMemorySafetyCheckAt = Date.distantPast
+    private var lastOllamaHealthCheckAt = Date.distantPast
+    private var lastOllamaOKToastAt = Date.distantPast
+    private var ollamaHealthCheckInFlight = false
+    private var isOllamaHealthy = false
     private var lastASRArenaFlushAt: Date?
     private var wakeRecoveryUntil: Date?
     private var isSystemSleeping = false
@@ -729,6 +736,56 @@ final class SpeechInputCoordinator {
         } else {
             popup.updateRecordingStatus(remainingSeconds: nil, memoryHigh: memoryHigh)
         }
+        refreshOllamaHealthForCapsuleIfNeeded()
+    }
+
+    private func refreshOllamaHealthForCapsuleIfNeeded(force: Bool = false) {
+        guard SmartAIModelStore.load().provider == .ollama else {
+            updateOllamaCapsuleHealth(false)
+            return
+        }
+        guard recorder.isRecording || activeSession != nil else {
+            updateOllamaCapsuleHealth(false)
+            return
+        }
+        let now = Date()
+        guard force || now.timeIntervalSince(lastOllamaHealthCheckAt) >= Timing.ollamaHealthProbeSeconds else {
+            popup.updateOllamaHealth(isHealthy: isOllamaHealthy)
+            return
+        }
+        guard !ollamaHealthCheckInFlight else { return }
+        lastOllamaHealthCheckAt = now
+        ollamaHealthCheckInFlight = true
+        Task { [weak self] in
+            guard let self else { return }
+            let healthy = await self.ollamaHealthProbe.isHealthy()
+            await MainActor.run {
+                self.ollamaHealthCheckInFlight = false
+                self.updateOllamaCapsuleHealth(healthy)
+            }
+        }
+    }
+
+    private func updateOllamaCapsuleHealth(_ healthy: Bool) {
+        let becameHealthy = healthy && !isOllamaHealthy
+        guard isOllamaHealthy != healthy else {
+            popup.updateOllamaHealth(isHealthy: healthy)
+            return
+        }
+        isOllamaHealthy = healthy
+        LaunchDiagnostics.mark("ollama health_capsule healthy=\(healthy)")
+        popup.updateOllamaHealth(isHealthy: healthy)
+        if becameHealthy {
+            showOllamaOKToastIfNeeded()
+        }
+    }
+
+    private func showOllamaOKToastIfNeeded() {
+        let now = Date()
+        guard now.timeIntervalSince(lastOllamaOKToastAt) >= Timing.ollamaOKToastCooldownSeconds else { return }
+        lastOllamaOKToastAt = now
+        LaunchDiagnostics.mark("ollama ok_toast_shown")
+        ToastPresenter.shared.show("本地 Ollama 已就绪", style: .success, duration: 1.4)
     }
 
     private func beginScreenshotFromHotkey() {
@@ -820,6 +877,7 @@ final class SpeechInputCoordinator {
             modeName: controller.smartRewritePreference.displayName,
             autoTranslateEnabled: controller.autoTranslateEnabled
         )
+        refreshOllamaHealthForCapsuleIfNeeded(force: true)
         outputAudioDucker.duckIfNeeded(enabled: controller.duckSystemAudioWhileRecordingEnabled)
         do {
             let startBegin = Date()
@@ -1030,6 +1088,7 @@ final class SpeechInputCoordinator {
         activeSession = nil
         recordingStartedAt = nil
         lastCapsuleStatusUpdateAt = nil
+        updateOllamaCapsuleHealth(false)
         updateCapsuleStatus()
         controller.resetInputBands()
         discardPendingRealtimeSnapshot()

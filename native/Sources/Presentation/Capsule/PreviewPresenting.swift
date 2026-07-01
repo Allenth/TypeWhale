@@ -18,6 +18,8 @@ protocol PreviewPresenting: AnyObject {
     func updateAutoTranslateEnabled(_ enabled: Bool)
     /// 更新录音状态（剩余秒数、内存高压提示）。
     func updateRecordingStatus(remainingSeconds: Int?, memoryHigh: Bool)
+    /// 更新本地 Ollama 健康状态；健康时实现可显示低优先级可用性提示。
+    func updateOllamaHealth(isHealthy: Bool)
     /// 显示某个状态文案与可选草稿，并让预览可见。
     func show(state: String, draft: String?)
     /// 更新实时预览草稿文本。

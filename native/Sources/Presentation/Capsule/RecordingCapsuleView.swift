@@ -12,6 +12,7 @@ final class RecordingCapsuleView: NSView {
         static let firstPreviewMinimumCharacters = 3
         static let preExpandLookaheadCharacters = 2
         static let preExpandExtraWidth: CGFloat = 8
+        static let healthPulseSeconds: TimeInterval = 1.8
     }
 
     private var state = "录音中"
@@ -23,6 +24,8 @@ final class RecordingCapsuleView: NSView {
     private var fadeTimer: Timer?
     private var fadeStartIndex: Int?
     private var fadeStartedAt: Date?
+    private var healthPulseStartedAt = Date()
+    private var healthPulseTimer: Timer?
     private var smoothedBands = WaveformBands()
     private var retainedPreviewWidth = Metrics.compactSize.width
     private let fadeDuration: TimeInterval = 0.25
@@ -38,11 +41,27 @@ final class RecordingCapsuleView: NSView {
         didSet { needsDisplay = true }
     }
 
+    /// 本地 Ollama 服务健康时显示的轻量绿边动画；紧急状态边框会覆盖它。
+    var ollamaHealthBorderActive = false {
+        didSet {
+            guard oldValue != ollamaHealthBorderActive else { return }
+            if ollamaHealthBorderActive {
+                healthPulseStartedAt = Date()
+                startHealthPulseTimerIfNeeded()
+            } else {
+                healthPulseTimer?.invalidate()
+                healthPulseTimer = nil
+            }
+            needsDisplay = true
+        }
+    }
+
     override var isOpaque: Bool { false }
 
     deinit {
         draftTimer?.invalidate()
         fadeTimer?.invalidate()
+        healthPulseTimer?.invalidate()
     }
 
     var preferredSize: NSSize {
@@ -113,6 +132,8 @@ final class RecordingCapsuleView: NSView {
             statusBorderColor.setStroke()
             path.lineWidth = 1.8
             path.stroke()
+        } else if ollamaHealthBorderActive {
+            drawOllamaHealthBorder(path: path)
         } else {
             NSColor(calibratedWhite: 1, alpha: 0.48).setStroke()
             path.lineWidth = 1.2
@@ -139,6 +160,22 @@ final class RecordingCapsuleView: NSView {
             attributes: draftAttributes,
             baseColor: textColor
         ).draw(in: draftRect)
+    }
+
+    private func drawOllamaHealthBorder(path: NSBezierPath) {
+        let elapsed = Date().timeIntervalSince(healthPulseStartedAt)
+        let wave = (sin(elapsed / Metrics.healthPulseSeconds * .pi * 2) + 1) / 2
+        let glowAlpha = 0.20 + wave * 0.22
+        let lineAlpha = 0.72 + wave * 0.18
+        let green = NSColor(calibratedRed: 0.16, green: 0.92, blue: 0.54, alpha: 1)
+
+        green.withAlphaComponent(glowAlpha).setStroke()
+        path.lineWidth = 4.0 + CGFloat(wave) * 1.2
+        path.stroke()
+
+        green.withAlphaComponent(lineAlpha).setStroke()
+        path.lineWidth = 1.45
+        path.stroke()
     }
 
     private var draftTextAttributes: [NSAttributedString.Key: Any] {
@@ -255,6 +292,20 @@ final class RecordingCapsuleView: NSView {
         }
         if let draftTimer {
             RunLoop.main.add(draftTimer, forMode: .common)
+        }
+    }
+
+    private func startHealthPulseTimerIfNeeded() {
+        guard healthPulseTimer == nil else { return }
+        healthPulseTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] timer in
+            guard let self, self.ollamaHealthBorderActive else {
+                timer.invalidate()
+                return
+            }
+            self.needsDisplay = true
+        }
+        if let healthPulseTimer {
+            RunLoop.main.add(healthPulseTimer, forMode: .common)
         }
     }
 

@@ -1,5 +1,13 @@
 import Foundation
 
+enum RecognitionLanguageMode {
+    case chinese
+
+    static func load() -> RecognitionLanguageMode {
+        .chinese
+    }
+}
+
 @main
 struct RecognitionTextNormalizerCheck {
     static func main() {
@@ -9,10 +17,12 @@ struct RecognitionTextNormalizerCheck {
         precondition(!isMeaningfulRecognitionText("我"))
         precondition(!isMeaningfulRecognitionText("我。"))
         precondition(!isMeaningfulRecognitionText("嗯"))
+        precondition(!isMeaningfulRecognitionText("The."))
 
         precondition(isMeaningfulRecognitionText("好的"))
         precondition(isMeaningfulRecognitionText("打开设置"))
         precondition(isMeaningfulRecognitionText("我想修改这个功能"))
+        precondition(isMeaningfulRecognitionText("The model works."))
         precondition(cleanRecognitionText("，目前的这些功能的话都是同行玩剩下的。") == "目前的这些功能的话都是同行玩剩下的。")
         precondition(cleanRecognitionText("...hello") == "hello")
         precondition(cleanRecognitionText(". lo.. 跳跃了。。是了。lo. 去了。了。") == "跳跃了。。是了。lo. 去了。了。")

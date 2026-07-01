@@ -57,6 +57,17 @@ struct FinalRecognitionUseCaseCheck {
         }
 
         switch FinalRecognitionUseCase.resolve(
+            .success(["text": "The.", "duration_sec": 0.2, "engine": "stub"]),
+            languageMode: .chinese
+        ) {
+        case .empty(let result):
+            precondition(result.text == "The.")
+            precondition(result.recognitionSeconds == 0.2)
+        default:
+            preconditionFailure("expected The. silence hallucination to be empty")
+        }
+
+        switch FinalRecognitionUseCase.resolve(
             .success(["error": "model unavailable"]),
             languageMode: .chinese
         ) {

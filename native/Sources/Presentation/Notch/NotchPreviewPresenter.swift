@@ -118,6 +118,7 @@ final class NotchPreviewPresenter: PreviewPresenting {
     func updateModeName(_ modeName: String) {}
     func updateAutoTranslateEnabled(_ enabled: Bool) {}
     func updateRecordingStatus(remainingSeconds: Int?, memoryHigh: Bool) {}
+    func updateOllamaHealth(isHealthy: Bool) {}
 
     func show(state: String, draft: String?) {
         currentState = state

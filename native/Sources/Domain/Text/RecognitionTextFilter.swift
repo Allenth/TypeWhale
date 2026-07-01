@@ -90,6 +90,12 @@ private struct RecognitionTextParts {
         if likelySilenceHallucinations.contains(semanticText) {
             return false
         }
+        let likelyLatinSilenceHallucinations: Set<String> = [
+            "the",
+        ]
+        if likelyLatinSilenceHallucinations.contains(semanticText.lowercased()) {
+            return false
+        }
 
         return true
     }

@@ -4,6 +4,7 @@ final class OllamaRewriteEngine: SmartAITextEngine {
     private let endpoint: URL
     private let model: SmartAIModel
     private let session: URLSession
+    private let serverRecovery: OllamaServerRecovery
     let displayName: String
     let logName = "ollama"
     let usesLocalCostGuard = false
@@ -11,11 +12,13 @@ final class OllamaRewriteEngine: SmartAITextEngine {
     init(
         model: SmartAIModel = .ollamaQwen35B,
         endpoint: URL = URL(string: "http://127.0.0.1:11434/api/chat")!,
-        session: URLSession = .shared
+        session: URLSession = .shared,
+        serverRecovery: OllamaServerRecovery = DefaultOllamaServerRecovery()
     ) {
         self.model = model
         self.endpoint = endpoint
         self.session = session
+        self.serverRecovery = serverRecovery
         self.displayName = model.displayName
     }
 
@@ -23,6 +26,7 @@ final class OllamaRewriteEngine: SmartAITextEngine {
         model: SmartAIModel,
         endpoint: URL = URL(string: "http://127.0.0.1:11434/api/chat")!,
         session: URLSession = .shared,
+        serverRecovery: OllamaServerRecovery = DefaultOllamaServerRecovery(),
         reason: String
     ) async {
         guard model.provider == .ollama else { return }
@@ -46,7 +50,17 @@ final class OllamaRewriteEngine: SmartAITextEngine {
                 )
             ))
             LaunchDiagnostics.mark("ollama warmup_start reason=\(reason) model=\(model.engineModelName)")
-            let (data, response) = try await session.data(for: request)
+            let (data, response) = try await sendWithRecovery(
+                request,
+                endpoint: endpoint,
+                session: session,
+                serverRecovery: serverRecovery,
+                model: model,
+                requestID: "warmup-\(UUID().uuidString)",
+                triggeredBy: "warmup_\(reason)",
+                mode: "warmup",
+                recordingSessionID: nil
+            )
             guard let httpResponse = response as? HTTPURLResponse,
                   200..<300 ~= httpResponse.statusCode else {
                 let status = (response as? HTTPURLResponse)?.statusCode ?? -1
@@ -180,7 +194,17 @@ final class OllamaRewriteEngine: SmartAITextEngine {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await session.data(for: request)
+            (data, response) = try await Self.sendWithRecovery(
+                request,
+                endpoint: endpoint,
+                session: session,
+                serverRecovery: serverRecovery,
+                model: model,
+                requestID: requestID,
+                triggeredBy: triggeredBy,
+                mode: mode,
+                recordingSessionID: context.recordingSessionId
+            )
         } catch {
             LaunchDiagnostics.mark(
                 "ollama request_failed recording_session_id=\(context.recordingSessionId ?? "--") request_id=\(requestID) triggered_by=\(triggeredBy) model=\(model.engineModelName) mode=\(mode) error=\"\(Self.logSnippet(error.localizedDescription))\""
@@ -221,6 +245,52 @@ final class OllamaRewriteEngine: SmartAITextEngine {
             .replacingOccurrences(of: "\r", with: "\\r")
             .replacingOccurrences(of: "\"", with: "\\\"")
     }
+
+    private static func sendWithRecovery(
+        _ request: URLRequest,
+        endpoint: URL,
+        session: URLSession,
+        serverRecovery: OllamaServerRecovery,
+        model: SmartAIModel,
+        requestID: String,
+        triggeredBy: String,
+        mode: String,
+        recordingSessionID: String?
+    ) async throws -> (Data, URLResponse) {
+        await serverRecovery.prepareForRequest(endpoint: endpoint, model: model, reason: triggeredBy)
+        do {
+            return try await session.data(for: request)
+        } catch {
+            guard isConnectionUnavailable(error) else { throw error }
+            let recovered = await serverRecovery.recoverAfterConnectionFailure(
+                endpoint: endpoint,
+                model: model,
+                requestID: requestID,
+                triggeredBy: triggeredBy,
+                mode: mode,
+                recordingSessionID: recordingSessionID,
+                error: error
+            )
+            guard recovered else { throw error }
+            LaunchDiagnostics.mark(
+                "ollama request_retry recording_session_id=\(recordingSessionID ?? "--") request_id=\(requestID) triggered_by=\(triggeredBy) model=\(model.engineModelName) mode=\(mode)"
+            )
+            return try await session.data(for: request)
+        }
+    }
+
+    private static func isConnectionUnavailable(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        guard nsError.domain == NSURLErrorDomain else { return false }
+        return [
+            NSURLErrorCannotConnectToHost,
+            NSURLErrorCannotFindHost,
+            NSURLErrorDNSLookupFailed,
+            NSURLErrorNetworkConnectionLost,
+            NSURLErrorNotConnectedToInternet,
+            NSURLErrorTimedOut,
+        ].contains(nsError.code)
+    }
 }
 
 enum OllamaRewriteError: Error {
@@ -228,6 +298,128 @@ enum OllamaRewriteError: Error {
     case invalidResponse
     case httpStatus(Int)
     case emptyContent
+}
+
+protocol OllamaServerRecovery {
+    func prepareForRequest(endpoint: URL, model: SmartAIModel, reason: String) async
+    func recoverAfterConnectionFailure(
+        endpoint: URL,
+        model: SmartAIModel,
+        requestID: String,
+        triggeredBy: String,
+        mode: String,
+        recordingSessionID: String?,
+        error: Error
+    ) async -> Bool
+}
+
+struct OllamaServerHealthProbe {
+    private let endpoint: URL
+    private let session: URLSession
+    private let timeout: TimeInterval
+
+    init(
+        endpoint: URL = URL(string: "http://127.0.0.1:11434/api/chat")!,
+        session: URLSession = .shared,
+        timeout: TimeInterval = 0.8
+    ) {
+        self.endpoint = endpoint
+        self.session = session
+        self.timeout = timeout
+    }
+
+    func isHealthy() async -> Bool {
+        guard let probeURL = URL(string: "/api/version", relativeTo: endpoint)?.absoluteURL else {
+            return false
+        }
+        var request = URLRequest(url: probeURL, timeoutInterval: timeout)
+        request.httpMethod = "GET"
+        do {
+            let (_, response) = try await session.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else { return false }
+            return 200..<300 ~= httpResponse.statusCode
+        } catch {
+            return false
+        }
+    }
+}
+
+struct DefaultOllamaServerRecovery: OllamaServerRecovery {
+    private let appName = "Ollama"
+    private let probeTimeout: TimeInterval = 1.0
+    private let startupWaitSeconds: TimeInterval = 7.0
+    private let pollIntervalNanoseconds: UInt64 = 350_000_000
+
+    func prepareForRequest(endpoint: URL, model: SmartAIModel, reason: String) async {
+        guard !(await isServerReady(endpoint: endpoint)) else { return }
+        LaunchDiagnostics.mark("ollama server_unavailable reason=\(reason) model=\(model.engineModelName) action=launch_app")
+        launchOllamaApp(reason: reason, model: model)
+        _ = await waitUntilReady(endpoint: endpoint, model: model, reason: reason)
+    }
+
+    func recoverAfterConnectionFailure(
+        endpoint: URL,
+        model: SmartAIModel,
+        requestID: String,
+        triggeredBy: String,
+        mode: String,
+        recordingSessionID: String?,
+        error: Error
+    ) async -> Bool {
+        LaunchDiagnostics.mark(
+            "ollama connection_failed recording_session_id=\(recordingSessionID ?? "--") request_id=\(requestID) triggered_by=\(triggeredBy) model=\(model.engineModelName) mode=\(mode) error=\"\(logSnippet(error.localizedDescription))\" action=launch_retry"
+        )
+        launchOllamaApp(reason: "connection_failed", model: model)
+        return await waitUntilReady(endpoint: endpoint, model: model, reason: "connection_failed")
+    }
+
+    private func launchOllamaApp(reason: String, model: SmartAIModel) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        process.arguments = ["-gj", "-a", appName]
+        do {
+            try process.run()
+            LaunchDiagnostics.mark("ollama launch_requested reason=\(reason) model=\(model.engineModelName)")
+        } catch {
+            LaunchDiagnostics.mark("ollama launch_failed reason=\(reason) model=\(model.engineModelName) error=\"\(logSnippet(error.localizedDescription))\"")
+        }
+    }
+
+    private func waitUntilReady(endpoint: URL, model: SmartAIModel, reason: String) async -> Bool {
+        let deadline = Date().addingTimeInterval(startupWaitSeconds)
+        while Date() < deadline {
+            if await isServerReady(endpoint: endpoint) {
+                LaunchDiagnostics.mark("ollama server_ready reason=\(reason) model=\(model.engineModelName)")
+                return true
+            }
+            try? await Task.sleep(nanoseconds: pollIntervalNanoseconds)
+        }
+        LaunchDiagnostics.mark("ollama server_unavailable_after_launch reason=\(reason) model=\(model.engineModelName)")
+        return false
+    }
+
+    private func isServerReady(endpoint: URL) async -> Bool {
+        guard let probeURL = URL(string: "/api/version", relativeTo: endpoint)?.absoluteURL else {
+            return false
+        }
+        var request = URLRequest(url: probeURL, timeoutInterval: probeTimeout)
+        request.httpMethod = "GET"
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else { return false }
+            return 200..<300 ~= httpResponse.statusCode
+        } catch {
+            return false
+        }
+    }
+
+    private func logSnippet(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\n", with: "\\n")
+            .replacingOccurrences(of: "\r", with: "\\r")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+    }
 }
 
 private struct OllamaChatRequest: Encodable {

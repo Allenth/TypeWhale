@@ -9,6 +9,33 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.7.2 (Build 480)",
+            date: "2026-07-01",
+            changes: [
+                "本地 Ollama 健康探测首次转为可用时，顶部会轻量弹出“本地 Ollama 已就绪”提示。",
+                "Ollama OK toast 带 60 秒冷却，避免连续录音时反复打扰；胶囊绿边继续作为持续健康状态提示。",
+                "提示只在当前选择本地 Ollama 模型并且健康探测通过时出现，DeepSeek 模型不触发。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.7.1 (Build 479)",
+            date: "2026-07-01",
+            changes: [
+                "本地 Ollama 整理在发现服务不可连接时会自动尝试拉起 Ollama，并在服务恢复后重试一次当前请求。",
+                "录音胶囊新增 Ollama 健康态绿边动效：当前选择本地模型且本机 Ollama 服务已可用时显示，倒计时或内存高压边框优先。",
+                "补充 Ollama 连接失败恢复回归检查，覆盖首次请求失败后自动恢复并重试的路径。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.7.1 (Build 477)",
+            date: "2026-07-01",
+            changes: [
+                "最终识别路径把孤立的英文静音幻觉 `The.` 归为空结果，不再进入智能整理或自动粘贴。",
+                "正常英文句子仍保留，例如 `The model works.` 不会被误判为空。",
+                "补充识别文本过滤和最终识别 use case 回归检查，覆盖 `The.` 空结果分类。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.7.1 (Build 476)",
             date: "2026-07-01",
             changes: [
