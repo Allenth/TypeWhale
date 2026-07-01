@@ -7,6 +7,9 @@ enum UITheme {
     static let brandTint = NSColor(calibratedRed: 1.0, green: 0.753, blue: 0.18, alpha: 0.06)
     static let brandGreen = NSColor(calibratedRed: 0.12, green: 0.90, blue: 0.52, alpha: 1)
     static let brandGreenTint = NSColor(calibratedRed: 0.12, green: 0.90, blue: 0.52, alpha: 0.10)
+    /// 胶囊「本地服务健康」呼吸边框专用绿：比 brandGreen 更柔和的祖母绿/薄荷绿，
+    /// 在深色 HUD 上更耐看，不刺眼。仅用于健康边框，避免影响权限点/刘海脉冲等处的品牌绿。
+    static let healthGreen = NSColor(calibratedRed: 0.34, green: 0.84, blue: 0.63, alpha: 1)
     static let brandTeal = brandGreen
     static let brandTealTint = brandGreenTint
     static let cardFill = NSColor(calibratedWhite: 1, alpha: 0.06)

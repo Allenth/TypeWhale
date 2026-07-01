@@ -9,6 +9,15 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.7.7 (Build 495)",
+            date: "2026-07-01",
+            changes: [
+                "调整 Ollama 健康态胶囊绿边：外侧光晕会被窗口裁剪时，改为在胶囊内侧绘制更宽、更亮的呼吸光晕。",
+                "新增健康边框专用柔和绿，避免健康光晕过刺眼；其他品牌绿、权限状态点、波形和 Notch 脉冲保持不变。",
+                "录音倒计时、内存高压等状态边框仍优先覆盖健康边框，胶囊尺寸和文字布局保持不变。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.7.6 (Build 494)",
             date: "2026-07-01",
             changes: [

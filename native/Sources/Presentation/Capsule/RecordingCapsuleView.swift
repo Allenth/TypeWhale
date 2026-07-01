@@ -13,8 +13,9 @@ final class RecordingCapsuleView: NSView {
         static let preExpandLookaheadCharacters = 2
         static let preExpandExtraWidth: CGFloat = 8
         static let healthBreathSeconds: TimeInterval = 2.8
-        static let healthInnerGlowPixels: CGFloat = 5
-        static let healthOuterGlowPixels: CGFloat = 2
+        // 健康呼吸光晕向胶囊内部渗透的宽度（像素）。父层 masksToBounds 会裁掉向外的光晕，
+        // 因此改为在胶囊内侧绘制更宽、更亮的呼吸光晕，确保效果真正显示在胶囊上。
+        static let healthInnerGlowPixels: CGFloat = 10
     }
 
     private var state = "录音中"
@@ -168,28 +169,17 @@ final class RecordingCapsuleView: NSView {
         let elapsed = Date().timeIntervalSince(healthBreathStartedAt)
         let progress = CGFloat((elapsed.truncatingRemainder(dividingBy: Metrics.healthBreathSeconds)) / Metrics.healthBreathSeconds)
         let breath = 0.5 - cos(progress * 2 * .pi) * 0.5
-        let intensity = 0.68 + breath * 0.32
-        let green = UITheme.brandGreen
+        let intensity = 0.55 + breath * 0.45
+        let green = UITheme.healthGreen
 
-        drawOuterHealthGlow(path: path, color: green, intensity: intensity)
+        // 父层 masksToBounds 会裁掉向胶囊外扩散的光晕，因此把呼吸光晕全部画在胶囊内侧，
+        // 保证「呼吸 + 光晕」真正显示在胶囊上。
         drawInnerHealthGlow(color: green, intensity: intensity)
 
-        green.withAlphaComponent(0.82 + 0.14 * intensity).setStroke()
-        path.lineWidth = 1.45
+        // 主描边：亮度随呼吸起伏，靠近波峰时更亮更实，形成明显的呼吸感。
+        green.withAlphaComponent(0.55 + 0.40 * intensity).setStroke()
+        path.lineWidth = 1.3 + 0.5 * intensity
         path.stroke()
-    }
-
-    private func drawOuterHealthGlow(path: NSBezierPath, color: NSColor, intensity: CGFloat) {
-        NSGraphicsContext.saveGraphicsState()
-        let outerGlow = NSShadow()
-        outerGlow.shadowColor = color.withAlphaComponent(0.38 * intensity)
-        outerGlow.shadowBlurRadius = Metrics.healthOuterGlowPixels
-        outerGlow.shadowOffset = .zero
-        outerGlow.set()
-        color.withAlphaComponent(0.22 * intensity).setStroke()
-        path.lineWidth = 2.4
-        path.stroke()
-        NSGraphicsContext.restoreGraphicsState()
     }
 
     private func drawInnerHealthGlow(color: NSColor, intensity: CGFloat) {
@@ -200,8 +190,9 @@ final class RecordingCapsuleView: NSView {
 
         for step in 1...steps {
             let offset = CGFloat(step)
+            // 线性靠近边缘、平方衰减向内：边缘处最亮，向胶囊内部柔和淡出。
             let falloff = 1 - (offset - 1) / Metrics.healthInnerGlowPixels
-            let alpha = 0.16 * intensity * falloff * falloff
+            let alpha = 0.34 * intensity * falloff * falloff
             let glowRect = rect.insetBy(dx: offset, dy: offset)
             guard glowRect.width > 0, glowRect.height > 0 else { continue }
             let glowPath = NSBezierPath(
@@ -210,7 +201,7 @@ final class RecordingCapsuleView: NSView {
                 yRadius: max(1, radius - offset)
             )
             color.withAlphaComponent(alpha).setStroke()
-            glowPath.lineWidth = 1.2
+            glowPath.lineWidth = 1.6
             glowPath.stroke()
         }
     }
