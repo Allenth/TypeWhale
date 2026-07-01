@@ -41,7 +41,7 @@ struct SmartTranslationCheck {
         precondition(!SmartTranslationSocialScopeStore.matches(devContext))
 
         // 社交默认模板与常规不同
-        precondition(SmartTranslationPromptStore.defaultTemplate(for: .chineseToEnglish, social: true).contains("适合发到社交平台"))
+        precondition(SmartTranslationPromptStore.defaultTemplate(for: .chineseToEnglish, social: true).contains("texting English"))
         precondition(
             SmartTranslationPromptStore.defaultTemplate(for: .chineseToEnglish, social: true)
                 != SmartTranslationPromptStore.defaultTemplate(for: .chineseToEnglish, social: false)
@@ -57,29 +57,29 @@ struct SmartTranslationCheck {
         precondition(SmartTranslationPromptStore.template(for: .chineseToEnglish, social: true).contains("XYZ"))
         precondition(!SmartTranslationPromptStore.template(for: .chineseToEnglish, social: false).contains("XYZ"))
         SmartTranslationPromptStore.reset(.chineseToEnglish, social: true)
-        precondition(SmartTranslationPromptStore.template(for: .chineseToEnglish, social: true).contains("适合发到社交平台"))
+        precondition(SmartTranslationPromptStore.template(for: .chineseToEnglish, social: true).contains("texting English"))
 
         // 语音中译英落到社交窗口用社交模板，其余走常规
         let socialPrompt = SmartTranslationPromptBuilder.prompt(
             source: "帮我看看这个功能", direction: .chineseToEnglish, context: socialContext, triggeredBy: "final_translation"
         )
-        precondition(socialPrompt.contains("适合发到社交平台"))
+        precondition(socialPrompt.contains("texting English"))
         precondition(!socialPrompt.contains("整体感觉要像在 Slack"))
 
         let normalPrompt = SmartTranslationPromptBuilder.prompt(
             source: "帮我看看这个功能", direction: .chineseToEnglish, context: devContext, triggeredBy: "final_translation"
         )
         precondition(normalPrompt.contains("整体感觉要像在 Slack"))
-        precondition(!normalPrompt.contains("适合发到社交平台"))
+        precondition(!normalPrompt.contains("texting English"))
 
         // 英译中与截图翻译忽略社交分流
         let enzhPrompt = SmartTranslationPromptBuilder.prompt(
             source: "hello", direction: .englishToChinese, context: socialContext, triggeredBy: "final_translation"
         )
-        precondition(!enzhPrompt.contains("适合发到社交平台"))
+        precondition(!enzhPrompt.contains("texting English"))
         let screenshotPrompt = SmartTranslationPromptBuilder.prompt(
             source: "[[TW_LINE_1]] hello", direction: .chineseToEnglish, context: socialContext, triggeredBy: "screenshot_translation"
         )
-        precondition(!screenshotPrompt.contains("适合发到社交平台"))
+        precondition(!screenshotPrompt.contains("texting English"))
     }
 }

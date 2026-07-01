@@ -231,10 +231,8 @@ extension MainViewController {
         return stack
     }
 
-    // 翻译 / 截图 / 系统 合并为一列（各自内容很少）
+    // 截图 / 系统 合并为一列（各自内容很少）
     private func buildMiscSettingsContent() -> NSView {
-        translationPromptButton.widthAnchor.constraint(equalToConstant: 92).isActive = true
-        socialScopeButton.widthAnchor.constraint(equalToConstant: 92).isActive = true
         screenshotSaveLocationButton.widthAnchor.constraint(equalToConstant: 120).isActive = true
         audioInputDeviceMode.widthAnchor.constraint(equalToConstant: 142).isActive = true
         audioInputRefreshButton.widthAnchor.constraint(equalToConstant: 30).isActive = true
@@ -243,10 +241,6 @@ extension MainViewController {
         audioInputControls.orientation = .horizontal
         audioInputControls.alignment = .centerY
         audioInputControls.spacing = 4
-        let translation = subSection("翻译", [
-            optionRow("翻译提示词", translationPromptButton),
-            optionRow("社交清单", socialScopeButton),
-        ])
         let screenshot = subSection("截图", [optionRow("保存位置", screenshotSaveLocationButton)])
         let system = subSection("系统", [
             optionRow("输入设备", audioInputControls),
@@ -256,13 +250,13 @@ extension MainViewController {
             optionRow("麦克风降噪（增强·略慢）", micNoiseReduction),
             optionRow("开机自动启动", launchAtLogin),
         ])
-        let d1 = hairlineView(); let d2 = hairlineView()
-        let stack = NSStackView(views: [translation, d1, screenshot, d2, system])
+        let d1 = hairlineView()
+        let stack = NSStackView(views: [screenshot, d1, system])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 10
         stack.translatesAutoresizingMaskIntoConstraints = false
-        [translation, d1, screenshot, d2, system].forEach {
+        [screenshot, d1, system].forEach {
             $0.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         }
         return stack
@@ -334,7 +328,7 @@ extension MainViewController {
     }
 
     private func buildSmartRewritePanelContent() -> NSView {
-        [autoScopeButton, promptSettingsButton, developerTermsButton, deepSeekKeyButton, deepSeekBalanceButton].forEach {
+        [autoScopeButton, promptSettingsButton, developerTermsButton, translationPromptButton, socialScopeButton, deepSeekKeyButton, deepSeekBalanceButton].forEach {
             $0.bezelStyle = .rounded
             $0.controlSize = .regular
         }
@@ -342,6 +336,8 @@ extension MainViewController {
         autoScopeButton.widthAnchor.constraint(equalToConstant: 92).isActive = true
         promptSettingsButton.widthAnchor.constraint(equalToConstant: 92).isActive = true
         developerTermsButton.widthAnchor.constraint(equalToConstant: 92).isActive = true
+        translationPromptButton.widthAnchor.constraint(equalToConstant: 92).isActive = true
+        socialScopeButton.widthAnchor.constraint(equalToConstant: 92).isActive = true
         deepSeekKeyButton.widthAnchor.constraint(equalToConstant: 92).isActive = true
         deepSeekBalanceButton.widthAnchor.constraint(equalToConstant: 92).isActive = true
         let keyRow = optionRow("DeepSeek Key", deepSeekKeyButton)
@@ -354,6 +350,8 @@ extension MainViewController {
             optionRow("自动范围", autoScopeButton),
             optionRow("整理提示词", promptSettingsButton),
             optionRow("开发术语", developerTermsButton),
+            optionRow("翻译提示词", translationPromptButton),
+            optionRow("社交清单", socialScopeButton),
             keyRow,
             usageRow,
         ])

@@ -9,6 +9,15 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.8.1 (Build 506)",
+            date: "2026-07-01",
+            changes: [
+                "社交中译英默认提示词改为更接近微信、iMessage、WhatsApp、Slack 私聊的 texting English 风格。",
+                "主界面设置布局调整：翻译提示词和社交清单入口移动到智能整理设置组，截图和系统设置组保持更轻。",
+                "更新翻译回归检查，确认社交场景使用新聊天英文模板，开发和截图翻译场景仍走原模板。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.8.1 (Build 505)",
             date: "2026-07-01",
             changes: [
