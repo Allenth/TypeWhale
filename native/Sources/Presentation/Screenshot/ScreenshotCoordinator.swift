@@ -43,7 +43,7 @@ final class ScreenshotCoordinator {
     private var escapeKeyGlobalMonitor: Any?
     private var operationTokens = ScreenshotOperationTokens()
     private let ocrRecognizer = ScreenshotOCRRecognizer()
-    private let translationEngine = SelectedSmartAITextEngine()
+    private let translationEngine = SelectedScreenshotTranslationEngine()
     private let onStatus: (ScreenshotStatus) -> Void
     private static let escapeKeyCode: UInt16 = 53
 
@@ -216,14 +216,12 @@ final class ScreenshotCoordinator {
 
                 emit(.init("截图翻译中", "正在翻译为中文", .processing))
                 let source = Self.numberedScreenshotSource(from: ocrResult.lines)
-                let output = try await translationEngine.translate(
+                let output = try await translationEngine.translateScreenshotOCR(
                     rawText: source,
-                    direction: .englishToChinese,
                     context: SmartInputContext(
                         targetAppName: "截图翻译",
                         targetBundleIdentifier: "TypeWhale.ScreenshotTranslation"
-                    ),
-                    triggeredBy: "screenshot_translation"
+                    )
                 )
                 guard operationTokens.isCurrent(token) else { return }
                 SmartUsageLedgerStore.record(output.usage)

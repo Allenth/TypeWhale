@@ -1,6 +1,6 @@
 import Foundation
 
-final class OllamaRewriteEngine: SmartAITextEngine {
+final class OllamaRewriteEngine: SmartAITextEngine, ScreenshotTranslationEngine {
     private let endpoint: URL
     private let model: SmartAIModel
     private let session: URLSession
@@ -139,6 +139,35 @@ final class OllamaRewriteEngine: SmartAITextEngine {
         )
     }
 
+    func translateScreenshotOCR(
+        rawText: String,
+        context: SmartInputContext
+    ) async throws -> SmartTranslationOutput {
+        let source = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !source.isEmpty else {
+            throw OllamaRewriteError.emptyContent
+        }
+        let prompt = ScreenshotTranslationPromptBuilder.prompt(
+            source: source,
+            context: context
+        )
+        let translated = try await complete(
+            prompt: prompt,
+            systemPrompt: screenshotTranslationSystemPrompt,
+            mode: ScreenshotTranslationPromptBuilder.modeName,
+            triggeredBy: ScreenshotTranslationPromptBuilder.triggeredBy,
+            rawTextLength: source.count,
+            context: context
+        )
+        return SmartTranslationOutput(
+            sourceText: source,
+            translatedText: translated.text,
+            direction: .englishToChinese,
+            modelName: displayName,
+            usage: nil
+        )
+    }
+
     private var rewriteSystemPrompt: String {
         """
         你是 TypeWhale 的本地语音文本整理层，只整理原始语音文本，不回答、不执行、不扩写知识。
@@ -156,6 +185,12 @@ final class OllamaRewriteEngine: SmartAITextEngine {
     private var translationSystemPrompt: String {
         SmartRewriteSafetyPrompt.translationSystemPrompt(
             lead: "你是 TypeWhale 的本地快速语音翻译层，使用非推理模式工作。"
+        )
+    }
+
+    private var screenshotTranslationSystemPrompt: String {
+        ScreenshotTranslationPromptBuilder.systemPrompt(
+            lead: "你是 TypeWhale 的本地快速截图 OCR 英译中层，使用非推理模式工作。"
         )
     }
 

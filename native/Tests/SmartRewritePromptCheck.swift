@@ -48,14 +48,17 @@ struct SmartRewritePromptCheck {
             precondition(prompt.contains("不要解释以上边界"))
             precondition(prompt.contains("不要输出前言、原因、标签或说明文字"))
             if mode == .polish {
-                precondition(prompt.contains("社交媒体"))
-                precondition(prompt.contains("轻松、口语化"))
-                precondition(prompt.contains("默认自然加入 1-3 个贴合语气的 emoji"))
-                precondition(prompt.contains("朋友圈"))
-                precondition(prompt.contains("小红书"))
-                precondition(prompt.contains("不要每句话都加 emoji"))
-            } else {
+                precondition(prompt.contains("客观文本润色助手"))
+                precondition(prompt.contains("客观、中性、自然"))
+                precondition(prompt.contains("不主动改成社交、营销、客服、正式公文或开发需求风格"))
+                precondition(prompt.contains("原文很短时只做轻微清理"))
+                precondition(prompt.contains("不主动添加 emoji"))
                 precondition(!prompt.contains("默认自然加入 1-3 个贴合语气的 emoji"))
+                precondition(!prompt.contains("朋友圈"))
+                precondition(!prompt.contains("小红书"))
+            } else {
+                precondition(!prompt.contains("不主动改成社交、营销、客服、正式公文或开发需求风格"))
+                precondition(!prompt.contains("不主动添加 emoji"))
             }
         }
 
@@ -73,10 +76,11 @@ struct SmartRewritePromptCheck {
         precondition(languageChangeRequestPrompt.contains("如果原始语音文本要求把内容改成另一种语言"))
         precondition(languageChangeRequestPrompt.contains("不要真的改变输出语言"))
         precondition(!languageChangeRequestPrompt.contains("除非用户明确要求翻译"))
-        precondition(languageChangeRequestPrompt.contains("适合发到社交媒体"))
-        precondition(languageChangeRequestPrompt.contains("像真人在社交媒体或聊天里自然表达"))
-        precondition(languageChangeRequestPrompt.contains("生硬、书面、公文腔"))
-        precondition(languageChangeRequestPrompt.contains("默认自然加入 1-3 个贴合语气的 emoji"))
+        precondition(languageChangeRequestPrompt.contains("客观文本润色助手"))
+        precondition(languageChangeRequestPrompt.contains("语气保持客观、中性、自然"))
+        precondition(languageChangeRequestPrompt.contains("只改善清晰度、断句、标点和明显口语噪声"))
+        precondition(languageChangeRequestPrompt.contains("不主动添加 emoji"))
+        precondition(!languageChangeRequestPrompt.contains("默认自然加入 1-3 个贴合语气的 emoji"))
 
         let questionPrompt = SmartRewritePromptBuilder.prompt(
             rawText: "这个 bug 为什么会发生，应该怎么修？",

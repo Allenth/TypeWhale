@@ -9,6 +9,15 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.8.1 (Build 507)",
+            date: "2026-07-01",
+            changes: [
+                "语音翻译继续归入智能整理体系，截图 OCR 翻译拆成独立 ScreenshotTranslation 路径和提示词，不再靠语音翻译 triggeredBy 分支切换。",
+                "润色模式默认提示词改为客观、中性、无明显偏向，不再主动社交化、营销化或默认追加 emoji。",
+                "截图翻译继续固定为英文 OCR 翻译成中文，保留行级贴回规则和独立模型路由。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.8.1 (Build 506)",
             date: "2026-07-01",
             changes: [

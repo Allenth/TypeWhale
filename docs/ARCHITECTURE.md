@@ -110,6 +110,7 @@ Preview non-goals:
 - Window-level capture may raise the explicitly selected target window and recapture in place.
 - During screenshot OCR/translation pending state, actions that export or mutate unstable output must be disabled or guarded. Cancel remains allowed.
 - Stale OCR/translation callbacks must be ignored after cancel or superseding operations.
+- Screenshot translation is a separate OCR workflow. It must use the ScreenshotTranslation prompt/engine path, default to English OCR -> Chinese translation, and preserve OCR line ids for layout. Do not route it through the voice SmartTranslation prompt builder with a special `triggeredBy` branch.
 - Screenshot translation layout and product acceptance details live in `docs/SCREENSHOT_TRANSLATION_SPEC.md`.
 
 ### Main Window Lifecycle
@@ -128,6 +129,7 @@ Preview non-goals:
 - Developer requirement mode is designed for text that may be pasted directly into Codex, Cursor, Claude Code, ChatGPT, terminals, IDEs, or other coding agents.
 - Developer requirement mode defaults to lightweight task cleanup, not requirements-document generation. Structure is a tool for complex or explicitly requested cases, not the default output shape.
 - Developer requirement mode must understand product/technical meaning before rewriting. It should correct context-supported Chinese ASR homophones and near-sound errors instead of mechanically copying wrong characters after removing fillers.
+- Voice language translation belongs to the SmartInput/Smart Rewrite product surface: its prompts and settings stay with intelligent text processing. It handles recognized speech text and must not carry screenshot OCR layout rules.
 - Developer requirement mode inherits the 1.4.20 semantic-preservation lesson: preserve explicit tasks, background reasons, constraints, ordering, risks, acceptance hints, subjective experience, and judgment intensity. Short content may stay short, but short content with cause, feeling, constraint, order, or risk must not be compressed into a single command.
 - Semantic correction is not only a fixed replacement list. When the ASR literal text is incoherent but the development-feedback context has an obvious homophone or near-sound candidate, restore the user's likely intent while preserving uncertain code, paths, commands, logs, and proper nouns.
 - Developer requirement output must preserve the user's speaking position. First-person and second-person expressions such as "我觉得", "我要求", "你看", "告诉我", "我们开始", and "给我" must not be rewritten into third-person summaries such as "用户要求" or "要求对方告知".

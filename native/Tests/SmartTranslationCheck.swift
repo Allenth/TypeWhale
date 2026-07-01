@@ -72,14 +72,17 @@ struct SmartTranslationCheck {
         precondition(normalPrompt.contains("整体感觉要像在 Slack"))
         precondition(!normalPrompt.contains("texting English"))
 
-        // 英译中与截图翻译忽略社交分流
+        // 英译中忽略社交分流；截图翻译已经拆到 ScreenshotTranslationPromptBuilder，不再复用语音翻译 builder。
         let enzhPrompt = SmartTranslationPromptBuilder.prompt(
             source: "hello", direction: .englishToChinese, context: socialContext, triggeredBy: "final_translation"
         )
         precondition(!enzhPrompt.contains("texting English"))
-        let screenshotPrompt = SmartTranslationPromptBuilder.prompt(
-            source: "[[TW_LINE_1]] hello", direction: .chineseToEnglish, context: socialContext, triggeredBy: "screenshot_translation"
+        let ignoredTriggeredByPrompt = SmartTranslationPromptBuilder.prompt(
+            source: "[[TW_LINE_1]] hello", direction: .englishToChinese, context: socialContext, triggeredBy: "screenshot_translation"
         )
-        precondition(!screenshotPrompt.contains("texting English"))
+        precondition(ignoredTriggeredByPrompt.contains("语音翻译助手"))
+        precondition(ignoredTriggeredByPrompt.contains("原始语音文本："))
+        precondition(!ignoredTriggeredByPrompt.contains("截图 OCR 翻译助手"))
+        precondition(!ignoredTriggeredByPrompt.contains("[[TW_LINE_n]]"))
     }
 }

@@ -74,7 +74,7 @@ struct SelectedSmartAITextEngineCheck {
             rawText: "Settings",
             direction: .englishToChinese,
             context: context,
-            triggeredBy: "screenshot_translation"
+            triggeredBy: "final_translation"
         )
         precondition(translationOutput.translatedText == "DeepSeek Probe:Settings")
         precondition(deepSeek.translateCalls == 1)

@@ -1,6 +1,6 @@
 import Foundation
 
-final class DeepSeekRewriteEngine: SmartAITextEngine {
+final class DeepSeekRewriteEngine: SmartAITextEngine, ScreenshotTranslationEngine {
     private let endpoint = URL(string: "https://api.deepseek.com/chat/completions")!
     private static let requiredModel = "deepseek-v4-flash"
     let displayName: String
@@ -99,6 +99,49 @@ final class DeepSeekRewriteEngine: SmartAITextEngine {
         )
     }
 
+    func translateScreenshotOCR(
+        rawText: String,
+        context: SmartInputContext
+    ) async throws -> SmartTranslationOutput {
+        let source = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !source.isEmpty else {
+            throw DeepSeekRewriteError.emptyContent
+        }
+        let prompt = ScreenshotTranslationPromptBuilder.prompt(
+            source: source,
+            context: context
+        )
+        switch SmartRewriteCostGuard.check(
+            rawText: source,
+            prompt: prompt,
+            triggeredBy: ScreenshotTranslationPromptBuilder.triggeredBy
+        ) {
+        case .allowed:
+            break
+        case .blocked(let reason):
+            LaunchDiagnostics.mark(
+                "deepseek request_skipped triggered_by=\(ScreenshotTranslationPromptBuilder.triggeredBy) mode=\(ScreenshotTranslationPromptBuilder.modeName) reason=\(reason) rawText_length=\(source.count) prompt_length=\(prompt.count)"
+            )
+            throw SmartRewriteError.costLimitExceeded(reason)
+        }
+        let translated = try await complete(
+            prompt: prompt,
+            systemPrompt: screenshotTranslationSystemPrompt,
+            mode: ScreenshotTranslationPromptBuilder.modeName,
+            triggeredBy: ScreenshotTranslationPromptBuilder.triggeredBy,
+            rawText: source,
+            rawTextLength: source.count,
+            context: context
+        )
+        return SmartTranslationOutput(
+            sourceText: source,
+            translatedText: translated.text,
+            direction: .englishToChinese,
+            modelName: displayName,
+            usage: translated.usage
+        )
+    }
+
     static func translationPrompt(
         source: String,
         direction: SmartTranslationDirection,
@@ -122,6 +165,12 @@ final class DeepSeekRewriteEngine: SmartAITextEngine {
     private var translationSystemPrompt: String {
         SmartRewriteSafetyPrompt.translationSystemPrompt(
             lead: "你是 TypeWhale 的快速语音翻译层，使用非推理模式工作。"
+        )
+    }
+
+    private var screenshotTranslationSystemPrompt: String {
+        ScreenshotTranslationPromptBuilder.systemPrompt(
+            lead: "你是 TypeWhale 的快速截图 OCR 英译中层，使用非推理模式工作。"
         )
     }
 

@@ -1,6 +1,6 @@
 import Foundation
 
-final class MiniMaxRewriteEngine: SmartAITextEngine {
+final class MiniMaxRewriteEngine: SmartAITextEngine, ScreenshotTranslationEngine {
     private let endpoint = URL(string: "https://api.minimaxi.com/v1/chat/completions")!
     private static let requiredModel = "MiniMax-M2"
     let displayName: String
@@ -82,6 +82,36 @@ final class MiniMaxRewriteEngine: SmartAITextEngine {
         )
     }
 
+    func translateScreenshotOCR(
+        rawText: String,
+        context: SmartInputContext
+    ) async throws -> SmartTranslationOutput {
+        let source = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !source.isEmpty else {
+            throw MiniMaxRewriteError.emptyContent
+        }
+        let prompt = ScreenshotTranslationPromptBuilder.prompt(
+            source: source,
+            context: context
+        )
+        let translated = try await complete(
+            prompt: prompt,
+            systemPrompt: screenshotTranslationSystemPrompt,
+            mode: ScreenshotTranslationPromptBuilder.modeName,
+            triggeredBy: ScreenshotTranslationPromptBuilder.triggeredBy,
+            rawText: source,
+            rawTextLength: source.count,
+            context: context
+        )
+        return SmartTranslationOutput(
+            sourceText: source,
+            translatedText: translated.text,
+            direction: .englishToChinese,
+            modelName: displayName,
+            usage: nil
+        )
+    }
+
     private var rewriteSystemPrompt: String {
         SmartRewriteSafetyPrompt.rewriteSystemPrompt(
             lead: "你是 TypeWhale 的快速语音文本整理层。"
@@ -91,6 +121,12 @@ final class MiniMaxRewriteEngine: SmartAITextEngine {
     private var translationSystemPrompt: String {
         SmartRewriteSafetyPrompt.translationSystemPrompt(
             lead: "你是 TypeWhale 的快速语音翻译层。"
+        )
+    }
+
+    private var screenshotTranslationSystemPrompt: String {
+        ScreenshotTranslationPromptBuilder.systemPrompt(
+            lead: "你是 TypeWhale 的快速截图 OCR 英译中层。"
         )
     }
 
