@@ -13,8 +13,9 @@ final class HealthBorderOverlayView: NSView {
         static let breathSeconds: TimeInterval = 2.8
         /// 玻璃背景的圆角，与 RecordingPanel 的圆角裁剪共用 UITheme.capsuleCornerRadius。
         static let glassCornerRadius = UITheme.capsuleCornerRadius
-        /// 绿环相对玻璃边缘的内缩量；同时留作向外光晕的余量，保证光晕不越过玻璃边缘被裁掉。
-        static let edgeInset: CGFloat = 3
+        /// 绿环相对玻璃边缘的内缩量。取 1 使绿环正好贴在胶囊边缘（与原描边位置一致），不悬浮在内侧。
+        /// 向外光晕会被父层 masksToBounds 裁掉，故辉光主要靠向内渗透那层。
+        static let edgeInset: CGFloat = 1
         /// 向胶囊内部渗透的呼吸光晕宽度（像素）。
         static let innerGlowPixels: CGFloat = 9
     }
