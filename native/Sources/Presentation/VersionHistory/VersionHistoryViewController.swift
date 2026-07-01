@@ -9,6 +9,24 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.7.2 (Build 482)",
+            date: "2026-07-01",
+            changes: [
+                "开发需求智能整理收紧短句处理：一句方向或命令只输出清理后的自然短句，不再强行套“目标/上下文/约束/完成标准”模板。",
+                "精简开发需求模板中的约束和完成标准改为原文明确提到时才输出，避免自动补出“未明确说明”或默认工程约束。",
+                "新增“先从模型段解决文同”回归样例，锁定短句方向整理成“先从模型端解决问题。”的边界。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.7.2 (Build 481)",
+            date: "2026-07-01",
+            changes: [
+                "开发需求智能整理进一步收紧提示词块处理：口述内容本身包含规则、边界或提示词时，会保留项目符号和指令语气。",
+                "输出给 Codex、Cursor、Claude Code、ChatGPT 等 coding agent 的内容继续保持像用户亲自发出的需求，不压缩成第三人称摘要。",
+                "新增开发需求提示词块回归检查，覆盖“开发需求模式额外边界”这类可直接粘贴给 coding agent 的原文。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.7.2 (Build 480)",
             date: "2026-07-01",
             changes: [

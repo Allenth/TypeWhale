@@ -1,6 +1,6 @@
 # TypeWhale Architecture
 
-Last updated: 2026-06-30
+Last updated: 2026-07-01
 
 This document is the single current architecture source for TypeWhale. Older architecture notes and ADR files are historical context only. If code or product behavior changes an architecture boundary, update this file and record the concrete work in `docs/开发日志.md`.
 
@@ -117,6 +117,14 @@ Preview non-goals:
 - Main-window visibility is governed only by explicit user actions, the configured main-window shortcut, status-item/menu commands, and approved first-install/default-open behavior.
 - Login-item/background launch must not unexpectedly surface the main window.
 - Screenshot and recording flows must not take ownership of main-window visibility. Screenshot close/copy/save/OCR/translation/cancel paths must not register reopen suppression or call `showMainWindow()`.
+
+### Smart Rewrite
+
+- Developer requirement mode is designed for text that may be pasted directly into Codex, Cursor, Claude Code, ChatGPT, terminals, IDEs, or other coding agents.
+- Developer requirement output must preserve the user's speaking position. First-person and second-person expressions such as "我觉得", "我要求", "你看", "告诉我", "我们开始", and "给我" must not be rewritten into third-person summaries such as "用户要求" or "要求对方告知".
+- Short developer directions must stay short. If the raw text is a single brief direction, command, or intent, such as "先从模型段解决文同", rewrite only speech-recognition errors, terminology, punctuation, and word order; do not expand it into goal/context/constraints/completion-standard fields.
+- If the raw text itself contains a prompt, rule block, boundary note, or bullet list intended for a coding agent, preserve the original directive tone, bullet structure, and first/second-person stance. Do not collapse it into a generic summary like "用户要求优化提示词".
+- These guardrails apply both to manual developer requirement mode and to automatic mode when target/context rules choose developer requirement mode.
 
 ### AI Providers
 

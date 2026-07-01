@@ -38,6 +38,7 @@ struct SmartRewritePromptCheck {
             precondition(prompt.contains("原文没有明确说“对方、客户、用户、团队、他、她”"))
             precondition(prompt.contains("原文是第一人称表达时，输出也必须保持第一人称"))
             precondition(prompt.contains("不要为了结构完整而补"))
+            precondition(prompt.contains("未明确说明"))
             precondition(prompt.contains("不要解释以上边界"))
             precondition(prompt.contains("不要输出前言、原因、标签或说明文字"))
             if mode == .polish {
@@ -74,6 +75,12 @@ struct SmartRewritePromptCheck {
         precondition(questionPrompt.contains("不要过度精简"))
         precondition(questionPrompt.contains("保留任务、背景、现象、期望、约束、顺序、风险、体验感受和判断强度"))
         precondition(questionPrompt.contains("ease-in-out"))
+        precondition(questionPrompt.contains("短句方向："))
+        precondition(questionPrompt.contains("先从模型段解决文同"))
+        precondition(questionPrompt.contains("先从模型端解决问题。"))
+        precondition(questionPrompt.contains("原文只有一句很短的方向、命令或意图时，只输出清理后的短句"))
+        precondition(questionPrompt.contains("不要套“目标/上下文/约束/完成标准”模板"))
+        precondition(questionPrompt.contains("不要补复现步骤、默认约束或完成标准"))
         precondition(questionPrompt.contains("简单问题："))
         precondition(questionPrompt.contains("直接输出流畅自然段，不强制编号或标题"))
         precondition(questionPrompt.contains("复杂问题："))
@@ -85,6 +92,8 @@ struct SmartRewritePromptCheck {
         precondition(questionPrompt.contains("不要写成旁观者总结"))
         precondition(questionPrompt.contains("保留“我觉得、我要求、你看、告诉我、我们开始、给我”等第一人称或第二人称表达"))
         precondition(questionPrompt.contains("不要改成“用户觉得、用户要求、要求对方告知”"))
+        precondition(questionPrompt.contains("原文包含提示词、规则块、边界说明或要直接交给 coding agent 的项目符号时"))
+        precondition(questionPrompt.contains("不要压缩成“用户要求优化提示词”这类第三人称摘要"))
         precondition(questionPrompt.contains("自动模式命中开发工具时仍按开发需求处理"))
         precondition(questionPrompt.contains("开发需求模板"))
         precondition(questionPrompt.contains("目标：修复 xxx 问题 / 实现 xxx 功能。"))
@@ -94,21 +103,28 @@ struct SmartRewritePromptCheck {
         precondition(questionPrompt.contains("期望行为："))
         precondition(questionPrompt.contains("复现步骤："))
         precondition(questionPrompt.contains("约束："))
-        precondition(questionPrompt.contains("保持现有 API 不变"))
-        precondition(questionPrompt.contains("尽量小改"))
-        precondition(questionPrompt.contains("遵循项目现有风格"))
-        precondition(questionPrompt.contains("必要时补测试"))
+        precondition(questionPrompt.contains("仅原文明确提到时输出"))
         precondition(questionPrompt.contains("完成标准："))
-        precondition(questionPrompt.contains("先定位根因"))
-        precondition(questionPrompt.contains("实现修复"))
-        precondition(questionPrompt.contains("运行最小相关测试"))
-        precondition(questionPrompt.contains("最后总结改了什么、如何验证、还有什么风险"))
-        precondition(questionPrompt.contains("用户明确要求完整需求、验收标准、计划，或要交给 coding agent 执行时"))
+        precondition(questionPrompt.contains("仅原文明确要求完整交付标准时输出"))
+        precondition(questionPrompt.contains("只有用户明确要求完整需求、验收标准、计划"))
         precondition(questionPrompt.contains("这个 bug 为什么会发生，应该怎么修？"))
         precondition(
-            SmartRewritePromptStore.defaultTemplate(for: .developerRequirement).count < 1350,
+            SmartRewritePromptStore.defaultTemplate(for: .developerRequirement).count < 1450,
             "developer requirement default prompt should stay compact"
         )
+
+        let shortDirectionPrompt = SmartRewritePromptBuilder.prompt(
+            rawText: "先从模型段解决文同",
+            mode: .developerRequirement,
+            context: context,
+            preference: .automatic
+        )
+        precondition(shortDirectionPrompt.contains("先从模型段解决文同"))
+        precondition(shortDirectionPrompt.contains("短句方向："))
+        precondition(shortDirectionPrompt.contains("先从模型端解决问题。"))
+        precondition(shortDirectionPrompt.contains("不要套“目标/上下文/约束/完成标准”模板"))
+        precondition(shortDirectionPrompt.contains("不要补复现步骤、默认约束或完成标准"))
+        precondition(shortDirectionPrompt.contains("不输出“待确认”“未明确说明”“未提及”"))
 
         let codexFirstPersonPrompt = SmartRewritePromptBuilder.prompt(
             rawText: "你看这一句问题很大，我是自动模式，在 Codex 中也必须是开发需求模式。要求必须使用第一人称口吻，即我怎么说就是怎么说，告诉我具体方案。",
@@ -121,6 +137,25 @@ struct SmartRewritePromptCheck {
         precondition(codexFirstPersonPrompt.contains("我怎么说就是怎么说"))
         precondition(codexFirstPersonPrompt.contains("告诉我具体方案"))
         precondition(codexFirstPersonPrompt.contains("不要改成“用户觉得、用户要求、要求对方告知”"))
+
+        let developerPromptBlockPrompt = SmartRewritePromptBuilder.prompt(
+            rawText: """
+            开发需求的提示词优化。会打出下列的内容。如果我说“开发需求”的提示词优化的话。
+
+            开发需求模式额外边界：
+            - 输出文本会被直接粘贴给 Codex、Cursor、Claude Code、ChatGPT 等 coding agent 时，必须像我亲自发出的需求，不要写成旁观者总结。
+            - 保留“我觉得、我要求、你看、告诉我、我们开始、给我”等第一人称或第二人称表达；必要时只清理语序，不要改成“用户觉得、用户要求、要求对方告知”。
+            - 自动模式命中开发工具时仍按开发需求处理；不要因为目标应用是 Codex 就把内容改写成第三人称任务转述。
+            """,
+            mode: .developerRequirement,
+            context: context,
+            preference: .automatic
+        )
+        precondition(developerPromptBlockPrompt.contains("开发需求的提示词优化"))
+        precondition(developerPromptBlockPrompt.contains("开发需求模式额外边界："))
+        precondition(developerPromptBlockPrompt.contains("必须像我亲自发出的需求，不要写成旁观者总结"))
+        precondition(developerPromptBlockPrompt.contains("保留原有指令语气、项目符号和第一/第二人称发话位置"))
+        precondition(developerPromptBlockPrompt.contains("不要压缩成“用户要求优化提示词”这类第三人称摘要"))
 
         let summaryPrompt = SmartRewritePromptBuilder.prompt(
             rawText: "今天讲了很多产品方向、风险和下一步计划",
