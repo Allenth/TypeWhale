@@ -254,11 +254,11 @@ extension MainViewController {
         if selectedBackend == .qwen3ASR {
             if let qwenPath = Qwen3ASRModelManifest.preferredModelDirectory?.path {
                 modelEntryStatus.stringValue = "已就绪"
-                modelEntryStatus.textColor = .systemGreen
-                modelEntryDot.layer?.backgroundColor = NSColor.systemGreen.cgColor
+                modelEntryStatus.textColor = UITheme.brandGreen
+                modelEntryDot.layer?.backgroundColor = UITheme.brandGreen.cgColor
                 modelValue.toolTip = qwenPath
                 modelValue.stringValue = "Qwen3-ASR 原生模型已就绪，可离线识别"
-                modelValue.textColor = .systemGreen
+                modelValue.textColor = UITheme.brandGreen
                 modelPathLabel.stringValue = qwenPath
                 modelProgress.isHidden = true
                 modelInstallButton.isHidden = true
@@ -294,11 +294,11 @@ extension MainViewController {
             let sensePath = SenseVoiceModelManifest.preferredModelDirectory?.path ?? ""
             modelEntryName.stringValue = asrBackend == .automatic ? "SenseVoice int8 · 自动" : "SenseVoice int8"
             modelEntryStatus.stringValue = "已就绪"
-            modelEntryStatus.textColor = .systemGreen
-            modelEntryDot.layer?.backgroundColor = NSColor.systemGreen.cgColor
+            modelEntryStatus.textColor = UITheme.brandGreen
+            modelEntryDot.layer?.backgroundColor = UITheme.brandGreen.cgColor
             modelValue.toolTip = sensePath
             modelValue.stringValue = "本地模型已就绪，可离线识别"
-            modelValue.textColor = .systemGreen
+            modelValue.textColor = UITheme.brandGreen
             modelPathLabel.stringValue = sensePath.isEmpty ? "内置模型" : sensePath
             modelProgress.isHidden = true
             modelInstallButton.isHidden = true
@@ -362,9 +362,9 @@ extension MainViewController {
     func statusColor(for tone: PrimaryStatusTone) -> NSColor {
         switch tone {
         case .idle, .success:
-            return .systemGreen
+            return UITheme.brandGreen
         case .listening:
-            return UITheme.brandTeal
+            return UITheme.brandGreen
         case .processing:
             return UITheme.brandYellow
         case .warning:

@@ -39,7 +39,7 @@ extension MainViewController {
         statusDot.translatesAutoresizingMaskIntoConstraints = false
         statusDot.wantsLayer = true
         statusDot.layer?.cornerRadius = 3.5
-        statusDot.layer?.backgroundColor = NSColor.systemGreen.cgColor
+        statusDot.layer?.backgroundColor = UITheme.brandGreen.cgColor
 
         let pillStack = NSStackView(views: [statusDot, status])
         pillStack.orientation = .horizontal
@@ -223,7 +223,7 @@ extension MainViewController {
         modelEntryDot.translatesAutoresizingMaskIntoConstraints = false
         modelEntryDot.wantsLayer = true
         modelEntryDot.layer?.cornerRadius = 3
-        modelEntryDot.layer?.backgroundColor = NSColor.systemGreen.cgColor
+        modelEntryDot.layer?.backgroundColor = UITheme.brandGreen.cgColor
         modelEntryStatus.textColor = .secondaryLabelColor
         let statusRow = NSStackView(views: [modelEntryDot, modelEntryStatus])
         statusRow.orientation = .horizontal

@@ -18,7 +18,7 @@ enum ToastStyle {
 
     var tint: NSColor {
         switch self {
-        case .success: return UITheme.brandTeal
+        case .success: return UITheme.brandGreen
         case .info: return NSColor(calibratedWhite: 1, alpha: 0.85)
         case .warning: return .systemOrange
         case .error: return .systemRed

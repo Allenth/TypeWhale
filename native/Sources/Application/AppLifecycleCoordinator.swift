@@ -100,6 +100,8 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
         appItem.submenu = appMenu
         mainMenu.addItem(appItem)
 
+        mainMenu.addItem(StandardEditMenuFactory.makeMenuItem())
+
         let windowItem = NSMenuItem()
         let windowMenu = NSMenu(title: "窗口")
         let closeItem = NSMenuItem(title: "关闭窗口", action: #selector(closeMainWindow), keyEquivalent: "w")

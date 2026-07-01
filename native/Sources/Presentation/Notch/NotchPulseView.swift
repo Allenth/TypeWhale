@@ -56,7 +56,7 @@ final class NotchPulseView: NSView {
         let halo = NSBezierPath(ovalIn: NSRect(
             x: center.x - haloR, y: center.y - haloR, width: haloR * 2, height: haloR * 2
         ))
-        UITheme.brandTeal.withAlphaComponent(0.14 + 0.30 * intensity).setFill()
+        UITheme.brandGreen.withAlphaComponent(0.14 + 0.30 * intensity).setFill()
         halo.fill()
 
         // 实心核心。
@@ -64,7 +64,7 @@ final class NotchPulseView: NSView {
         let core = NSBezierPath(ovalIn: NSRect(
             x: center.x - coreR, y: center.y - coreR, width: coreR * 2, height: coreR * 2
         ))
-        UITheme.brandTeal.withAlphaComponent(0.92).setFill()
+        UITheme.brandGreen.withAlphaComponent(0.92).setFill()
         core.fill()
     }
 }

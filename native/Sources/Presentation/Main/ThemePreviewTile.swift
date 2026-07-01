@@ -33,7 +33,7 @@ final class ThemePreviewTile: NSView {
         NSColor(calibratedWhite: 1, alpha: 0.05).setFill()
         card.fill()
         card.lineWidth = isSelected ? 2 : 1
-        (isSelected ? UITheme.brandTeal : UITheme.cardBorder).setStroke()
+        (isSelected ? UITheme.brandGreen : UITheme.cardBorder).setStroke()
         card.stroke()
 
         // 模拟一个屏幕画面（裁剪范围只作用于场景，不影响标题）。
@@ -52,7 +52,7 @@ final class ThemePreviewTile: NSView {
         // 标题。
         let attrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 11, weight: isSelected ? .semibold : .regular),
-            .foregroundColor: isSelected ? UITheme.brandTeal : NSColor.secondaryLabelColor,
+            .foregroundColor: isSelected ? UITheme.brandGreen : NSColor.secondaryLabelColor,
         ]
         let size = (titleText as NSString).size(withAttributes: attrs)
         (titleText as NSString).draw(
@@ -61,7 +61,7 @@ final class ThemePreviewTile: NSView {
         )
     }
 
-    /// 默认主题：底部居中胶囊 + teal 波形线。
+    /// 默认主题：底部居中胶囊 + 品牌绿波形线。
     private func drawClassic(in screen: NSRect) {
         let pillW = screen.width * 0.64
         let pillH: CGFloat = 13
@@ -79,7 +79,7 @@ final class ThemePreviewTile: NSView {
         }
         line.lineWidth = 1.5
         line.lineCapStyle = .round
-        UITheme.brandTeal.setStroke()
+        UITheme.brandGreen.setStroke()
         line.stroke()
     }
 
@@ -94,7 +94,7 @@ final class ThemePreviewTile: NSView {
         let dotR: CGFloat = 2.3
         NSColor(calibratedWhite: 0.82, alpha: 1).setFill()
         NSBezierPath(ovalIn: NSRect(x: island.minX + 5, y: island.midY - dotR, width: dotR * 2, height: dotR * 2)).fill()
-        UITheme.brandTeal.setFill()
+        UITheme.brandGreen.setFill()
         NSBezierPath(ovalIn: NSRect(x: island.maxX - 5 - dotR * 2, y: island.midY - dotR, width: dotR * 2, height: dotR * 2)).fill()
 
         let bar = NSRect(x: island.midX - islandW * 0.16, y: island.midY - 1.5, width: islandW * 0.32, height: 3)

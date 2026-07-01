@@ -2,11 +2,13 @@ import AppKit
 
 @MainActor
 enum UITheme {
-    // Logo palette: warm golden "sky" (primary) + teal "water" (secondary accent).
+    // Logo palette: warm golden "sky" (primary) + vivid soft green (secondary accent).
     static let brandYellow = NSColor(calibratedRed: 1.0, green: 0.753, blue: 0.18, alpha: 1)
     static let brandTint = NSColor(calibratedRed: 1.0, green: 0.753, blue: 0.18, alpha: 0.06)
-    static let brandTeal = NSColor(calibratedRed: 0.17, green: 0.72, blue: 0.71, alpha: 1)
-    static let brandTealTint = NSColor(calibratedRed: 0.17, green: 0.72, blue: 0.71, alpha: 0.08)
+    static let brandGreen = NSColor(calibratedRed: 0.12, green: 0.90, blue: 0.52, alpha: 1)
+    static let brandGreenTint = NSColor(calibratedRed: 0.12, green: 0.90, blue: 0.52, alpha: 0.10)
+    static let brandTeal = brandGreen
+    static let brandTealTint = brandGreenTint
     static let cardFill = NSColor(calibratedWhite: 1, alpha: 0.06)
     static let cardBorder = NSColor(calibratedWhite: 1, alpha: 0.12)
     static let hairline = NSColor(calibratedWhite: 1, alpha: 0.08)
@@ -261,7 +263,7 @@ final class MiniWaveformView: NSView {
         path.lineWidth = 2
         path.lineCapStyle = .round
         path.lineJoinStyle = .round
-        UITheme.brandTeal.withAlphaComponent(0.5 + 0.5 * Double(activity)).setStroke()
+        UITheme.brandGreen.withAlphaComponent(0.5 + 0.5 * Double(activity)).setStroke()
         path.stroke()
     }
 }

@@ -169,7 +169,7 @@ final class RecordingCapsuleView: NSView {
         let progress = CGFloat((elapsed.truncatingRemainder(dividingBy: Metrics.healthBreathSeconds)) / Metrics.healthBreathSeconds)
         let breath = 0.5 - cos(progress * 2 * .pi) * 0.5
         let intensity = 0.68 + breath * 0.32
-        let green = NSColor(calibratedRed: 0.16, green: 0.92, blue: 0.54, alpha: 1)
+        let green = UITheme.brandGreen
 
         drawOuterHealthGlow(path: path, color: green, intensity: intensity)
         drawInnerHealthGlow(color: green, intensity: intensity)

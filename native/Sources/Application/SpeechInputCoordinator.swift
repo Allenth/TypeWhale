@@ -438,18 +438,18 @@ final class SpeechInputCoordinator {
         UserDefaults.standard.synchronize()
         if checkMicrophone {
             controller.micStatus.stringValue = permissions.microphoneAuthorized ? "● 已开启" : "● 未开启"
-            controller.micStatus.textColor = permissions.microphoneAuthorized ? .systemGreen : .systemRed
+            controller.micStatus.textColor = permissions.microphoneAuthorized ? UITheme.brandGreen : .systemRed
         } else {
             controller.micStatus.stringValue = "● 录音时确认"
             controller.micStatus.textColor = .secondaryLabelColor
         }
         controller.accessibilityStatus.stringValue = permissions.accessibilityTrusted ? "● 已开启" : "● 未开启"
-        controller.accessibilityStatus.textColor = permissions.accessibilityTrusted ? .systemGreen : .systemRed
+        controller.accessibilityStatus.textColor = permissions.accessibilityTrusted ? UITheme.brandGreen : .systemRed
         controller.screenRecordingStatus.stringValue = permissions.screenRecordingAuthorized ? "● 已开启" : "● 未开启"
-        controller.screenRecordingStatus.textColor = permissions.screenRecordingAuthorized ? .systemGreen : .systemRed
+        controller.screenRecordingStatus.textColor = permissions.screenRecordingAuthorized ? UITheme.brandGreen : .systemRed
         if globalListening {
             controller.hotkeyStatus.stringValue = "● 监听中"
-            controller.hotkeyStatus.textColor = .systemGreen
+            controller.hotkeyStatus.textColor = UITheme.brandGreen
         } else {
             controller.hotkeyStatus.stringValue = "● 未监听"
             controller.hotkeyStatus.textColor = .systemOrange

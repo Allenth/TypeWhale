@@ -148,15 +148,15 @@ final class OllamaRewriteEngine: SmartAITextEngine {
         忠实保留叙述主体；原文没有明确说“对方、客户、用户、团队、他、她”时，不要主动补出这些主体。
         不要为了结构完整而补“无明确行动项”或泛化风险。
         主体不明参考：原文“没有准确理解并妥善处理我表达的内容，而且沟通里还有曲解。”合格输出“我的表达内容没有被准确理解和妥善处理，沟通中还存在曲解。”不合格输出“对方未准确理解并妥善处理我表达的内容，且在沟通中存在曲解。”
-        保持输入主要语言，只输出最终正文，不输出分析、标签、Markdown 或规则解释。
+        保持输入主要语言，\(SmartRewriteSafetyPrompt.languageLock)
+        只输出最终正文，不输出分析、标签、Markdown 或规则解释。
         """
     }
 
     private var translationSystemPrompt: String {
-        """
-        你是 TypeWhale 的本地快速语音翻译层，使用非推理模式工作。
-        严格按照用户指定方向翻译。只输出最终译文，不要输出分析、思考、Markdown 代码块、标签或解释。
-        """
+        SmartRewriteSafetyPrompt.translationSystemPrompt(
+            lead: "你是 TypeWhale 的本地快速语音翻译层，使用非推理模式工作。"
+        )
     }
 
     private func complete(

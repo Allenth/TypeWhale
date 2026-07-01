@@ -15,7 +15,7 @@ final class ThirdPartyNoticesViewController: NSViewController {
             name: "sherpa-onnx",
             license: "Apache-2.0",
             status: "已随包",
-            statusColor: .systemGreen,
+            statusColor: UITheme.brandGreen,
             sourceURL: URL(string: "https://github.com/k2-fsa/sherpa-onnx"),
             note: "原生语音识别运行库，随包保留 Apache-2.0 notice。"
         ),
@@ -23,7 +23,7 @@ final class ThirdPartyNoticesViewController: NSViewController {
             name: "ONNX Runtime",
             license: "MIT",
             status: "已随包",
-            statusColor: .systemGreen,
+            statusColor: UITheme.brandGreen,
             sourceURL: URL(string: "https://github.com/microsoft/onnxruntime"),
             note: "ONNX 推理运行库，随包保留 MIT notice 和版权说明。"
         ),
@@ -31,7 +31,7 @@ final class ThirdPartyNoticesViewController: NSViewController {
             name: "Silero VAD",
             license: "MIT",
             status: "已随包",
-            statusColor: .systemGreen,
+            statusColor: UITheme.brandGreen,
             sourceURL: URL(string: "https://github.com/snakers4/silero-vad"),
             note: "人声检测模型，随包保留 MIT notice 和版权说明。"
         ),

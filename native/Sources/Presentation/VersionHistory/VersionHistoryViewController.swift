@@ -9,6 +9,42 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.7.6 (Build 493)",
+            date: "2026-07-01",
+            changes: [
+                "统一智能整理的语言边界：即使原始语音要求翻译，智能整理也只整理这条要求本身，不再真的改变输出语言。",
+                "DeepSeek 和 MiniMax 智能整理 system prompt 移除“除非用户明确要求翻译”的例外，和统一边界保持一致。",
+                "恢复开发需求提示词里的强语言保持与术语保护表达，并新增 system prompt 边界回归检查。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.7.6 (Build 492)",
+            date: "2026-07-01",
+            changes: [
+                "开发需求默认提示词替换为更短、更直接的版本：口述内容会整理成可直接粘贴给 coding agent 的开发任务或产品反馈。",
+                "短句处理改为“原意整理”：反馈/感受/偏好用陈述语气转达，只有明确动作要求才整理成指令。",
+                "加强口语清理和 UI 指代还原，例如“绿色镜框”“分贝那里”“以前那个颜色”会按语境还原成明确 UI 对象。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.7.5 (Build 491)",
+            date: "2026-07-01",
+            changes: [
+                "恢复 App 标准编辑菜单，提示词编辑器、翻译提示词编辑器和自动模式输入框支持 Command+A 全选、Command+C 复制和 Command+V 粘贴。",
+                "编辑命令统一走 macOS responder chain，不单独改写各个提示词弹窗，剪切、撤销和重做也随系统文本控件一起恢复。",
+                "提示词内容、保存逻辑、恢复默认和自动模式匹配规则保持不变。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.7.5 (Build 490)",
+            date: "2026-07-01",
+            changes: [
+                "统一 App 内各种成功态/健康态绿色到同一套品牌绿，避免系统绿、蓝绿色和胶囊绿混在一起。",
+                "新绿色更鲜艳醒目，同时保留柔和感；状态点、模型就绪、权限已开启、成功 toast、波形、Notch 脉冲和胶囊健康边保持一致。",
+                "红色错误、橙色警告和黄色处理中状态不变，继续保留原有风险语义。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.7.5 (Build 489)",
             date: "2026-07-01",
             changes: [

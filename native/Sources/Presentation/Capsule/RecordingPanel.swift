@@ -111,7 +111,7 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
 
         // 实时输入电平（dBFS），等宽数字 + 固定宽度避免数值变化时胶囊抖动；用于肉眼分辨近场/远场强弱。
         levelLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
-        levelLabel.textColor = NSColor(calibratedRed: 0.30, green: 0.82, blue: 0.80, alpha: 0.98)
+        levelLabel.textColor = UITheme.brandGreen.withAlphaComponent(0.98)
         levelLabel.maximumNumberOfLines = 1
         levelLabel.alignment = .right
         levelLabel.toolTip = "实时输入电平（dBFS），越接近 0 越响"
