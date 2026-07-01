@@ -44,6 +44,10 @@ struct SmartInputCheck {
             }
         }
         SmartRewriteAutoRuleStore.reset()
+        precondition(!SmartRewriteAutoRuleStore.selectableModes.contains(.note))
+        precondition(!SmartRewriteAutoRuleStore.selectableModes.contains(.chat))
+        precondition(!SmartRewriteAutoRuleStore.defaultConfiguration.rules.contains { $0.mode == .note || $0.mode == .chat })
+        precondition(!SmartRewriteAutoRuleStore.defaultConfiguration.rules.contains { $0.id == "notes" || $0.id == "chat" })
 
         let noopRouter = SmartInputRouter(engine: NoopRewriteEngine())
 
@@ -106,6 +110,22 @@ struct SmartInputCheck {
         precondition(automaticSummaryResult.mode == .exhaustiveSummary)
         precondition(automaticSummaryResult.text == "帮我总结一下今天会议的要点和行动项")
 
+        let notesResult = await noopRouter.rewrite(
+            rawText: "  今天随手记一下这个想法  ",
+            preference: .automatic,
+            context: SmartInputContext(targetAppName: "Notes", targetBundleIdentifier: "com.apple.Notes")
+        )
+        precondition(notesResult.mode == .polish)
+        precondition(notesResult.text == "今天随手记一下这个想法")
+
+        let chatResult = await noopRouter.rewrite(
+            rawText: "  晚点发给你  ",
+            preference: .automatic,
+            context: SmartInputContext(targetAppName: "WeChat", targetBundleIdentifier: "com.tencent.xinWeChat")
+        )
+        precondition(chatResult.mode == .polish)
+        precondition(chatResult.text == "晚点发给你")
+
         let secureResult = await noopRouter.rewrite(
             rawText: "  secret  ",
             preference: .developerRequirement,
@@ -141,21 +161,38 @@ struct SmartInputCheck {
         {
           "rules": [
             {
-              "id": "legacy-chat",
-              "title": "旧聊天规则",
+              "id": "notes",
+              "title": "旧内置笔记规则",
+              "keywords": ["notes"],
+              "mode": "note",
+              "isEnabled": true
+            },
+            {
+              "id": "chat",
+              "title": "旧内置聊天规则",
               "keywords": ["wechat"],
+              "mode": "chat",
+              "isEnabled": true
+            },
+            {
+              "id": "legacy-custom",
+              "title": "旧自定义规则",
+              "keywords": ["custom"],
               "mode": "chat",
               "isEnabled": true
             }
           ],
-          "fallbackMode": "polish"
+          "fallbackMode": "chat"
         }
         """.data(using: .utf8)!
         UserDefaults.standard.set(legacyJSON, forKey: autoRulesKey)
         let migrated = SmartRewriteAutoRuleStore.load()
-        let legacyRule = migrated.rules.first { $0.id == "legacy-chat" }
+        precondition(!migrated.rules.contains { $0.id == "notes" || $0.id == "chat" })
+        let legacyRule = migrated.rules.first { $0.id == "legacy-custom" }
+        precondition(legacyRule?.mode == .polish)
         precondition(legacyRule?.matchTarget == true)
         precondition(legacyRule?.matchContent == false)
+        precondition(migrated.fallbackMode == .polish)
         precondition(migrated.rules.contains { $0.id == "summary-intent" && $0.matchContent && !$0.matchTarget })
     }
 }

@@ -12,12 +12,14 @@ struct SmartRewritePromptCheck {
             }
         }
         SmartRewritePromptStore.resetAll()
+        precondition(!SmartRewritePromptStore.editableModes.contains(.note))
+        precondition(!SmartRewritePromptStore.editableModes.contains(.chat))
 
         let context = SmartInputContext(
             targetAppName: "Codex",
             targetBundleIdentifier: "com.openai.codex"
         )
-        for mode in [RewriteMode.developerRequirement, .polish, .note, .chat, .exhaustiveSummary] {
+        for mode in SmartRewritePromptStore.editableModes {
             let prompt = SmartRewritePromptBuilder.prompt(
                 rawText: "帮我调查为什么中文会变成英文",
                 mode: mode,

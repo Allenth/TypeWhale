@@ -9,6 +9,15 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.7.7 (Build 496)",
+            date: "2026-07-01",
+            changes: [
+                "收敛智能整理用户可见模式：提示词编辑器和自动范围不再显示“笔记”“聊天”两个历史整理模式。",
+                "自动模式默认范围移除笔记窗口和聊天窗口的专用整理规则，Notes、微信等未命中总结/开发规则时统一回到润色。",
+                "旧配置中的内置 notes/chat 自动规则会被迁移移除，旧自定义 note/chat 模式会安全回落到润色。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.7.7 (Build 495)",
             date: "2026-07-01",
             changes: [

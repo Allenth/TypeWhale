@@ -4,8 +4,6 @@ enum SmartRewritePromptStore {
     static let editableModes: [RewriteMode] = [
         .developerRequirement,
         .polish,
-        .note,
-        .chat,
         .exhaustiveSummary,
     ]
 
