@@ -90,12 +90,31 @@ extension MainViewController {
         dialog.present(in: window) { [weak self] result in
             guard let self else { return }
             switch result {
-            case .save(let direction, let template):
-                SmartTranslationPromptStore.save(template, for: direction)
-                self.detail.stringValue = "\(direction.displayName)提示词已保存"
-            case .reset(let direction):
-                SmartTranslationPromptStore.reset(direction)
-                self.detail.stringValue = "\(direction.displayName)提示词已恢复默认"
+            case .save(let direction, let social, let template):
+                SmartTranslationPromptStore.save(template, for: direction, social: social)
+                let label = social ? "中译英（社交）" : direction.displayName
+                self.detail.stringValue = "\(label)提示词已保存"
+            case .reset(let direction, let social):
+                SmartTranslationPromptStore.reset(direction, social: social)
+                let label = social ? "中译英（社交）" : direction.displayName
+                self.detail.stringValue = "\(label)提示词已恢复默认"
+            case .cancel:
+                break
+            }
+        }
+    }
+
+    @objc func configureSocialScope() {
+        guard let window = view.window else { return }
+        SocialScopeDialog().present(in: window) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .save(let raw):
+                SmartTranslationSocialScopeStore.save(raw)
+                self.detail.stringValue = "社交应用清单已保存"
+            case .reset:
+                SmartTranslationSocialScopeStore.reset()
+                self.detail.stringValue = "社交应用清单已恢复默认"
             case .cancel:
                 break
             }

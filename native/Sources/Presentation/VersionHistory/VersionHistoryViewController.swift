@@ -9,6 +9,52 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.8.0 (Build 504)",
+            date: "2026-07-01",
+            changes: [
+                "展开 1.4 智能整理提示词对比，归档 1.4.0、1.4.32、当前架构和新设计的差异。",
+                "开发需求 ModeContract 收敛为 7 条不可变边界，默认模板只负责输出风格和结构，不再混写安全规则、模式规则和格式规则。",
+                "润色模式不再强制追加 emoji 或开发术语表；raw/command 直接绕过智能整理 prompt，所有默认模板移除 {rawText} 原文块。",
+                "开发类自定义模板继续自动补开发术语表，社交润色和极致归纳尊重用户模板；术语模糊纠错改为 allowsFuzzy 显式开启。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.8.0 (Build 503)",
+            date: "2026-07-01",
+            changes: [
+                "智能整理提示词渲染拆成全局安全边界、模式边界、可编辑模板和原始语音文本四层，开发需求硬规则集中到模式边界。",
+                "原始语音文本现在最后追加，不再参与占位符替换；口述里的 {rawText}、{targetAppName}、{developerGlossary} 会作为原文保留。",
+                "提示词编辑器说明同步更新：自定义模板继续支持目标 App、Bundle ID 和开发术语表占位符，原始语音由 TypeWhale 自动附加。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.8.0 (Build 502)",
+            date: "2026-07-01",
+            changes: [
+                "补充完整短语级误识别：使用 Check Full Question 3.635B 会归一为用 Ollama 检查 Qwen3.6 35B。",
+                "不把 check、full、question 拆成单词级热词，避免普通英文文本被误修。",
+                "新增术语归一化回归，覆盖带“使用”的整句和不带“使用”的短语片段。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.7.8 (Build 500)",
+            date: "2026-07-01",
+            changes: [
+                "补充真实语音样本里的 Alama、Alma、拉马到 Ollama 归一化，纤问/纤温 3.635B 会归一为 Qwen3.6 35B。",
+                "收紧模糊推断边界：已经命中词库标准词或别名的片段不再被模糊扩写，避免 Qwen3.6 被误扩展成带参数量的型号。",
+                "两字中文音译别名不再被短英文别名安全规则过滤，继续保留短英文别名的误替换防护。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.7.8 (Build 499)",
+            date: "2026-07-01",
+            changes: [
+                "开发术语归一化改为先做保守模糊推断，再做明确别名替换，像 ollma、sceen capture kit 这类轻微误识别会在进入智能整理模型前先修正。",
+                "默认开发术语词库扩充 Ollama、DeepSeek、MiniMax、Qwen3.6、ONNX Runtime、MLX、ScreenCaptureKit、UserDefaults、Info.plist、VAD、OCR 等高频技术词。",
+                "自定义智能整理提示词会强制补齐开发术语表和术语规则，避免用户自定义模板绕开术语表。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.7.8 (Build 498)",
             date: "2026-07-01",
             changes: [

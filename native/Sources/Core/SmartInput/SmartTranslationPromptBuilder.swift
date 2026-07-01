@@ -32,6 +32,11 @@ enum SmartTranslationPromptBuilder {
             """
         }
 
+        // 中译英落到社交窗口时，改用社交提示词；其余场景保持常规语气模板。
+        let social = direction == .chineseToEnglish
+            && SmartTranslationSocialScopeStore.matches(context)
+        let tone = SmartTranslationPromptStore.template(for: direction, social: social)
+
         return """
         你是 TypeWhale 的语音翻译助手。
 
@@ -44,7 +49,7 @@ enum SmartTranslationPromptBuilder {
         - 修正明显的语音识别错误，但不要新增原文没有的信息。
         - 语气自然，适合直接粘贴到当前输入框。
 
-        \(direction.toneInstruction)
+        \(tone)
         \(translationLayoutInstruction(triggeredBy: triggeredBy))
 
         目标应用：\(context.targetAppName ?? "未知")

@@ -10,6 +10,9 @@ enum UITheme {
     /// 胶囊「本地服务健康」呼吸边框专用绿：比 brandGreen 更柔和的祖母绿/薄荷绿，
     /// 在深色 HUD 上更耐看，不刺眼。仅用于健康边框，避免影响权限点/刘海脉冲等处的品牌绿。
     static let healthGreen = NSColor(calibratedRed: 0.34, green: 0.84, blue: 0.63, alpha: 1)
+    /// 录音胶囊毛玻璃背景的圆角半径。RecordingPanel 的圆角裁剪与健康绿环需共用同一值，避免各画各的。
+    /// nonisolated：允许在非主线程隔离的静态初始化（如 HealthBorderOverlayView.Metrics）中直接引用。
+    nonisolated static let capsuleCornerRadius: CGFloat = 21
     static let brandTeal = brandGreen
     static let brandTealTint = brandGreenTint
     static let cardFill = NSColor(calibratedWhite: 1, alpha: 0.06)

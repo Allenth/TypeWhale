@@ -3,30 +3,47 @@ import Foundation
 enum SmartTranslationPromptStore {
     private static let keyPrefix = "smartTranslationPromptTemplate."
 
-    static func template(for direction: SmartTranslationDirection) -> String {
-        let saved = UserDefaults.standard.string(forKey: storageKey(for: direction)) ?? ""
-        let trimmed = saved.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? defaultTemplate(for: direction) : saved
+    /// 社交变体目前只对中译英开放；其余方向传 `social: true` 也回退到常规模板。
+    static func supportsSocialVariant(_ direction: SmartTranslationDirection) -> Bool {
+        direction == .chineseToEnglish
     }
 
-    static func save(_ template: String, for direction: SmartTranslationDirection) {
+    static func template(for direction: SmartTranslationDirection, social: Bool = false) -> String {
+        let effectiveSocial = social && supportsSocialVariant(direction)
+        let saved = UserDefaults.standard.string(forKey: storageKey(for: direction, social: effectiveSocial)) ?? ""
+        let trimmed = saved.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? defaultTemplate(for: direction, social: effectiveSocial) : saved
+    }
+
+    static func save(_ template: String, for direction: SmartTranslationDirection, social: Bool = false) {
+        let effectiveSocial = social && supportsSocialVariant(direction)
         let trimmed = template.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty || trimmed == defaultTemplate(for: direction).trimmingCharacters(in: .whitespacesAndNewlines) {
-            reset(direction)
+        if trimmed.isEmpty
+            || trimmed == defaultTemplate(for: direction, social: effectiveSocial).trimmingCharacters(in: .whitespacesAndNewlines) {
+            reset(direction, social: effectiveSocial)
         } else {
-            UserDefaults.standard.set(template, forKey: storageKey(for: direction))
+            UserDefaults.standard.set(template, forKey: storageKey(for: direction, social: effectiveSocial))
         }
     }
 
-    static func reset(_ direction: SmartTranslationDirection) {
-        UserDefaults.standard.removeObject(forKey: storageKey(for: direction))
+    static func reset(_ direction: SmartTranslationDirection, social: Bool = false) {
+        let effectiveSocial = social && supportsSocialVariant(direction)
+        UserDefaults.standard.removeObject(forKey: storageKey(for: direction, social: effectiveSocial))
     }
 
     static func resetAll() {
-        SmartTranslationDirection.allCases.forEach(reset)
+        for direction in SmartTranslationDirection.allCases {
+            reset(direction)
+            if supportsSocialVariant(direction) {
+                reset(direction, social: true)
+            }
+        }
     }
 
-    static func defaultTemplate(for direction: SmartTranslationDirection) -> String {
+    static func defaultTemplate(for direction: SmartTranslationDirection, social: Bool = false) -> String {
+        if social && supportsSocialVariant(direction) {
+            return socialChineseToEnglishTemplate
+        }
         switch direction {
         case .chineseToEnglish:
             return """
@@ -69,7 +86,28 @@ enum SmartTranslationPromptStore {
         }
     }
 
-    private static func storageKey(for direction: SmartTranslationDirection) -> String {
-        keyPrefix + direction.rawValue
+    /// 社交中译英默认模板：面向公开社媒发帖/评论的英文风格。
+    private static let socialChineseToEnglishTemplate = """
+    你是一个中译英助手，负责把中文内容翻译成适合发到社交平台的自然英文。
+
+    英文语气要求：
+    - 面向 X / Threads / Instagram / 小红书 等公开社媒表达，轻松、真实、有网感。
+    - 可以口语化、用常见缩写和自然的网络说法，但不要浮夸、不要硬凑俚语。
+    - 短句优先、节奏轻快；可适度使用 emoji，但不堆叠、不喧宾夺主。
+    - 保留原文的意思、态度和信息，不夸大、不新增情绪。
+    - 产品名、变量名、技术缩写、代码术语保持原样，例如 TypeWhale、ASR、OCR、prompt 等。
+
+    翻译目标：
+    让英文读起来像一个真实的人在社交平台上自然发帖或评论，而不是像 AI 翻译或正式文档。
+
+    输出要求：
+    - 只输出英文翻译结果。
+    - 不要解释翻译思路。
+    - 不要添加标题。
+    - 不要输出多个版本，除非我明确要求。
+    """
+
+    private static func storageKey(for direction: SmartTranslationDirection, social: Bool) -> String {
+        keyPrefix + direction.rawValue + (social ? ".social" : "")
     }
 }

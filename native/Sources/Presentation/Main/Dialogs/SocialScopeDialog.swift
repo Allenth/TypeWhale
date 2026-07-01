@@ -1,31 +1,24 @@
 import AppKit
 
-final class SmartRewritePromptDialog: NSObject {
+final class SocialScopeDialog: NSObject {
     enum Result {
-        case save(RewriteMode, String)
-        case reset(RewriteMode)
+        case save(String)
+        case reset
         case cancel
     }
 
-    private let modePicker = NSPopUpButton()
     private let textView = NSTextView()
     private let sheet = FormSheetController()
-    private var selectedMode: RewriteMode
-
-    init(initialMode: RewriteMode) {
-        selectedMode = SmartRewritePromptStore.editableModes.contains(initialMode) ? initialMode : .developerRequirement
-        super.init()
-    }
 
     func present(in parent: NSWindow, completion: @escaping (Result) -> Void) {
         let content = buildAccessoryView()
-        loadTemplate(for: selectedMode)
+        loadList()
         sheet.present(
             in: parent,
-            title: "智能整理提示词",
-            message: "选择一种整理模式，修改提示词后保存。原始语音会自动追加到最终提示词末尾。",
+            title: "社交应用清单",
+            message: "每行一个关键词，小写后匹配目标 App 名 / Bundle ID / 窗口标题；命中即视为社交窗口，中译英改用“社交”提示词。# 开头的行为注释。",
             contentView: content,
-            contentSize: NSSize(width: 460, height: 360),
+            contentSize: NSSize(width: 460, height: 320),
             buttons: [
                 .init(title: "保存", isDefault: true),
                 .init(title: "恢复默认"),
@@ -34,9 +27,9 @@ final class SmartRewritePromptDialog: NSObject {
         ) { [self] index in
             switch index {
             case 0:
-                completion(.save(selectedMode, textView.string))
+                completion(.save(textView.string))
             case 1:
-                completion(.reset(selectedMode))
+                completion(.reset)
             default:
                 completion(.cancel)
             }
@@ -44,17 +37,6 @@ final class SmartRewritePromptDialog: NSObject {
     }
 
     private func buildAccessoryView() -> NSView {
-        modePicker.removeAllItems()
-        for mode in SmartRewritePromptStore.editableModes {
-            modePicker.addItem(withTitle: mode.displayName)
-            modePicker.lastItem?.representedObject = mode.rawValue
-        }
-        modePicker.selectItem(withTitle: selectedMode.displayName)
-        modePicker.target = self
-        modePicker.action = #selector(modeDidChange)
-        modePicker.bezelStyle = .rounded
-        modePicker.controlSize = .regular
-
         textView.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
         textView.textColor = NSColor(calibratedWhite: 0.96, alpha: 1)
         textView.backgroundColor = NSColor(calibratedWhite: 0.08, alpha: 1)
@@ -68,7 +50,7 @@ final class SmartRewritePromptDialog: NSObject {
         textView.isAutomaticDashSubstitutionEnabled = false
         textView.isAutomaticTextReplacementEnabled = false
         textView.textContainerInset = NSSize(width: 10, height: 10)
-        textView.frame = NSRect(x: 0, y: 0, width: 460, height: 300)
+        textView.frame = NSRect(x: 0, y: 0, width: 460, height: 260)
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
         textView.autoresizingMask = [.width]
@@ -90,49 +72,39 @@ final class SmartRewritePromptDialog: NSObject {
         scrollView.documentView = textView
         scrollView.translatesAutoresizingMaskIntoConstraints = false
 
-        let hint = NSTextField(labelWithString: "保存空内容会恢复默认。可用占位符：{targetAppName}、{targetBundleIdentifier}、{developerGlossary}。")
+        let hint = NSTextField(labelWithString: "示例：微信、wechat、com.tencent、threads、x.com。保存空内容会恢复默认清单。")
         hint.font = .systemFont(ofSize: 11)
         hint.textColor = .secondaryLabelColor
         hint.maximumNumberOfLines = 2
         hint.lineBreakMode = .byWordWrapping
 
-        let stack = NSStackView(views: [modePicker, scrollView, hint])
+        let stack = NSStackView(views: [scrollView, hint])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 8
         stack.translatesAutoresizingMaskIntoConstraints = false
 
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 460, height: 360))
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 460, height: 320))
         container.addSubview(stack)
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             stack.topAnchor.constraint(equalTo: container.topAnchor),
             stack.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            modePicker.widthAnchor.constraint(equalToConstant: 160),
             scrollView.widthAnchor.constraint(equalToConstant: 460),
-            scrollView.heightAnchor.constraint(equalToConstant: 300),
+            scrollView.heightAnchor.constraint(equalToConstant: 260),
             hint.widthAnchor.constraint(equalToConstant: 460),
         ])
         return container
     }
 
-    @objc private func modeDidChange() {
-        guard let rawValue = modePicker.selectedItem?.representedObject as? String,
-              let mode = RewriteMode(rawValue: rawValue) else {
-            return
-        }
-        selectedMode = mode
-        loadTemplate(for: mode)
-    }
-
-    private func loadTemplate(for mode: RewriteMode) {
+    private func loadList() {
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedSystemFont(ofSize: 12, weight: .regular),
             .foregroundColor: NSColor(calibratedWhite: 0.96, alpha: 1),
         ]
         textView.textStorage?.setAttributedString(NSAttributedString(
-            string: SmartRewritePromptStore.template(for: mode),
+            string: SmartTranslationSocialScopeStore.rawList(),
             attributes: attributes
         ))
         textView.setSelectedRange(NSRange(location: 0, length: 0))

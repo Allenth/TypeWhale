@@ -14,6 +14,7 @@ extension MainViewController {
         autoTranslate.toolTip = "可在快捷键设置中配置快速打开或关闭"
         translationDirectionMode.setAccessibilityLabel("翻译方向")
         translationPromptButton.setAccessibilityLabel("翻译提示词")
+        socialScopeButton.setAccessibilityLabel("社交应用清单")
         screenshotSaveLocationButton.setAccessibilityLabel("截图保存位置")
         backlogDirectoryButton.setAccessibilityLabel("需求池目录")
         realtime.setAccessibilityLabel("胶囊实时预览")
@@ -214,6 +215,15 @@ extension MainViewController {
         translationPromptButton.controlSize = .regular
         translationPromptButton.font = .systemFont(ofSize: 12, weight: .medium)
         translationPromptButton.toolTip = "调整、修改并保存自动翻译提示词"
+    }
+
+    func configureSocialScopeButton() {
+        socialScopeButton.target = self
+        socialScopeButton.action = #selector(configureSocialScope)
+        socialScopeButton.bezelStyle = .rounded
+        socialScopeButton.controlSize = .regular
+        socialScopeButton.font = .systemFont(ofSize: 12, weight: .medium)
+        socialScopeButton.toolTip = "维护社交窗口清单，命中时中译英使用社交提示词"
     }
 
     func configureScreenshotSaveLocationButton() {

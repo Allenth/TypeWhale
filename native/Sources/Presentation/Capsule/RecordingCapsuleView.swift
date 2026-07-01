@@ -1,5 +1,4 @@
 import AppKit
-import QuartzCore
 
 final class RecordingCapsuleView: NSView {
     private enum Metrics {

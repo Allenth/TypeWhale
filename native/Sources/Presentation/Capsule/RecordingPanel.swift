@@ -49,7 +49,7 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
         visualBackground.state = .active
         visualBackground.appearance = NSAppearance(named: .vibrantDark)
         visualBackground.wantsLayer = true
-        visualBackground.layer?.cornerRadius = 21
+        visualBackground.layer?.cornerRadius = UITheme.capsuleCornerRadius
         visualBackground.layer?.masksToBounds = true
 
         capsule.frame = visualBackground.bounds

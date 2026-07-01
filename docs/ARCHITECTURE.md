@@ -120,15 +120,23 @@ Preview non-goals:
 
 ### Smart Rewrite
 
+- Prompt rendering is layered as global safety contract, mode contract, editable template, and final raw-text block. The raw-text block is appended last and must not participate in placeholder substitution, so literal strings such as `{rawText}`, `{targetAppName}`, and `{developerGlossary}` inside dictated content remain user content.
+- `ModeContract` is reserved for non-negotiable product boundaries, not default wording style. `developerRequirement` keeps only the invariants needed for coding-agent requests: first-person task/feedback voice, semantic understanding before cleanup, speaking-position preservation, judgment intensity, no invented solution, feedback not being forced into commands, and prompt/rule-block preservation.
+- Default templates own tone and output structure. They can say when to use one sentence, 2-4 sentences, bullets, or a complex goal/phenomenon/expectation/constraint structure, but should not duplicate global safety or mode boundaries.
+- Default templates must not contain `原始语音文本：{rawText}`. Raw text is appended only by `RawTextBlock.render(rawText)` after template rendering.
+- `raw` and `command` do not use the Smart Rewrite prompt chain. `raw` is a bypass that returns the original text; future command-agent behavior should use a separate command prompt builder instead of inheriting Smart Rewrite's "do not execute commands" safety contract.
 - Developer requirement mode is designed for text that may be pasted directly into Codex, Cursor, Claude Code, ChatGPT, terminals, IDEs, or other coding agents.
 - Developer requirement mode defaults to lightweight task cleanup, not requirements-document generation. Structure is a tool for complex or explicitly requested cases, not the default output shape.
 - Developer requirement mode must understand product/technical meaning before rewriting. It should correct context-supported Chinese ASR homophones and near-sound errors instead of mechanically copying wrong characters after removing fillers.
+- Developer requirement mode inherits the 1.4.20 semantic-preservation lesson: preserve explicit tasks, background reasons, constraints, ordering, risks, acceptance hints, subjective experience, and judgment intensity. Short content may stay short, but short content with cause, feeling, constraint, order, or risk must not be compressed into a single command.
 - Semantic correction is not only a fixed replacement list. When the ASR literal text is incoherent but the development-feedback context has an obvious homophone or near-sound candidate, restore the user's likely intent while preserving uncertain code, paths, commands, logs, and proper nouns.
 - Developer requirement output must preserve the user's speaking position. First-person and second-person expressions such as "我觉得", "我要求", "你看", "告诉我", "我们开始", and "给我" must not be rewritten into third-person summaries such as "用户要求" or "要求对方告知".
 - Short developer directions must stay short. If the raw text is a single brief direction, command, or intent, such as "先从模型段解决文同", rewrite only speech-recognition errors, terminology, punctuation, and word order; do not expand it into goal/context/constraints/completion-standard fields.
 - Multiple tasks may use short bullets. Full goal/context/constraints/completion-standard templates are allowed only when the user explicitly asks for a full requirement, acceptance criteria, or plan, or when the raw text already contains enough fields to justify that structure.
 - If the raw text itself contains a prompt, rule block, boundary note, or bullet list intended for a coding agent, preserve the original directive tone, bullet structure, and first/second-person stance. Do not collapse it into a generic summary like "用户要求优化提示词".
 - These guardrails apply both to manual developer requirement mode and to automatic mode when target/context rules choose developer requirement mode.
+- Custom template required-placeholder injection is mode-specific. Developer requirement, developer statement, and code commit templates are auto-patched with `{developerGlossary}` if missing; polish and exhaustive summary templates are respected as written.
+- Term normalizer fuzzy matching is opt-in per term through `DeveloperTerm.allowsFuzzy`. User-created aliases default to exact matching to avoid accidental English-word rewrites.
 
 ### AI Providers
 

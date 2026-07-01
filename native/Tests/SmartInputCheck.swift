@@ -18,6 +18,7 @@ private final class CapturingRewriteEngine: SmartRewriteEngine {
     let displayName = "Capture Test Engine"
     private(set) var lastMode: RewriteMode?
     private(set) var lastPreference: SmartRewritePreference?
+    private(set) var lastRawText: String?
 
     func rewrite(
         rawText: String,
@@ -25,6 +26,7 @@ private final class CapturingRewriteEngine: SmartRewriteEngine {
         context: SmartInputContext,
         preference: SmartRewritePreference
     ) async throws -> SmartRewriteEngineOutput {
+        lastRawText = rawText
         lastMode = mode
         lastPreference = preference
         return SmartRewriteEngineOutput(text: rawText.trimmingCharacters(in: .whitespacesAndNewlines), usage: nil)
@@ -35,15 +37,29 @@ private final class CapturingRewriteEngine: SmartRewriteEngine {
 struct SmartInputCheck {
     static func main() async {
         let autoRulesKey = "smartRewriteAutoConfiguration.v1"
+        let lexiconKey = "developerLexicon.terms.v1"
         let originalAutoRules = UserDefaults.standard.data(forKey: autoRulesKey)
+        let originalLexicon = UserDefaults.standard.data(forKey: lexiconKey)
         defer {
             if let originalAutoRules {
                 UserDefaults.standard.set(originalAutoRules, forKey: autoRulesKey)
             } else {
                 UserDefaults.standard.removeObject(forKey: autoRulesKey)
             }
+            if let originalLexicon {
+                UserDefaults.standard.set(originalLexicon, forKey: lexiconKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: lexiconKey)
+            }
         }
         SmartRewriteAutoRuleStore.reset()
+        DeveloperLexiconStore.restoreDefaults()
+        let loadedTerms = DeveloperLexiconStore.load()
+        let termNames = loadedTerms.map(\.canonical).joined(separator: ", ")
+        precondition(
+            loadedTerms.contains { $0.canonical == "Ollama" && $0.aliases.contains("ollama") },
+            "Expected default lexicon to include Ollama, got \(termNames)"
+        )
         precondition(!SmartRewriteAutoRuleStore.selectableModes.contains(.note))
         precondition(!SmartRewriteAutoRuleStore.selectableModes.contains(.chat))
         precondition(SmartRewriteAutoRuleStore.selectableModes.contains(.developerStatement))
@@ -158,6 +174,31 @@ struct SmartInputCheck {
         )
         precondition(captureEngine.lastMode == .developerRequirement)
         precondition(captureEngine.lastPreference == .developerRequirement)
+
+        let directLoadedNormalization = DeveloperTermNormalizer().normalize(
+            "用 ollma 检查 q wen 三点六 三十五 b",
+            context: codex
+        ).text
+        precondition(
+            directLoadedNormalization == "用 Ollama 检查 Qwen3.6 35B",
+            "Expected loaded lexicon normalization, got \(directLoadedNormalization)"
+        )
+
+        let fuzzyCaptureEngine = CapturingRewriteEngine()
+        let fuzzyCaptureRouter = SmartInputRouter(engine: fuzzyCaptureEngine)
+        let fuzzyResult = await fuzzyCaptureRouter.rewrite(
+            rawText: "  用 ollma 检查 q wen 三点六 三十五 b  ",
+            preference: .developerRequirement,
+            context: codex
+        )
+        precondition(
+            fuzzyCaptureEngine.lastRawText == "用 Ollama 检查 Qwen3.6 35B",
+            "Expected normalized text before model, got \(fuzzyCaptureEngine.lastRawText ?? "nil")"
+        )
+        precondition(
+            fuzzyResult.text == "用 Ollama 检查 Qwen3.6 35B",
+            "Expected normalized result, got \(fuzzyResult.text)"
+        )
 
         let legacyJSON = """
         {

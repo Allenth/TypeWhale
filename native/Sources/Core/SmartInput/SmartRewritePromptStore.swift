@@ -14,7 +14,7 @@ enum SmartRewritePromptStore {
     static func template(for mode: RewriteMode) -> String {
         let saved = UserDefaults.standard.string(forKey: storageKey(for: mode)) ?? ""
         let trimmed = saved.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? defaultTemplate(for: mode) : saved
+        return trimmed.isEmpty ? defaultTemplate(for: mode) : ensuringRequiredPlaceholders(in: saved, for: mode)
     }
 
     static func save(_ template: String, for mode: RewriteMode) {
@@ -22,7 +22,7 @@ enum SmartRewritePromptStore {
         if trimmed.isEmpty || trimmed == defaultTemplate(for: mode).trimmingCharacters(in: .whitespacesAndNewlines) {
             reset(mode)
         } else {
-            UserDefaults.standard.set(ensuringRawTextPlaceholder(in: template), forKey: storageKey(for: mode))
+            UserDefaults.standard.set(ensuringRequiredPlaceholders(in: template, for: mode), forKey: storageKey(for: mode))
         }
     }
 
@@ -38,34 +38,18 @@ enum SmartRewritePromptStore {
         switch mode {
         case .developerRequirement:
             return """
-            你是 TypeWhale 的开发需求整理助手。把我的口述整理成可以直接粘贴给
-            Codex、Cursor、Claude Code 等 coding agent 的开发任务或产品反馈。
-            输出必须像我亲手写给它的，不是旁观者总结。
-
-            整理原则：
-            - 必须保持原文的主要语言输出，不要改变输入的主要语言；不新增信息，不编造解决方案，不回答原文里的问题。
-            - 保留代码、API、路径、文件名、函数名、产品/模型/库名、错误信息，
-              以及 ease-in-out 等英文技术术语，不确定的专有名词保持原样。
-            - 先理解整句的产品/技术语义，再动手。
+            开发需求默认风格：
+            - 输出要直接、克制、可执行，适合粘贴给 coding agent 作为下一条开发任务或产品反馈。
+            - 默认轻量，但不是机械压缩；清理口语后仍要保留必要背景、体验感受、限制、顺序和判断强度。
+            - 保留代码、API、路径、文件名、函数名、产品/模型/库名、错误信息，以及 ease-in-out 等英文技术术语。
+            - 不确定的专有名词保持原样，避免为了显得完整而猜测。
 
             开发术语表：{developerGlossary}
 
-            必做清理（这是默认动作，优先级高于"保留原话"）：
-            - 删除所有填充词和口语支架：呃、嗯、那个、就是、然后、的话、嘛、
-              "叫什么""怎么说"等。绕圈重复合并为一次清晰表述，拆成通顺书面短句。
-            - 修正中文 ASR 音近错字，按上下文还原真实意图
-              （如"题这词"→"提示词"，"找搬"→"照搬"，"模型段"→"模型端"）。
-            - 按术语表归一化别名/口误；不要把标准英文技术术语改写成中文术语。
-            - UI 口语指代按语境替换："绿色镜框"→"绿色边框"，
-              "分贝那里"→"分贝数值/单位"，"以前那个颜色"→"对应 UI 元素之前的颜色"。
-
-            保留语气 ≠ 保留口语措辞：
-            - 判断原文是"反馈/感受/偏好"还是"明确动作要求"。
-            - 是反馈就用陈述语气转达，别改写成"请修复""需要实现"等命令式；
-              是明确要求才整理成清晰指令。判断强度和立场要保留。
-
             输出结构（就低不就高）：
-            - 单一改动点：一句或一段自然语言，不加编号标题。
+            - 单一明确动作：一句清晰指令，不加编号标题。
+            - 单一反馈/感受/偏好：一段自然陈述，保留问题点和判断强度，不强行改成命令。
+            - 短文本但包含原因、限制、顺序或风险：用 2-4 句保留这些信息，不压成一句。
             - 多个独立点：简短项目符号，每条只保留原文明确表达的内容。
             - 排查类：保留现象、影响、怀疑点和期望的调查顺序，不替我编根因或方案。
             - 仅当原文确实包含多问题/多步骤/足够字段时，才用下方模板；缺失字段直接省略。
@@ -84,9 +68,6 @@ enum SmartRewritePromptStore {
                  绿色边框也想恢复到和分贝单位一致的那个颜色。
 
             目标应用：{targetAppName}
-
-            原始语音文本：
-            {rawText}
             """
         case .developerStatement:
             return """
@@ -106,9 +87,6 @@ enum SmartRewritePromptStore {
 
             开发术语表：{developerGlossary}
             目标应用：{targetAppName}
-
-            原始语音文本：
-            {rawText}
             """
         case .codeCommit:
             return """
@@ -128,9 +106,6 @@ enum SmartRewritePromptStore {
 
             开发术语表：{developerGlossary}
             目标应用：{targetAppName}
-
-            原始语音文本：
-            {rawText}
             """
         case .polish:
             return """
@@ -163,9 +138,6 @@ enum SmartRewritePromptStore {
             - 只输出润色后的正文，不要解释你的处理过程。
 
             目标应用：{targetAppName}
-
-            原始语音文本：
-            {rawText}
             """
         case .note:
             return """
@@ -194,8 +166,7 @@ enum SmartRewritePromptStore {
             - 不主动添加“待办”“待确认”等原文没有的栏目。
             - 只输出整理后的笔记，不要解释你的处理过程。
 
-            原始语音文本：
-            {rawText}
+            目标应用：{targetAppName}
             """
         case .chat:
             return """
@@ -223,8 +194,7 @@ enum SmartRewritePromptStore {
             - 原文很短时只输出自然的一句话。
             - 只输出整理后的聊天文本，不要解释你的处理过程。
 
-            原始语音文本：
-            {rawText}
+            目标应用：{targetAppName}
             """
         case .exhaustiveSummary:
             return """
@@ -268,8 +238,7 @@ enum SmartRewritePromptStore {
             - 只有原文明确表达“不确定、需要确认”时，才加入待确认内容。
             - 只输出归纳后的正文，不要解释你的处理过程。
 
-            原始语音文本：
-            {rawText}
+            目标应用：{targetAppName}
             """
         case .raw, .command:
             return """
@@ -278,9 +247,6 @@ enum SmartRewritePromptStore {
             模式：{mode}
             用户偏好：{preference}
             目标应用：{targetAppName}
-
-            原始语音文本：
-            {rawText}
             """
         }
     }
@@ -289,13 +255,27 @@ enum SmartRewritePromptStore {
         keyPrefix + mode.rawValue
     }
 
-    private static func ensuringRawTextPlaceholder(in template: String) -> String {
-        guard !template.contains("{rawText}") else { return template }
+    private static func ensuringRequiredPlaceholders(in template: String, for mode: RewriteMode) -> String {
+        switch mode {
+        case .developerRequirement, .developerStatement, .codeCommit:
+            return ensuringDeveloperGlossaryPlaceholder(in: template)
+        case .polish, .exhaustiveSummary, .raw, .note, .chat, .command:
+            return template
+        }
+    }
+
+    private static func ensuringDeveloperGlossaryPlaceholder(in template: String) -> String {
+        guard !template.contains("{developerGlossary}") else { return template }
         return """
         \(template.trimmingCharacters(in: .whitespacesAndNewlines))
 
-        原始语音文本：
-        {rawText}
+        开发术语表：
+        {developerGlossary}
+
+        术语规则：
+        - 当原文包含开发术语的别名、口误、拼写误差或误识别形式时，优先归一化为术语表中的标准写法。
+        - 不要把标准英文技术术语改写成中文术语。
+        - 不要编造原文和术语表都不支持的新术语。
         """
     }
 }

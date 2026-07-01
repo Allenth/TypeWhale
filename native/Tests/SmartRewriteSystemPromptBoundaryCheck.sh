@@ -25,4 +25,12 @@ for file in \
   }
 done
 
+# Ollama 的整理提示词是小模型定制正文，不走共享 rewriteSystemPrompt，但必须复用
+# 共享 languageLock，否则翻译防注入行会像历史上那样只在本地引擎悄悄漂移。
+OLLAMA_ENGINE="$ROOT/native/Sources/Infrastructure/SmartRewrite/OllamaRewriteEngine.swift"
+grep -Fq "SmartRewriteSafetyPrompt.languageLock" "$OLLAMA_ENGINE" || {
+  echo "Ollama engine must reuse shared languageLock: $OLLAMA_ENGINE" >&2
+  exit 1
+}
+
 echo "SmartRewriteSystemPromptBoundaryCheck passed"
