@@ -9,6 +9,15 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.8.2 (Build 508)",
+            date: "2026-07-01",
+            changes: [
+                "完整版本构建：收口语音语言翻译归入智能整理体系、截图 OCR 翻译独立路径和客观润色默认提示词。",
+                "安装版版本号进入 1.8.2，便于和 1.8.1 的连续本地 build 区分。",
+                "本次不新增额外用户路径，只作为已提交翻译链路拆分改动的完整构建验证版本。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.8.1 (Build 507)",
             date: "2026-07-01",
             changes: [
