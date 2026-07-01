@@ -201,11 +201,10 @@ final class ThirdPartyNoticesViewController: NSViewController {
             NSWorkspace.shared.open(url)
             return
         }
-        let alert = NSAlert()
-        alert.messageText = "未找到第三方组件说明"
-        alert.informativeText = "当前 App 包内缺少 THIRD_PARTY_NOTICES.md，请重新构建或安装 \(AppBrand.displayName)。"
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "好")
-        alert.runModal()
+        ToastPresenter.shared.show(
+            "未找到第三方组件说明，请重新构建应用",
+            style: .warning,
+            duration: 2.6
+        )
     }
 }

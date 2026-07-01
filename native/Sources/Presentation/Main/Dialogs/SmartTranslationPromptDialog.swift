@@ -9,6 +9,7 @@ final class SmartTranslationPromptDialog: NSObject {
 
     private let directionPicker = NSPopUpButton()
     private let textView = NSTextView()
+    private let sheet = FormSheetController()
     private var selectedDirection: SmartTranslationDirection
 
     init(initialDirection: SmartTranslationDirection) {
@@ -16,24 +17,29 @@ final class SmartTranslationPromptDialog: NSObject {
         super.init()
     }
 
-    func runModal() -> Result {
-        let alert = NSAlert()
-        alert.messageText = "翻译提示词"
-        alert.informativeText = "选择翻译方向，修改语气和表达规则后保存。中译英提示词会影响英文翻译的口语化风格。"
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "保存")
-        alert.addButton(withTitle: "恢复默认")
-        alert.addButton(withTitle: "取消")
-        alert.accessoryView = buildAccessoryView()
+    func present(in parent: NSWindow, completion: @escaping (Result) -> Void) {
+        let content = buildAccessoryView()
         loadTemplate(for: selectedDirection)
-
-        switch alert.runModal() {
-        case .alertFirstButtonReturn:
-            return .save(selectedDirection, textView.string)
-        case .alertSecondButtonReturn:
-            return .reset(selectedDirection)
-        default:
-            return .cancel
+        sheet.present(
+            in: parent,
+            title: "翻译提示词",
+            message: "选择翻译方向，修改语气和表达规则后保存。中译英提示词会影响英文翻译的口语化风格。",
+            contentView: content,
+            contentSize: NSSize(width: 460, height: 320),
+            buttons: [
+                .init(title: "保存", isDefault: true),
+                .init(title: "恢复默认"),
+                .init(title: "取消", isCancel: true),
+            ]
+        ) { [self] index in
+            switch index {
+            case 0:
+                completion(.save(selectedDirection, textView.string))
+            case 1:
+                completion(.reset(selectedDirection))
+            default:
+                completion(.cancel)
+            }
         }
     }
 

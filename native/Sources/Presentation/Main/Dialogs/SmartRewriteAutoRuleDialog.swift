@@ -84,32 +84,38 @@ final class SmartRewriteAutoRuleDialog: NSObject {
     private var configuration: SmartRewriteAutoConfiguration
     private var rows: [RuleRow] = []
     private let fallbackPicker = NSPopUpButton()
+    private let sheet = FormSheetController()
 
     init(configuration: SmartRewriteAutoConfiguration) {
         self.configuration = configuration
         super.init()
     }
 
-    func runModal() -> Result {
-        let alert = NSAlert()
-        alert.messageText = "自动模式范围"
-        alert.informativeText = "为常用窗口或口述内容设置自动使用的智能整理模式。匹配来源可选择目标窗口、原始语音文本，或两者同时使用。"
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "保存")
-        alert.addButton(withTitle: "恢复默认")
-        alert.addButton(withTitle: "取消")
-        alert.accessoryView = buildAccessoryView()
-
-        switch alert.runModal() {
-        case .alertFirstButtonReturn:
-            return .save(SmartRewriteAutoConfiguration(
-                rules: rows.map(\.rule),
-                fallbackMode: RuleRow.selectedMode(from: fallbackPicker)
-            ))
-        case .alertSecondButtonReturn:
-            return .reset
-        default:
-            return .cancel
+    func present(in parent: NSWindow, completion: @escaping (Result) -> Void) {
+        let content = buildAccessoryView()
+        sheet.present(
+            in: parent,
+            title: "自动模式范围",
+            message: "为常用窗口或口述内容设置自动使用的智能整理模式。匹配来源可选择目标窗口、原始语音文本，或两者同时使用。",
+            contentView: content,
+            contentSize: NSSize(width: 620, height: 326),
+            buttons: [
+                .init(title: "保存", isDefault: true),
+                .init(title: "恢复默认"),
+                .init(title: "取消", isCancel: true),
+            ]
+        ) { [self] index in
+            switch index {
+            case 0:
+                completion(.save(SmartRewriteAutoConfiguration(
+                    rules: rows.map(\.rule),
+                    fallbackMode: RuleRow.selectedMode(from: fallbackPicker)
+                )))
+            case 1:
+                completion(.reset)
+            default:
+                completion(.cancel)
+            }
         }
     }
 

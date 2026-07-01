@@ -49,57 +49,73 @@ extension MainViewController {
     }
 
     @objc func configureSmartRewritePrompts() {
+        guard let window = view.window else { return }
         let dialog = SmartRewritePromptDialog(initialMode: smartRewritePreference.manualMode ?? .developerRequirement)
-        switch dialog.runModal() {
-        case .save(let mode, let template):
-            SmartRewritePromptStore.save(template, for: mode)
-            detail.stringValue = "\(mode.displayName)提示词已保存"
-        case .reset(let mode):
-            SmartRewritePromptStore.reset(mode)
-            detail.stringValue = "\(mode.displayName)提示词已恢复默认"
-        case .cancel:
-            break
+        dialog.present(in: window) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .save(let mode, let template):
+                SmartRewritePromptStore.save(template, for: mode)
+                self.detail.stringValue = "\(mode.displayName)提示词已保存"
+            case .reset(let mode):
+                SmartRewritePromptStore.reset(mode)
+                self.detail.stringValue = "\(mode.displayName)提示词已恢复默认"
+            case .cancel:
+                break
+            }
         }
     }
 
     @objc func configureSmartRewriteAutoRules() {
+        guard let window = view.window else { return }
         let dialog = SmartRewriteAutoRuleDialog(configuration: SmartRewriteAutoRuleStore.load())
-        switch dialog.runModal() {
-        case .save(let configuration):
-            SmartRewriteAutoRuleStore.save(configuration)
-            detail.stringValue = "智能整理自动范围已保存"
-        case .reset:
-            SmartRewriteAutoRuleStore.reset()
-            detail.stringValue = "智能整理自动范围已恢复默认"
-        case .cancel:
-            break
+        dialog.present(in: window) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .save(let configuration):
+                SmartRewriteAutoRuleStore.save(configuration)
+                self.detail.stringValue = "智能整理自动范围已保存"
+            case .reset:
+                SmartRewriteAutoRuleStore.reset()
+                self.detail.stringValue = "智能整理自动范围已恢复默认"
+            case .cancel:
+                break
+            }
         }
     }
 
     @objc func configureTranslationPrompts() {
+        guard let window = view.window else { return }
         let dialog = SmartTranslationPromptDialog(initialDirection: translationDirection)
-        switch dialog.runModal() {
-        case .save(let direction, let template):
-            SmartTranslationPromptStore.save(template, for: direction)
-            detail.stringValue = "\(direction.displayName)提示词已保存"
-        case .reset(let direction):
-            SmartTranslationPromptStore.reset(direction)
-            detail.stringValue = "\(direction.displayName)提示词已恢复默认"
-        case .cancel:
-            break
+        dialog.present(in: window) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .save(let direction, let template):
+                SmartTranslationPromptStore.save(template, for: direction)
+                self.detail.stringValue = "\(direction.displayName)提示词已保存"
+            case .reset(let direction):
+                SmartTranslationPromptStore.reset(direction)
+                self.detail.stringValue = "\(direction.displayName)提示词已恢复默认"
+            case .cancel:
+                break
+            }
         }
     }
 
     @objc func configureDeveloperTerms() {
-        switch DeveloperLexiconDialog().runModal() {
-        case .save(let terms):
-            DeveloperLexiconStore.save(terms)
-            detail.stringValue = "开发术语词库已保存"
-        case .reset:
-            DeveloperLexiconStore.restoreDefaults()
-            detail.stringValue = "开发术语词库已恢复默认"
-        case .cancel:
-            break
+        guard let window = view.window else { return }
+        DeveloperLexiconDialog().present(in: window) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .save(let terms):
+                DeveloperLexiconStore.save(terms)
+                self.detail.stringValue = "开发术语词库已保存"
+            case .reset:
+                DeveloperLexiconStore.restoreDefaults()
+                self.detail.stringValue = "开发术语词库已恢复默认"
+            case .cancel:
+                break
+            }
         }
     }
 
@@ -144,45 +160,49 @@ extension MainViewController {
     }
 
     @objc func configureDeepSeekAPIKey() {
-        let alert = NSAlert()
-        alert.messageText = "DeepSeek API Key"
-        alert.informativeText = "用于智能整理和自动翻译，保存到 macOS Keychain。\(AppBrand.displayName) 使用 deepseek-v4-flash，并关闭 thinking。"
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "保存")
-        alert.addButton(withTitle: "清除")
-        alert.addButton(withTitle: "取消")
-
+        guard let window = view.window else { return }
         let input = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 24))
         input.placeholderString = DeepSeekAPIKeyStore.hasAPIKey() ? "已保存 Key，输入新 Key 可覆盖" : "sk-..."
-        alert.accessoryView = input
 
-        switch alert.runModal() {
-        case .alertFirstButtonReturn:
-            do {
-                try DeepSeekAPIKeyStore.save(input.stringValue)
-                refreshDeepSeekKeyButton()
-                if DeepSeekAPIKeyStore.hasAPIKey() {
-                    detail.stringValue = "DeepSeek Key 已保存，智能整理已启用"
-                    ToastPresenter.shared.show("Key 已保存", style: .success)
-                } else {
-                    detail.stringValue = "未输入 Key，智能整理会回退原文"
+        FormSheetController().present(
+            in: window,
+            title: "DeepSeek API Key",
+            message: "用于智能整理和自动翻译，保存到 macOS Keychain。\(AppBrand.displayName) 使用 deepseek-v4-flash，并关闭 thinking。",
+            contentView: input,
+            contentSize: NSSize(width: 320, height: 24),
+            buttons: [
+                .init(title: "保存", isDefault: true),
+                .init(title: "清除"),
+                .init(title: "取消", isCancel: true),
+            ]
+        ) { [weak self] index in
+            guard let self else { return }
+            switch index {
+            case 0:
+                do {
+                    try DeepSeekAPIKeyStore.save(input.stringValue)
+                    self.refreshDeepSeekKeyButton()
+                    if DeepSeekAPIKeyStore.hasAPIKey() {
+                        self.detail.stringValue = "DeepSeek Key 已保存，智能整理已启用"
+                        ToastPresenter.shared.show("Key 已保存", style: .success)
+                    } else {
+                        self.detail.stringValue = "未输入 Key，智能整理会回退原文"
+                    }
+                } catch {
+                    self.showDeepSeekKeyError(error)
                 }
-            } catch {
-                showDeepSeekKeyError(error)
+            case 1:
+                DeepSeekAPIKeyStore.delete()
+                self.refreshDeepSeekKeyButton()
+                self.detail.stringValue = "DeepSeek Key 已清除，智能整理会回退原文"
+            default:
+                self.refreshDeepSeekKeyButton()
             }
-        case .alertSecondButtonReturn:
-            DeepSeekAPIKeyStore.delete()
-            refreshDeepSeekKeyButton()
-            detail.stringValue = "DeepSeek Key 已清除，智能整理会回退原文"
-        default:
-            refreshDeepSeekKeyButton()
         }
     }
 
     func showDeepSeekKeyError(_ error: Error) {
-        let alert = NSAlert(error: error)
-        alert.messageText = "DeepSeek Key 保存失败"
-        alert.runModal()
+        ToastPresenter.shared.show("DeepSeek Key 保存失败，请重试", style: .error, duration: 2.6)
     }
 
     @objc func showDeepSeekBalance(_ sender: NSButton) {

@@ -9,6 +9,15 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.7.7 (Build 497)",
+            date: "2026-07-01",
+            changes: [
+                "设置类编辑窗口改为挂在主窗口下的原生 sheet，智能整理提示词、翻译提示词、自动范围、开发术语词库和 DeepSeek Key 不再以警告框样式弹出。",
+                "Ollama 健康绿边从胶囊内部绘制迁移为置顶 overlay，绿环渲染在毛玻璃层上方，继续避让录音倒计时和内存高压等紧急状态。",
+                "第三方组件说明缺失时改用轻量 toast 提示，减少设置与说明页面里的阻塞式弹窗。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.7.7 (Build 496)",
             date: "2026-07-01",
             changes: [

@@ -8,25 +8,31 @@ final class DeveloperLexiconDialog: NSObject {
     }
 
     private let textView = NSTextView()
+    private let sheet = FormSheetController()
 
-    func runModal() -> Result {
-        let alert = NSAlert()
-        alert.messageText = "开发术语词库"
-        alert.informativeText = "每行一个专业术语：标准词 | 分类 | 别名1, 别名2。新增一行即可添加词库，编辑或删除对应行即可管理现有术语。"
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "保存")
-        alert.addButton(withTitle: "恢复默认")
-        alert.addButton(withTitle: "取消")
-        alert.accessoryView = buildAccessoryView()
+    func present(in parent: NSWindow, completion: @escaping (Result) -> Void) {
+        let content = buildAccessoryView()
         loadTerms()
-
-        switch alert.runModal() {
-        case .alertFirstButtonReturn:
-            return .save(parseTerms(from: textView.string))
-        case .alertSecondButtonReturn:
-            return .reset
-        default:
-            return .cancel
+        sheet.present(
+            in: parent,
+            title: "开发术语词库",
+            message: "每行一个专业术语：标准词 | 分类 | 别名1, 别名2。新增一行即可添加词库，编辑或删除对应行即可管理现有术语。",
+            contentView: content,
+            contentSize: NSSize(width: 520, height: 350),
+            buttons: [
+                .init(title: "保存", isDefault: true),
+                .init(title: "恢复默认"),
+                .init(title: "取消", isCancel: true),
+            ]
+        ) { [self] index in
+            switch index {
+            case 0:
+                completion(.save(parseTerms(from: textView.string)))
+            case 1:
+                completion(.reset)
+            default:
+                completion(.cancel)
+            }
         }
     }
 

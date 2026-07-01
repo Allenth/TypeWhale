@@ -9,6 +9,7 @@ final class SmartRewritePromptDialog: NSObject {
 
     private let modePicker = NSPopUpButton()
     private let textView = NSTextView()
+    private let sheet = FormSheetController()
     private var selectedMode: RewriteMode
 
     init(initialMode: RewriteMode) {
@@ -16,24 +17,29 @@ final class SmartRewritePromptDialog: NSObject {
         super.init()
     }
 
-    func runModal() -> Result {
-        let alert = NSAlert()
-        alert.messageText = "智能整理提示词"
-        alert.informativeText = "选择一种整理模式，修改提示词后保存。可用占位符：{rawText}、{targetAppName}、{targetBundleIdentifier}。"
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "保存")
-        alert.addButton(withTitle: "恢复默认")
-        alert.addButton(withTitle: "取消")
-        alert.accessoryView = buildAccessoryView()
+    func present(in parent: NSWindow, completion: @escaping (Result) -> Void) {
+        let content = buildAccessoryView()
         loadTemplate(for: selectedMode)
-
-        switch alert.runModal() {
-        case .alertFirstButtonReturn:
-            return .save(selectedMode, textView.string)
-        case .alertSecondButtonReturn:
-            return .reset(selectedMode)
-        default:
-            return .cancel
+        sheet.present(
+            in: parent,
+            title: "智能整理提示词",
+            message: "选择一种整理模式，修改提示词后保存。可用占位符：{rawText}、{targetAppName}、{targetBundleIdentifier}。",
+            contentView: content,
+            contentSize: NSSize(width: 460, height: 360),
+            buttons: [
+                .init(title: "保存", isDefault: true),
+                .init(title: "恢复默认"),
+                .init(title: "取消", isCancel: true),
+            ]
+        ) { [self] index in
+            switch index {
+            case 0:
+                completion(.save(selectedMode, textView.string))
+            case 1:
+                completion(.reset(selectedMode))
+            default:
+                completion(.cancel)
+            }
         }
     }
 

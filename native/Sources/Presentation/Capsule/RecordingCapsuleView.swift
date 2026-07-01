@@ -12,10 +12,6 @@ final class RecordingCapsuleView: NSView {
         static let firstPreviewMinimumCharacters = 3
         static let preExpandLookaheadCharacters = 2
         static let preExpandExtraWidth: CGFloat = 8
-        static let healthBreathSeconds: TimeInterval = 2.8
-        // 健康呼吸光晕向胶囊内部渗透的宽度（像素）。父层 masksToBounds 会裁掉向外的光晕，
-        // 因此改为在胶囊内侧绘制更宽、更亮的呼吸光晕，确保效果真正显示在胶囊上。
-        static let healthInnerGlowPixels: CGFloat = 10
     }
 
     private var state = "录音中"
@@ -27,8 +23,6 @@ final class RecordingCapsuleView: NSView {
     private var fadeTimer: Timer?
     private var fadeStartIndex: Int?
     private var fadeStartedAt: Date?
-    private var healthBreathStartedAt = Date()
-    private var healthBreathTimer: Timer?
     private var smoothedBands = WaveformBands()
     private var retainedPreviewWidth = Metrics.compactSize.width
     private let fadeDuration: TimeInterval = 0.25
@@ -44,27 +38,11 @@ final class RecordingCapsuleView: NSView {
         didSet { needsDisplay = true }
     }
 
-    /// 本地 Ollama 服务健康时显示的轻量绿边动画；紧急状态边框会覆盖它。
-    var ollamaHealthBorderActive = false {
-        didSet {
-            guard oldValue != ollamaHealthBorderActive else { return }
-            if ollamaHealthBorderActive {
-                healthBreathStartedAt = Date()
-                startHealthBreathTimerIfNeeded()
-            } else {
-                healthBreathTimer?.invalidate()
-                healthBreathTimer = nil
-            }
-            needsDisplay = true
-        }
-    }
-
     override var isOpaque: Bool { false }
 
     deinit {
         draftTimer?.invalidate()
         fadeTimer?.invalidate()
-        healthBreathTimer?.invalidate()
     }
 
     var preferredSize: NSSize {
@@ -135,8 +113,6 @@ final class RecordingCapsuleView: NSView {
             statusBorderColor.setStroke()
             path.lineWidth = 1.8
             path.stroke()
-        } else if ollamaHealthBorderActive {
-            drawOllamaHealthBorder(path: path)
         } else {
             NSColor(calibratedWhite: 1, alpha: 0.48).setStroke()
             path.lineWidth = 1.2
@@ -163,47 +139,6 @@ final class RecordingCapsuleView: NSView {
             attributes: draftAttributes,
             baseColor: textColor
         ).draw(in: draftRect)
-    }
-
-    private func drawOllamaHealthBorder(path: NSBezierPath) {
-        let elapsed = Date().timeIntervalSince(healthBreathStartedAt)
-        let progress = CGFloat((elapsed.truncatingRemainder(dividingBy: Metrics.healthBreathSeconds)) / Metrics.healthBreathSeconds)
-        let breath = 0.5 - cos(progress * 2 * .pi) * 0.5
-        let intensity = 0.55 + breath * 0.45
-        let green = UITheme.healthGreen
-
-        // 父层 masksToBounds 会裁掉向胶囊外扩散的光晕，因此把呼吸光晕全部画在胶囊内侧，
-        // 保证「呼吸 + 光晕」真正显示在胶囊上。
-        drawInnerHealthGlow(color: green, intensity: intensity)
-
-        // 主描边：亮度随呼吸起伏，靠近波峰时更亮更实，形成明显的呼吸感。
-        green.withAlphaComponent(0.55 + 0.40 * intensity).setStroke()
-        path.lineWidth = 1.3 + 0.5 * intensity
-        path.stroke()
-    }
-
-    private func drawInnerHealthGlow(color: NSColor, intensity: CGFloat) {
-        let rect = bounds.insetBy(dx: 1, dy: 1)
-        let radius: CGFloat = 20
-        let steps = Int(Metrics.healthInnerGlowPixels)
-        guard steps > 0 else { return }
-
-        for step in 1...steps {
-            let offset = CGFloat(step)
-            // 线性靠近边缘、平方衰减向内：边缘处最亮，向胶囊内部柔和淡出。
-            let falloff = 1 - (offset - 1) / Metrics.healthInnerGlowPixels
-            let alpha = 0.34 * intensity * falloff * falloff
-            let glowRect = rect.insetBy(dx: offset, dy: offset)
-            guard glowRect.width > 0, glowRect.height > 0 else { continue }
-            let glowPath = NSBezierPath(
-                roundedRect: glowRect,
-                xRadius: max(1, radius - offset),
-                yRadius: max(1, radius - offset)
-            )
-            color.withAlphaComponent(alpha).setStroke()
-            glowPath.lineWidth = 1.6
-            glowPath.stroke()
-        }
     }
 
     private var draftTextAttributes: [NSAttributedString.Key: Any] {
@@ -320,20 +255,6 @@ final class RecordingCapsuleView: NSView {
         }
         if let draftTimer {
             RunLoop.main.add(draftTimer, forMode: .common)
-        }
-    }
-
-    private func startHealthBreathTimerIfNeeded() {
-        guard healthBreathTimer == nil else { return }
-        healthBreathTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] timer in
-            guard let self, self.ollamaHealthBorderActive else {
-                timer.invalidate()
-                return
-            }
-            self.needsDisplay = true
-        }
-        if let healthBreathTimer {
-            RunLoop.main.add(healthBreathTimer, forMode: .common)
         }
     }
 

@@ -4,6 +4,7 @@ import QuartzCore
 final class RecordingPanel: NSPanel, PreviewPresenting {
     private let visualBackground = NSVisualEffectView()
     private let capsule = RecordingCapsuleView()
+    private let healthBorderOverlay = HealthBorderOverlayView()
     private let infoBar = NSStackView()
     private let appIconView = NSImageView()
     private let appNameLabel = NSTextField(labelWithString: "")
@@ -56,6 +57,12 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
         visualBackground.addSubview(capsule)
 
         configureInfoBar()
+
+        // 健康呼吸绿环置于最上层（信息条之后添加），确保绿边渲染在毛玻璃与文字之前。
+        healthBorderOverlay.frame = visualBackground.bounds
+        healthBorderOverlay.autoresizingMask = [.width, .height]
+        visualBackground.addSubview(healthBorderOverlay)
+
         contentView = visualBackground
     }
 
@@ -216,7 +223,8 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
 
     private func applyBorderState() {
         capsule.statusBorderColor = currentStatusBorderColor
-        capsule.ollamaHealthBorderActive = ollamaHealthy && currentStatusBorderColor == nil
+        // 紧急状态边框（倒计时/内存）由胶囊绘制并优先；否则由置顶绿环显示健康呼吸。
+        healthBorderOverlay.isActive = ollamaHealthy && currentStatusBorderColor == nil
     }
 
     private func updateTargetApp(appIcon: NSImage?, appName: String?, shouldResize: Bool) {
