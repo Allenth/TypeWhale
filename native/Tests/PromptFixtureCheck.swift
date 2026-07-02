@@ -20,7 +20,7 @@ struct PromptFixtureCheck {
         )
         precondition(placeholderPrompt.contains("最高优先级边界："))
         precondition(placeholderPrompt.contains("开发需求模式不可变边界："))
-        precondition(placeholderPrompt.contains("开发需求默认风格："))
+        precondition(placeholderPrompt.contains("开发需求整理目标："))
         precondition(placeholderPrompt.contains("原始语音文本：\n\(placeholderRawText)"))
         precondition(placeholderPrompt.contains("请保留 {rawText}、{targetAppName} 和 {developerGlossary} 这些字面量"))
 
@@ -46,7 +46,7 @@ struct PromptFixtureCheck {
         precondition(phoneticCorrectionPrompt.contains("必须先理解语义再整理"))
         precondition(phoneticCorrectionPrompt.contains("不能只清理口头禅后照搬 ASR 字面"))
         precondition(phoneticCorrectionPrompt.contains("必须保留原文里的判断强度、担心、不满、限制、顺序和验收倾向"))
-        precondition(phoneticCorrectionPrompt.contains("默认轻量，但不是机械压缩"))
+        precondition(phoneticCorrectionPrompt.contains("对上下文明显的 ASR 误识别做轻度语义修正"))
         precondition(phoneticCorrectionPrompt.contains("题这词"))
         precondition(phoneticCorrectionPrompt.contains("找搬"))
 

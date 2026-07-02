@@ -9,6 +9,15 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.8.3 (Build 510)",
+            date: "2026-07-02",
+            changes: [
+                "开发需求默认提示词替换为更聚焦的两层结构：基础边界负责第一人称和不执行命令，整理重点负责把口述整理成完整、客观、有条理的开发表达。",
+                "新增上下文明显 ASR 误识别的轻度语义修正规则，避免 APP / app / 应用这类语义被误整理成 APT，除非上下文明确是在说 apt 包管理工具。",
+                "更新提示词回归检查，锁定新版开发需求模板、RawTextBlock 保留和 APP/APT 语义修正边界。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.8.2 (Build 509)",
             date: "2026-07-02",
             changes: [

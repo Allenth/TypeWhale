@@ -33,7 +33,9 @@ struct SmartRewritePromptCheck {
             precondition(!prompt.contains("不要翻译成英文"))
             precondition(prompt.contains("开发术语表"))
             precondition(prompt.contains("无"))
-            precondition(!prompt.contains("Qwen3-ASR"))
+            if mode != .developerRequirement {
+                precondition(!prompt.contains("Qwen3-ASR"))
+            }
             if mode != .developerRequirement {
                 precondition(prompt.contains("不要把标准英文技术术语改写成中文术语"))
             }
@@ -94,26 +96,29 @@ struct SmartRewritePromptCheck {
         precondition(questionPrompt.contains("输出必须像我亲自发给 coding agent 的开发任务或产品反馈"))
         precondition(questionPrompt.contains("必须先理解语义再整理"))
         precondition(questionPrompt.contains("不能只清理口头禅后照搬 ASR 字面"))
-        precondition(questionPrompt.contains("绿色镜框"))
-        precondition(questionPrompt.contains("分贝那里"))
-        precondition(questionPrompt.contains("开发需求默认风格"))
+        precondition(questionPrompt.contains("开发需求整理目标"))
+        precondition(questionPrompt.contains("把我的口述整理成一段可以直接发给 Codex、Cursor、Claude Code 等 coding agent 的开发需求、产品反馈或执行说明"))
+        precondition(questionPrompt.contains("基础边界："))
+        precondition(questionPrompt.contains("整理重点："))
         precondition(questionPrompt.contains("原文是反馈就整理成反馈"))
         precondition(questionPrompt.contains("原文是明确动作才整理成指令"))
         precondition(questionPrompt.contains("不要强行任务化"))
         precondition(questionPrompt.contains("ease-in-out"))
-        precondition(questionPrompt.contains("输出结构（就低不就高）"))
-        precondition(questionPrompt.contains("单一明确动作：一句清晰指令"))
+        precondition(questionPrompt.contains("SwiftUI"))
+        precondition(questionPrompt.contains("Ollama"))
+        precondition(questionPrompt.contains("Qwen3-ASR"))
+        precondition(questionPrompt.contains("输出方式："))
+        precondition(questionPrompt.contains("单一明确动作：输出一句或一小段清晰指令"))
         precondition(questionPrompt.contains("单一反馈/感受/偏好"))
         precondition(questionPrompt.contains("短文本但包含原因、限制、顺序或风险"))
-        precondition(questionPrompt.contains("清理口语后仍要保留必要背景、体验感受、限制、顺序和判断强度"))
+        precondition(questionPrompt.contains("把逻辑梳理清楚，让内容更完整、客观、有条理"))
         precondition(questionPrompt.contains("必须保留原文里的判断强度、担心、不满、限制、顺序和验收倾向"))
-        precondition(questionPrompt.contains("多个独立点：简短项目符号"))
+        precondition(questionPrompt.contains("对上下文明显的 ASR 误识别做轻度语义修正"))
+        precondition(questionPrompt.contains("“APP / app / 应用”不要误整理成“APT”"))
+        precondition(questionPrompt.contains("除非原文上下文明确是在说 apt 包管理工具"))
+        precondition(questionPrompt.contains("多个独立点：用简短项目符号"))
         precondition(questionPrompt.contains("缺失字段直接省略"))
-        precondition(questionPrompt.contains("只输出整理后的正文，不解释过程"))
-        precondition(questionPrompt.contains("需求模板（复杂时才用）"))
-        precondition(questionPrompt.contains("质量示例："))
-        precondition(questionPrompt.contains("这个颜色不太好看，然后分贝那里的颜色的话恢复以前嘛"))
-        precondition(questionPrompt.contains("绿色边框也想恢复到和分贝单位一致的那个颜色"))
+        precondition(questionPrompt.contains("只输出整理后的正文，不要解释处理过程"))
         precondition(questionPrompt.contains("必须保留第一人称/第二人称发话位置"))
         precondition(questionPrompt.contains("不要改成“用户要求”“对方表示”"))
         precondition(questionPrompt.contains("原文包含提示词、规则块或项目符号时"))
@@ -133,7 +138,7 @@ struct SmartRewritePromptCheck {
         precondition(shortOriginalIntentPrompt.contains("先从模型段解决文同"))
         precondition(shortOriginalIntentPrompt.contains("原文是明确动作才整理成指令"))
         precondition(shortOriginalIntentPrompt.contains("不能只清理口头禅后照搬 ASR 字面"))
-        precondition(shortOriginalIntentPrompt.contains("只输出整理后的正文，不解释过程"))
+        precondition(shortOriginalIntentPrompt.contains("只输出整理后的正文，不要解释处理过程"))
 
         let colorFeedbackPrompt = SmartRewritePromptBuilder.prompt(
             rawText: "这个颜色不太好看，然后分贝那里的颜色的话恢复以前嘛，呃绿色镜框也恢复到以前叫什么分贝那个单位一样的颜色。",
@@ -145,7 +150,7 @@ struct SmartRewritePromptCheck {
         precondition(colorFeedbackPrompt.contains("分贝那里"))
         precondition(colorFeedbackPrompt.contains("绿色镜框"))
         precondition(colorFeedbackPrompt.contains("原文是反馈就整理成反馈"))
-        precondition(colorFeedbackPrompt.contains("绿色边框也想恢复到和分贝单位一致的那个颜色"))
+        precondition(colorFeedbackPrompt.contains("把逻辑梳理清楚，让内容更完整、客观、有条理"))
 
         let semanticCorrectionPrompt = SmartRewritePromptBuilder.prompt(
             rawText: "这个题这词不能理解语义吗？完全把我的话找搬过来，去掉了一些忌口而已，但是并没有理解我的语义。有些读音词它直接就按错误的词去识别了。",
@@ -169,6 +174,16 @@ struct SmartRewritePromptCheck {
         precondition(expandedSemanticCorrectionPrompt.contains("去掉一些借口而已"))
         precondition(expandedSemanticCorrectionPrompt.contains("必须先理解语义再整理"))
         precondition(expandedSemanticCorrectionPrompt.contains("不能只清理口头禅后照搬 ASR 字面"))
+
+        let appCorrectionPrompt = SmartRewritePromptBuilder.prompt(
+            rawText: "可以直接在 APT 里面打开智能整理的提示词。",
+            mode: .developerRequirement,
+            context: context,
+            preference: .automatic
+        )
+        precondition(appCorrectionPrompt.contains("可以直接在 APT 里面打开智能整理的提示词。"))
+        precondition(appCorrectionPrompt.contains("“APP / app / 应用”不要误整理成“APT”"))
+        precondition(appCorrectionPrompt.contains("除非原文上下文明确是在说 apt 包管理工具"))
 
         let codexFirstPersonPrompt = SmartRewritePromptBuilder.prompt(
             rawText: "你看这一句问题很大，我是自动模式，在 Codex 中也必须是开发需求模式。要求必须使用第一人称口吻，即我怎么说就是怎么说，告诉我具体方案。",
