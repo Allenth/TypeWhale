@@ -46,6 +46,22 @@ if ! grep -q "startTranslationLoadingAnimation" "$SCREENSHOT"; then
   exit 1
 fi
 
+ocr_block="$(
+  awk '
+    /private func recognizeText\(in image: NSImage\)/ { in_block=1 }
+    in_block { print }
+    in_block && /^    }$/ { exit }
+  ' "$SCREENSHOT"
+)"
+
+ocr_status_line="$(grep -n 'showTransientStatus("OCR 识别中"' <<<"$ocr_block" | head -1 | cut -d: -f1 || true)"
+ocr_token_line="$(grep -n 'operationTokens.start(.ocr)' <<<"$ocr_block" | head -1 | cut -d: -f1 || true)"
+if [ -z "$ocr_status_line" ] || [ -z "$ocr_token_line" ] || [ "$ocr_status_line" -ge "$ocr_token_line" ]; then
+  echo "OCR processing status must be emitted before starting the OCR operation token" >&2
+  echo "Otherwise the transient status token invalidates the OCR result before it can copy text." >&2
+  exit 1
+fi
+
 if ! grep -q "ScreenshotCoordinator()" "$SPEECH"; then
   echo "SpeechInputCoordinator must not inject main UI status/reopen callbacks into ScreenshotCoordinator" >&2
   exit 1

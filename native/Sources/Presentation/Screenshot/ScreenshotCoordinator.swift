@@ -174,9 +174,9 @@ final class ScreenshotCoordinator {
     }
 
     private func recognizeText(in image: NSImage) {
-        let token = operationTokens.start(.ocr)
         closeAll()
         showTransientStatus("OCR 识别中", "正在识别选区文字", .processing)
+        let token = operationTokens.start(.ocr)
         Task { [weak self] in
             guard let self else { return }
             do {

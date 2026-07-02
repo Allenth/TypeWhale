@@ -9,6 +9,15 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.8.2 (Build 509)",
+            date: "2026-07-02",
+            changes: [
+                "修复截图 OCR 识别成功后没有复制文字的问题：OCR 处理中状态不再提前作废识别结果回调。",
+                "新增截图架构边界检查，防止后续改动再次让临时状态 token 覆盖 OCR operation token。",
+                "截图复制、保存、标注和截图翻译路径保持不变，本次只修复普通 OCR 结果写入剪贴板链路。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.8.2 (Build 508)",
             date: "2026-07-01",
             changes: [
