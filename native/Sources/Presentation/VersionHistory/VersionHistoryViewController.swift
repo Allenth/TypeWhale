@@ -9,6 +9,15 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.9.3 (Build 539)",
+            date: "2026-07-06",
+            changes: [
+                "补齐 Pro ASR 中英混合与热词改造的可执行开发计划，明确从评测集、provider 能力、离线 runner、模型对比、router/merger 到实验开关的推进顺序。",
+                "第一版落地 Pro ASR 热词评测集 manifest，覆盖 Codex、Obsidian、Qwen3-ASR、SpeechInputCoordinator、sherpa-onnx、FunASR、Paraformer Contextual 和 ModelScope。",
+                "新增评测集校验脚本，防止后续模型测试缺少样本数量、中英混合覆盖或核心热词覆盖。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.9.2 (Build 538)",
             date: "2026-07-06",
             changes: [
