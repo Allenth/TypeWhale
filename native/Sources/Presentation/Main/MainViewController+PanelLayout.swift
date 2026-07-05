@@ -1,7 +1,7 @@
 import AppKit
 
-// 平铺横向滚动布局：所有功能摊开成并排的分区面板，重要/常用在左，低频配置在右，
-// 横向滚动即可找到。每个面板有明确边界（圆角描边）。
+// 稳定双区布局：左侧是当前语音工作区，右侧是按目的分组的控制面板。
+// 右侧内容只允许纵向滚动，避免横向裁切破坏设置的空间稳定感。
 extension MainViewController {
 
     // MARK: - 顶层装配
@@ -13,32 +13,12 @@ extension MainViewController {
         let topBar = buildTopBar()
         container.addSubview(topBar)
 
-        let scroll = NSScrollView()
-        scroll.translatesAutoresizingMaskIntoConstraints = false
-        scroll.hasHorizontalScroller = true
-        scroll.hasVerticalScroller = false
-        scroll.autohidesScrollers = true
-        scroll.drawsBackground = false
-        scroll.borderType = .noBorder
-        scroll.horizontalScrollElasticity = .allowed
-        scroll.verticalScrollElasticity = .none
-        panelScrollView = scroll
-
         wireHotkeyButtons()
 
-        // 当前会话固定在左侧，不随横向滚动移动；窄一些，把更多纵向空间留给最近转录。
-        let fixedSession = panel("当前会话", width: 300, fillsHeight: true, buildSessionAndRecentContent())
-        container.addSubview(fixedSession)
-
-        let panelViews = buildPanels()
-        let panels = NSStackView(views: panelViews)
-        panels.orientation = .horizontal
-        panels.alignment = .top
-        panels.spacing = 14
-        panels.edgeInsets = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 6)
-        panels.translatesAutoresizingMaskIntoConstraints = false
-        scroll.documentView = panels
-        container.addSubview(scroll)
+        let session = panel("当前会话", width: 300, fillsHeight: true, buildSessionAndRecentContent())
+        let inspector = panel("控制面板", width: 620, fillsHeight: true, buildInspectorTabs())
+        container.addSubview(session)
+        container.addSubview(inspector)
 
         NSLayoutConstraint.activate([
             topBar.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 18),
@@ -46,23 +26,15 @@ extension MainViewController {
             topBar.topAnchor.constraint(equalTo: container.topAnchor, constant: 14),
             topBar.heightAnchor.constraint(equalToConstant: 38),
 
-            fixedSession.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 18),
-            fixedSession.topAnchor.constraint(equalTo: topBar.bottomAnchor, constant: 12),
-            fixedSession.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -16),
+            session.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 18),
+            session.topAnchor.constraint(equalTo: topBar.bottomAnchor, constant: 12),
+            session.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -16),
 
-            scroll.leadingAnchor.constraint(equalTo: fixedSession.trailingAnchor, constant: 14),
-            scroll.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -18),
-            scroll.topAnchor.constraint(equalTo: topBar.bottomAnchor, constant: 12),
-            scroll.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -16),
-
-            panels.heightAnchor.constraint(equalTo: scroll.contentView.heightAnchor),
-            panels.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
-            panels.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
+            inspector.leadingAnchor.constraint(equalTo: session.trailingAnchor, constant: 14),
+            inspector.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -18),
+            inspector.topAnchor.constraint(equalTo: topBar.bottomAnchor, constant: 12),
+            inspector.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -16),
         ])
-        // 每个面板填满纵向高度
-        for p in panelViews {
-            p.heightAnchor.constraint(equalTo: panels.heightAnchor).isActive = true
-        }
         return container
     }
 
@@ -108,8 +80,7 @@ extension MainViewController {
     // MARK: - 面板容器（明确边界）
 
     private func panel(_ title: String, width: CGFloat, fillsHeight: Bool = false, _ content: NSView) -> NSView {
-        let header = label(title, size: 12, weight: .semibold)
-        header.textColor = UITheme.sectionTitle
+        let header = panelTitleLabel(title)
 
         let stack = NSStackView(views: [header, content])
         stack.orientation = .vertical
@@ -122,7 +93,7 @@ extension MainViewController {
         box.translatesAutoresizingMaskIntoConstraints = false
         box.wantsLayer = true
         box.layer?.backgroundColor = NSColor(calibratedWhite: 1, alpha: 0.045).cgColor
-        box.layer?.cornerRadius = 12
+        box.layer?.cornerRadius = UILayout.cornerRadius
         box.layer?.borderWidth = 1
         box.layer?.borderColor = UITheme.cardBorder.cgColor
         box.addSubview(stack)
@@ -150,21 +121,158 @@ extension MainViewController {
         return stack
     }
 
-    // MARK: - 各分区面板（左=常用，右=低频）
+    // MARK: - Inspector tabs
 
-    private func buildPanels() -> [NSView] {
-        [
-            panel("预览主题", width: 200, buildPreviewThemeContent()),
-            panel("整理设置", width: 250, buildComboQuickSmartContent()),
-            panel("模型", width: 390, buildManagedModelContent()),
-            panel("快捷键", width: 300, buildHotkeysPanelContent()),
-            panel("更多设置", width: 276, buildMiscSettingsContent()),
-            panel("状态", width: 204, buildStatusPanelContent()),
-        ]
+    func buildInspectorTabs() -> NSView {
+        applyInspectorControlSizingIfNeeded()
+        inspectorTabButtons.removeAll()
+        inspectorContent.translatesAutoresizingMaskIntoConstraints = false
+        inspectorContent.wantsLayer = true
+
+        inspectorScroll.translatesAutoresizingMaskIntoConstraints = false
+        inspectorScroll.documentView = inspectorContent
+        inspectorScroll.hasVerticalScroller = true
+        inspectorScroll.hasHorizontalScroller = false
+        inspectorScroll.autohidesScrollers = true
+        inspectorScroll.drawsBackground = false
+        inspectorScroll.borderType = .noBorder
+        inspectorScroll.horizontalScrollElasticity = .none
+        inspectorScroll.verticalScrollElasticity = .allowed
+        inspectorScroll.automaticallyAdjustsContentInsets = false
+
+        let tabs = MainInspectorTab.allCases.map { tab -> NSButton in
+            let button = NSButton(title: tab.title, target: self, action: #selector(handleInspectorTab(_:)))
+            button.setButtonType(.toggle)
+            button.bezelStyle = .rounded
+            button.controlSize = .small
+            button.font = .systemFont(ofSize: 12, weight: .semibold)
+            button.attributedTitle = NSAttributedString(string: tab.title, attributes: inspectorTabTitleAttributes(isSelected: false))
+            button.tag = MainInspectorTab.allCases.firstIndex(of: tab) ?? 0
+            button.setAccessibilityLabel("\(tab.title)设置")
+            button.widthAnchor.constraint(equalToConstant: 84).isActive = true
+            inspectorTabButtons[tab] = button
+            return button
+        }
+
+        let tabRow = NSStackView(views: tabs)
+        tabRow.orientation = .horizontal
+        tabRow.alignment = .centerY
+        tabRow.spacing = 6
+        tabRow.translatesAutoresizingMaskIntoConstraints = false
+
+        let stack = NSStackView(views: [tabRow, inspectorScroll])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 10
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        tabRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        inspectorScroll.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        inspectorScroll.setContentHuggingPriority(.defaultLow, for: .vertical)
+        inspectorScroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 460).isActive = true
+        inspectorContent.widthAnchor.constraint(equalTo: inspectorScroll.contentView.widthAnchor).isActive = true
+
+        selectInspectorTab(.common)
+        return stack
+    }
+
+    private func applyInspectorControlSizingIfNeeded() {
+        guard !didApplyInspectorControlSizing else { return }
+        didApplyInspectorControlSizing = true
+
+        smartRewriteMode.widthAnchor.constraint(equalToConstant: 96).isActive = true
+        translationDirectionMode.widthAnchor.constraint(equalToConstant: 88).isActive = true
+        screenshotSaveLocationButton.widthAnchor.constraint(equalToConstant: 120).isActive = true
+        audioInputDeviceMode.widthAnchor.constraint(equalToConstant: 142).isActive = true
+        audioInputRefreshButton.widthAnchor.constraint(equalToConstant: 30).isActive = true
+        audioInputRefreshButton.heightAnchor.constraint(equalToConstant: 24).isActive = true
+        smartAIModelMode.widthAnchor.constraint(equalToConstant: 132).isActive = true
+
+        [autoScopeButton, promptSettingsButton, developerTermsButton, translationPromptButton, socialScopeButton,
+         deepSeekKeyButton, deepSeekBalanceButton].forEach {
+            $0.widthAnchor.constraint(equalToConstant: 92).isActive = true
+        }
+    }
+
+    @objc func handleInspectorTab(_ sender: NSButton) {
+        let tabs = MainInspectorTab.allCases
+        guard sender.tag >= 0, sender.tag < tabs.count else { return }
+        selectInspectorTab(tabs[sender.tag])
+    }
+
+    func selectInspectorTab(_ tab: MainInspectorTab) {
+        selectedInspectorTab = tab
+        inspectorTabButtons.forEach { key, button in
+            let isSelected = key == tab
+            button.state = isSelected ? .on : .off
+            button.contentTintColor = isSelected ? UITheme.brandYellow : .secondaryLabelColor
+            button.attributedTitle = NSAttributedString(
+                string: key.title,
+                attributes: inspectorTabTitleAttributes(isSelected: isSelected)
+            )
+        }
+        inspectorContent.subviews.forEach { $0.removeFromSuperview() }
+        let page = buildInspectorPage(tab)
+        page.translatesAutoresizingMaskIntoConstraints = false
+        inspectorContent.addSubview(page)
+        NSLayoutConstraint.activate([
+            page.leadingAnchor.constraint(equalTo: inspectorContent.leadingAnchor),
+            page.trailingAnchor.constraint(equalTo: inspectorContent.trailingAnchor),
+            page.topAnchor.constraint(equalTo: inspectorContent.topAnchor),
+            page.bottomAnchor.constraint(equalTo: inspectorContent.bottomAnchor),
+        ])
+        inspectorScroll.contentView.scroll(to: .zero)
+        inspectorScroll.reflectScrolledClipView(inspectorScroll.contentView)
+    }
+
+    func buildInspectorPage(_ tab: MainInspectorTab) -> NSView {
+        switch tab {
+        case .common:
+            return inspectorPage([
+                inspectorGroup("预览主题", buildPreviewThemeContent(), prominence: .lead),
+                inspectorGroup("快捷设置", buildQuickSettingsCardContent()),
+                inspectorGroup("截图", buildScreenshotSettingsContent()),
+                inspectorGroup("系统", buildSystemSettingsContent()),
+            ])
+        case .intelligence:
+            return inspectorPage([
+                inspectorGroup("智能整理", buildSmartRewritePanelContent()),
+            ])
+        case .hotkeys:
+            return inspectorPage([
+                inspectorGroup("快捷键", buildHotkeysPanelContent()),
+            ])
+        case .status:
+            return inspectorPage([
+                inspectorGroup("模型", buildManagedModelContent()),
+                inspectorGroup("状态", buildStatusPanelContent()),
+            ])
+        }
     }
 
     private func buildManagedModelContent() -> NSView {
         managedASRModelListView
+    }
+
+    private func inspectorPage(_ groups: [NSView]) -> NSView {
+        let stack = FlippedStackView(views: groups)
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = UILayout.groupSpacing
+        stack.edgeInsets = NSEdgeInsets(top: 2, left: 2, bottom: 10, right: 10)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        groups.forEach { $0.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true }
+        return stack
+    }
+
+    private func inspectorGroup(_ title: String, _ body: NSView, prominence: InspectorGroupProminence = .standard) -> NSView {
+        let header = inspectorGroupTitleLabel(title)
+        let stack = NSStackView(views: [header, body])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 7
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        body.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        return inspectorGroupBox(stack, prominence: prominence)
     }
 
     // 第二列：预览主题。两张程序绘制的迷你预览，点击切换主题。
@@ -209,12 +317,11 @@ extension MainViewController {
     }
 
     private func subSectionView(_ title: String, _ body: NSView) -> NSView {
-        let header = label(title, size: 11, weight: .semibold)
-        header.textColor = .secondaryLabelColor
+        let header = inspectorGroupTitleLabel(title)
         let stack = NSStackView(views: [header, body])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 6
+        stack.spacing = UILayout.compactGroupSpacing - 4
         stack.translatesAutoresizingMaskIntoConstraints = false
         body.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         return stack
@@ -228,7 +335,7 @@ extension MainViewController {
         let stack = NSStackView(views: [quick, divider, smart])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 12
+        stack.spacing = UILayout.groupSpacing
         stack.translatesAutoresizingMaskIntoConstraints = false
         [quick, divider, smart].forEach {
             $0.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
@@ -236,18 +343,18 @@ extension MainViewController {
         return stack
     }
 
-    // 截图 / 系统 合并为一列（各自内容很少）
-    private func buildMiscSettingsContent() -> NSView {
-        screenshotSaveLocationButton.widthAnchor.constraint(equalToConstant: 120).isActive = true
-        audioInputDeviceMode.widthAnchor.constraint(equalToConstant: 142).isActive = true
-        audioInputRefreshButton.widthAnchor.constraint(equalToConstant: 30).isActive = true
-        audioInputRefreshButton.heightAnchor.constraint(equalToConstant: 24).isActive = true
+    private func buildScreenshotSettingsContent() -> NSView {
+        return rowStack([
+            optionRow("保存位置", screenshotSaveLocationButton),
+        ])
+    }
+
+    private func buildSystemSettingsContent() -> NSView {
         let audioInputControls = NSStackView(views: [audioInputDeviceMode, audioInputRefreshButton])
         audioInputControls.orientation = .horizontal
         audioInputControls.alignment = .centerY
         audioInputControls.spacing = 4
-        let screenshot = subSection("截图", [optionRow("保存位置", screenshotSaveLocationButton)])
-        let system = subSection("系统", [
+        return rowStack([
             optionRow("输入设备", audioInputControls),
             optionRow("胶囊实时预览", realtime),
             optionRow("停顿自动完成", autoFinish),
@@ -255,16 +362,6 @@ extension MainViewController {
             optionRow("麦克风降噪（增强·略慢）", micNoiseReduction),
             optionRow("开机自动启动", launchAtLogin),
         ])
-        let d1 = hairlineView()
-        let stack = NSStackView(views: [screenshot, d1, system])
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 10
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        [screenshot, d1, system].forEach {
-            $0.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-        }
-        return stack
     }
 
     private func buildSessionAndRecentContent() -> NSView {
@@ -286,8 +383,7 @@ extension MainViewController {
         recentScroll.translatesAutoresizingMaskIntoConstraints = false
         let recentCard = roundedBox(recentScroll, hPad: 8, vPad: 6)
 
-        let recentHeader = label("最近转录", size: 11, weight: .medium)
-        recentHeader.textColor = UITheme.sectionTitle
+        let recentHeader = inspectorGroupTitleLabel("最近转录")
 
         let stack = NSStackView(views: [sessionPanel, recentHeader, recentCard])
         stack.orientation = .vertical
@@ -310,8 +406,6 @@ extension MainViewController {
         translationDirectionMode.controlSize = .small
         smartRewriteMode.font = .systemFont(ofSize: 11, weight: .medium)
         translationDirectionMode.font = .systemFont(ofSize: 11, weight: .medium)
-        smartRewriteMode.widthAnchor.constraint(equalToConstant: 96).isActive = true
-        translationDirectionMode.widthAnchor.constraint(equalToConstant: 88).isActive = true
         return rowStack([
             compactOptionRow("整理模式", smartRewriteMode),
             compactOptionRow("自动翻译", autoTranslate),
@@ -337,14 +431,6 @@ extension MainViewController {
             $0.bezelStyle = .rounded
             $0.controlSize = .regular
         }
-        smartAIModelMode.widthAnchor.constraint(equalToConstant: 132).isActive = true
-        autoScopeButton.widthAnchor.constraint(equalToConstant: 92).isActive = true
-        promptSettingsButton.widthAnchor.constraint(equalToConstant: 92).isActive = true
-        developerTermsButton.widthAnchor.constraint(equalToConstant: 92).isActive = true
-        translationPromptButton.widthAnchor.constraint(equalToConstant: 92).isActive = true
-        socialScopeButton.widthAnchor.constraint(equalToConstant: 92).isActive = true
-        deepSeekKeyButton.widthAnchor.constraint(equalToConstant: 92).isActive = true
-        deepSeekBalanceButton.widthAnchor.constraint(equalToConstant: 92).isActive = true
         let keyRow = optionRow("DeepSeek Key", deepSeekKeyButton)
         let usageRow = optionRow("费用 / 余额", deepSeekBalanceButton)
         smartAIKeyRow = keyRow
@@ -371,23 +457,13 @@ extension MainViewController {
             shortcutRow(title: "翻译截图", captureButton: screenshotTranslationHotkeyCaptureButton, fallbackButton: screenshotTranslationHotkeyResetButton),
             shortcutRow(title: "自动翻译", captureButton: autoTranslateHotkeyCaptureButton, fallbackButton: autoTranslateHotkeyClearButton),
             shortcutRow(title: "唤起主页", captureButton: mainWindowHotkeyCaptureButton, fallbackButton: mainWindowHotkeyResetButton),
-            shortcutRow(title: "闪念胶囊", captureButton: ideaPillHotkeyCaptureButton, fallbackButton: ideaPillHotkeyClearButton),
         ])
-    }
-
-    // 横向滚动到右侧配置区（供 ⌘, 与状态栏调用，替代原偏好弹窗）
-    func scrollToConfigPanels() {
-        guard let scroll = panelScrollView,
-              let doc = scroll.documentView else { return }
-        let maxX = max(0, doc.frame.width - scroll.contentView.bounds.width)
-        scroll.contentView.scroll(to: NSPoint(x: maxX * 0.42, y: 0))
-        scroll.reflectScrolledClipView(scroll.contentView)
     }
 
     // 快捷键录入按钮的接线与样式（原在偏好弹窗里，现由「快捷键」面板复用）
     func wireHotkeyButtons() {
         [hotkeyValue, secondaryHotkeyValue, screenshotHotkeyValue, secondaryScreenshotHotkeyValue,
-         screenshotTranslationHotkeyValue, autoTranslateHotkeyValue, mainWindowHotkeyValue, ideaPillHotkeyValue].forEach {
+         screenshotTranslationHotkeyValue, autoTranslateHotkeyValue, mainWindowHotkeyValue].forEach {
             $0.lineBreakMode = .byTruncatingMiddle
         }
         hotkeyCaptureButton.target = self; hotkeyCaptureButton.action = #selector(beginHotkeyCapture)
@@ -404,20 +480,18 @@ extension MainViewController {
         autoTranslateHotkeyClearButton.target = self; autoTranslateHotkeyClearButton.action = #selector(clearAutoTranslateHotkey)
         mainWindowHotkeyCaptureButton.target = self; mainWindowHotkeyCaptureButton.action = #selector(beginMainWindowHotkeyCapture)
         mainWindowHotkeyResetButton.target = self; mainWindowHotkeyResetButton.action = #selector(clearMainWindowHotkey)
-        ideaPillHotkeyCaptureButton.target = self; ideaPillHotkeyCaptureButton.action = #selector(beginIdeaPillHotkeyCapture)
-        ideaPillHotkeyClearButton.target = self; ideaPillHotkeyClearButton.action = #selector(clearIdeaPillHotkey)
         let captureButtons = [hotkeyCaptureButton, secondaryHotkeyCaptureButton, screenshotHotkeyCaptureButton,
                               secondaryScreenshotHotkeyCaptureButton, screenshotTranslationHotkeyCaptureButton,
-                              autoTranslateHotkeyCaptureButton, mainWindowHotkeyCaptureButton, ideaPillHotkeyCaptureButton]
+                              autoTranslateHotkeyCaptureButton, mainWindowHotkeyCaptureButton]
         let trailingButtons = [hotkeyResetButton, secondaryHotkeyClearButton, screenshotHotkeyResetButton,
                                secondaryScreenshotHotkeyClearButton, screenshotTranslationHotkeyResetButton,
-                               autoTranslateHotkeyClearButton, mainWindowHotkeyResetButton, ideaPillHotkeyClearButton]
+                               autoTranslateHotkeyClearButton, mainWindowHotkeyResetButton]
         (captureButtons + trailingButtons).forEach {
             $0.bezelStyle = .rounded
             $0.controlSize = .small
             $0.font = .systemFont(ofSize: 11, weight: .medium)
         }
-        captureButtons.forEach { $0.widthAnchor.constraint(equalToConstant: 92).isActive = true }
-        trailingButtons.forEach { $0.widthAnchor.constraint(equalToConstant: 52).isActive = true }
+        captureButtons.forEach { $0.widthAnchor.constraint(equalToConstant: 128).isActive = true }
+        trailingButtons.forEach { $0.widthAnchor.constraint(equalToConstant: 70).isActive = true }
     }
 }

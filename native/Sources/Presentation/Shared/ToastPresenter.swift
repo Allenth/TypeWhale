@@ -16,6 +16,7 @@ enum ToastStyle {
         }
     }
 
+    @MainActor
     var tint: NSColor {
         switch self {
         case .success: return UITheme.brandGreen
@@ -136,8 +137,10 @@ final class ToastPresenter {
             context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             panel.animator().alphaValue = 0
         } completionHandler: { [weak self] in
-            guard let self, generation == self.generation else { return }
-            self.panel.orderOut(nil)
+            Task { @MainActor [weak self] in
+                guard let self, generation == self.generation else { return }
+                self.panel.orderOut(nil)
+            }
         }
     }
 

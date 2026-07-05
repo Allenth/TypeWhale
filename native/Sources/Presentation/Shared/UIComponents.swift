@@ -15,24 +15,28 @@ enum UITheme {
     nonisolated static let capsuleCornerRadius: CGFloat = 21
     static let brandTeal = brandGreen
     static let brandTealTint = brandGreenTint
-    static let cardFill = NSColor(calibratedWhite: 1, alpha: 0.06)
-    static let cardBorder = NSColor(calibratedWhite: 1, alpha: 0.12)
-    static let hairline = NSColor(calibratedWhite: 1, alpha: 0.08)
-    static let sectionTitle = NSColor(calibratedWhite: 1, alpha: 0.42)
-    static let keycapFill = NSColor(calibratedWhite: 1, alpha: 0.10)
-    static let keycapBorder = NSColor(calibratedWhite: 1, alpha: 0.16)
+    static let cardFill = NSColor(calibratedWhite: 1, alpha: 0.082)
+    static let cardBorder = NSColor(calibratedWhite: 1, alpha: 0.24)
+    static let hairline = NSColor(calibratedWhite: 1, alpha: 0.17)
+    static let sectionTitle = NSColor(calibratedWhite: 1, alpha: 0.68)
+    static let keycapFill = NSColor(calibratedWhite: 1, alpha: 0.13)
+    static let keycapBorder = NSColor(calibratedWhite: 1, alpha: 0.24)
     static let iconTint = NSColor(calibratedWhite: 1, alpha: 0.5)
 }
 
 /// Shared layout scale so cards, rows and gaps stay on one consistent grid.
 @MainActor
 enum UILayout {
-    static let cornerRadius: CGFloat = 10
+    static let cornerRadius: CGFloat = 8
     static let rowHeight: CGFloat = 30
+    static let compactRowHeight: CGFloat = 26
+    static let controlLabelWidth: CGFloat = 160
+    static let compactControlLabelWidth: CGFloat = 132
     static let cardPadH: CGFloat = 12
     static let cardPadV: CGFloat = 4
     static let sectionSpacing: CGFloat = 16
-    static let groupSpacing: CGFloat = 10
+    static let groupSpacing: CGFloat = 14
+    static let compactGroupSpacing: CGFloat = 10
     static let headerSpacing: CGFloat = 8
 }
 
@@ -41,6 +45,87 @@ func sectionHeader(_ text: String) -> NSTextField {
     let value = label(text, size: 12, weight: .medium)
     value.textColor = UITheme.sectionTitle
     return value
+}
+
+@MainActor
+func panelTitleLabel(_ text: String) -> NSTextField {
+    let value = label(text, size: 12, weight: .semibold)
+    value.textColor = UITheme.sectionTitle
+    value.maximumNumberOfLines = 1
+    value.lineBreakMode = .byTruncatingTail
+    return value
+}
+
+@MainActor
+func inspectorGroupTitleLabel(_ text: String) -> NSTextField {
+    let value = label(text, size: 11, weight: .semibold)
+    value.textColor = UITheme.sectionTitle
+    value.maximumNumberOfLines = 1
+    value.lineBreakMode = .byTruncatingTail
+    return value
+}
+
+@MainActor
+func controlRowLabel(_ text: String, compact: Bool = false) -> NSTextField {
+    let value = label(text, size: 11, weight: .medium)
+    value.textColor = compact ? NSColor(calibratedWhite: 1, alpha: 0.72) : NSColor(calibratedWhite: 1, alpha: 0.86)
+    value.maximumNumberOfLines = 1
+    value.lineBreakMode = .byTruncatingTail
+    value.setContentCompressionResistancePriority(.required, for: .horizontal)
+    value.widthAnchor.constraint(equalToConstant: compact ? UILayout.compactControlLabelWidth : UILayout.controlLabelWidth).isActive = true
+    return value
+}
+
+@MainActor
+func controlCaptionLabel(_ text: String) -> NSTextField {
+    let value = label(text, size: 10, weight: .medium)
+    value.textColor = UITheme.sectionTitle
+    value.maximumNumberOfLines = 1
+    value.lineBreakMode = .byTruncatingTail
+    return value
+}
+
+@MainActor
+func inspectorTabTitleAttributes(isSelected: Bool) -> [NSAttributedString.Key: Any] {
+    [
+        .font: NSFont.systemFont(ofSize: 12, weight: .semibold),
+        .foregroundColor: isSelected ? UITheme.brandYellow : NSColor.secondaryLabelColor,
+    ]
+}
+
+@MainActor
+func inspectorGroupBox(_ content: NSView, prominence: InspectorGroupProminence = .standard) -> NSView {
+    let box = roundedBox(content, hPad: 12, vPad: prominence.verticalPadding)
+    box.layer?.backgroundColor = prominence.fillColor.cgColor
+    box.layer?.borderColor = prominence.borderColor.cgColor
+    return box
+}
+
+@MainActor
+enum InspectorGroupProminence {
+    case lead
+    case standard
+
+    var verticalPadding: CGFloat {
+        switch self {
+        case .lead: return 11
+        case .standard: return 9
+        }
+    }
+
+    var fillColor: NSColor {
+        switch self {
+        case .lead: return NSColor(calibratedWhite: 1, alpha: 0.088)
+        case .standard: return UITheme.cardFill
+        }
+    }
+
+    var borderColor: NSColor {
+        switch self {
+        case .lead: return NSColor(calibratedWhite: 1, alpha: 0.28)
+        case .standard: return UITheme.cardBorder
+        }
+    }
 }
 
 @MainActor

@@ -40,21 +40,10 @@ next_full_version() {
   local minor="${match[2]}"
   local patch="${match[3]}"
   local patch_number=$((10#$patch))
-  local minor_number=$((10#$minor))
 
-  if (( patch_number < 0 || patch_number > 9 )); then
-    echo "Unexpected decimal patch in version: $version" >&2
-    return 1
-  fi
+  patch_number=$((patch_number + 1))
 
-  if (( patch_number < 9 )); then
-    patch_number=$((patch_number + 1))
-  else
-    minor_number=$((minor_number + 1))
-    patch_number=0
-  fi
-
-  echo "$major.$minor_number.$patch_number"
+  echo "$major.$minor.$patch_number"
 }
 
 next_build=$((current_build + 1))
@@ -72,7 +61,7 @@ else
   fi
 fi
 
-if [[ -n "${TYPEWHALE_NEXT_VERSION:-}" && ! "$TYPEWHALE_NEXT_VERSION" =~ ^[0-9]+\\.[0-9]+\\.[0-9]$ ]]; then
+if [[ -n "${TYPEWHALE_NEXT_VERSION:-}" && ! "$TYPEWHALE_NEXT_VERSION" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then
   echo "Unexpected TYPEWHALE_NEXT_VERSION format: $TYPEWHALE_NEXT_VERSION" >&2
   exit 1
 fi

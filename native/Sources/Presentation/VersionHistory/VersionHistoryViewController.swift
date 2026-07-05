@@ -9,6 +9,33 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.9.2 (Build 538)",
+            date: "2026-07-06",
+            changes: [
+                "撤回右侧横向滚动面板，恢复历史验证过的 Classic Mac inspector 控制面板。",
+                "模型管理进入控制面板的“状态”页，右侧只保留纵向滚动，避免横向裁切和隐藏功能区。",
+                "恢复主窗口布局边界检查，并把完整版本号规则改为 patch 自然递增，例如 1.2.9 -> 1.2.10。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.9.2 (Build 537)",
+            date: "2026-07-06",
+            changes: [
+                "清理 Swift 6 并发隔离 warning：Toast 样式色彩访问回到 MainActor 边界内。",
+                "修复 toast 淡出完成回调的 Sendable 闭包访问 MainActor 状态警告。",
+                "移除截图窗口重捕获路径里的 macOS 14 弃用 CGWindowListCreateImage 调用，改用透明 overlay 后的显示器截图。"
+            ]
+        ),
+        VersionEntry(
+            version: "版本 1.9.2 (Build 536)",
+            date: "2026-07-06",
+            changes: [
+                "执行 Pro ASR 改造后的覆盖安装验证，确认安装版升级路径可继续使用。",
+                "保留模型列表、下载进度环、停止下载、目标目录展示和本地模型文件复用策略不变。",
+                "本构建不新增运行时功能，作为 ASR 模型管理与分支合并后的安装验证版本。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.9.1 (Build 535)",
             date: "2026-07-05",
             changes: [

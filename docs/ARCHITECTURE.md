@@ -118,6 +118,7 @@ Preview non-goals:
 - Main-window visibility is governed only by explicit user actions, the configured main-window shortcut, status-item/menu commands, and approved first-install/default-open behavior.
 - Login-item/background launch must not unexpectedly surface the main window.
 - Screenshot and recording flows must not take ownership of main-window visibility. Screenshot close/copy/save/OCR/translation/cancel paths must not register reopen suppression or call `showMainWindow()`.
+- Main-window layout follows the Classic Mac inspector direction: left side is the stable current-session workspace, right side is a tabbed control panel with vertical scrolling only. Do not reintroduce a horizontal settings panel scroller or navigation by horizontal scroll position.
 
 ### Smart Rewrite
 

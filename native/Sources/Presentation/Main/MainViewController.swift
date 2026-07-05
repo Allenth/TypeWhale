@@ -29,7 +29,6 @@ final class MainViewController: NSViewController {
     let accessibilityStatus = label("检测中", size: 12, weight: .medium)
     let screenRecordingStatus = label("检测中", size: 12, weight: .medium)
     let hotkeyStatus = label("检测中", size: 12, weight: .medium)
-    var panelScrollView: NSScrollView?
     let hotkeyValue = label(
         HotkeyBinding.load(storageKey: HotkeyBinding.chineseStorageKey, fallback: .defaultBinding).displayName,
         size: 13,
@@ -141,6 +140,11 @@ final class MainViewController: NSViewController {
 
     let recentStack = FlippedStackView()
     let recentScroll = NSScrollView()
+    var selectedInspectorTab: MainInspectorTab = .common
+    var inspectorTabButtons: [MainInspectorTab: NSButton] = [:]
+    var didApplyInspectorControlSizing = false
+    let inspectorContent = FlippedView()
+    let inspectorScroll = NSScrollView()
     var recentRecords: [RecentTranscription] = []
     var isCapturingHotkey = false
     var capturingChannel: SpeechInputChannel?
@@ -174,6 +178,22 @@ final class MainViewController: NSViewController {
         case ideaPill
     }
 
+    enum MainInspectorTab: CaseIterable {
+        case common
+        case intelligence
+        case hotkeys
+        case status
+
+        var title: String {
+            switch self {
+            case .common: return "常用"
+            case .intelligence: return "智能"
+            case .hotkeys: return "快捷键"
+            case .status: return "状态"
+            }
+        }
+    }
+
     enum MediaKeyCapture {
         static let systemDefinedEventType = CGEventType(rawValue: 14)!
         static let auxControlButtonSubtype = 8
@@ -196,7 +216,7 @@ final class MainViewController: NSViewController {
         let darkOverlay = NSView()
         darkOverlay.translatesAutoresizingMaskIntoConstraints = false
         darkOverlay.wantsLayer = true
-        darkOverlay.layer?.backgroundColor = NSColor(calibratedWhite: 0, alpha: 0.36).cgColor
+        darkOverlay.layer?.backgroundColor = NSColor(calibratedWhite: 0, alpha: 0.45).cgColor
         view.addSubview(darkOverlay)
         NSLayoutConstraint.activate([
             darkOverlay.leadingAnchor.constraint(equalTo: view.leadingAnchor),

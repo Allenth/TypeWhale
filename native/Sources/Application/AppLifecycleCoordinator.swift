@@ -271,7 +271,7 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
 
     @objc private func showPreferences() {
         showMainWindow()
-        controller.scrollToConfigPanels()
+        controller.selectInspectorTab(.common)
         NSApp.activate(ignoringOtherApps: true)
     }
 

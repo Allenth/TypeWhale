@@ -79,8 +79,7 @@ extension MainViewController {
 
         configureRealtimeTextView()
 
-        let draftCaption = label("实时文本", size: 10, weight: .medium)
-        draftCaption.textColor = UITheme.sectionTitle
+        let draftCaption = controlCaptionLabel("实时文本")
 
         let draftStack = NSStackView(views: [draftCaption, realtimeScroll])
         draftStack.orientation = .vertical
@@ -209,8 +208,7 @@ extension MainViewController {
     }
 
     func buildModelEntry() -> NSView {
-        let caption = label("当前模型", size: 10, weight: .medium)
-        caption.textColor = UITheme.sectionTitle
+        let caption = controlCaptionLabel("当前模型")
         modelEntryName.maximumNumberOfLines = 1
         modelEntryName.lineBreakMode = .byTruncatingTail
 
@@ -281,7 +279,7 @@ extension MainViewController {
 
     func sidebarPermissionRow(icon: String, name: String, status: NSTextField, button: NSButton) -> NSView {
         let iconView = symbolIcon(icon, size: 13)
-        let nameLabel = label(name, size: 11, weight: .medium)
+        let nameLabel = controlRowLabel(name)
         nameLabel.maximumNumberOfLines = 1
         nameLabel.lineBreakMode = .byTruncatingTail
 

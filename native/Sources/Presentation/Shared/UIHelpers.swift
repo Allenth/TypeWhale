@@ -28,3 +28,7 @@ func label(_ text: String, size: CGFloat = 13, weight: NSFont.Weight = .regular)
 final class FlippedStackView: NSStackView {
     override var isFlipped: Bool { true }
 }
+
+final class FlippedView: NSView {
+    override var isFlipped: Bool { true }
+}

@@ -132,7 +132,7 @@ final class ScreenshotCoordinator {
             let refreshedCandidate = refreshedCandidates.first { $0.windowID == candidate.windowID } ?? candidate
             var didRefreshAnyOverlay = false
             for overlay in self.overlays {
-                guard let image = self.captureFullScreen(overlay.displayID, below: overlay) else { continue }
+                guard let image = self.captureFullScreen(overlay.displayID, excluding: overlay) else { continue }
                 didRefreshAnyOverlay = true
                 overlay.replaceScreenshot(
                     image,
@@ -401,17 +401,10 @@ final class ScreenshotCoordinator {
         CGDisplayCreateImage(displayID)
     }
 
-    private func captureFullScreen(_ displayID: CGDirectDisplayID, below overlay: ScreenshotOverlayWindow) -> CGImage? {
-        let overlayWindowID = CGWindowID(overlay.windowNumber)
-        guard overlayWindowID != 0 else {
-            return captureFullScreen(displayID)
+    private func captureFullScreen(_ displayID: CGDirectDisplayID, excluding overlay: ScreenshotOverlayWindow) -> CGImage? {
+        overlay.withHiddenContentDuringScreenCapture {
+            captureFullScreen(displayID)
         }
-        return CGWindowListCreateImage(
-            CGDisplayBounds(displayID),
-            [.optionOnScreenBelowWindow],
-            overlayWindowID,
-            [.bestResolution]
-        ) ?? captureFullScreen(displayID)
     }
 
     private static func visibleWindowCandidates() -> [ScreenshotWindowCandidate] {
@@ -565,6 +558,19 @@ private final class ScreenshotOverlayWindow: NSPanel {
             windowCandidates: windowCandidates,
             preselectedWindowFrame: preselectedWindowFrame
         )
+    }
+
+    func withHiddenContentDuringScreenCapture<T>(_ body: () -> T) -> T {
+        let previousAlpha = alphaValue
+        alphaValue = 0
+        displayIfNeeded()
+        contentView?.displayIfNeeded()
+        defer {
+            alphaValue = previousAlpha
+            displayIfNeeded()
+            contentView?.displayIfNeeded()
+        }
+        return body()
     }
 }
 
