@@ -65,7 +65,7 @@ final class SelectedSmartAITextEngine: SmartAITextEngine {
 
     private func engine(for model: SmartAIModel) -> SmartAITextEngine {
         switch model {
-        case .ollamaQwen35B, .ollamaQwen8B:
+        case .ollamaQwen35B:
             return ollama(model)
         case .deepSeekV4Flash:
             return deepSeek

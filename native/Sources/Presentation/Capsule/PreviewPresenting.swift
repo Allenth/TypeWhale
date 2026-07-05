@@ -1,5 +1,10 @@
 import AppKit
 
+enum PreviewAccent {
+    case normal
+    case ideaPill
+}
+
 /// 实时预览窗的能力抽象。
 ///
 /// 把预览窗的全部功能从具体 UI（默认胶囊 / 刘海主题）中剥离：协调器只依赖本协议，
@@ -20,6 +25,8 @@ protocol PreviewPresenting: AnyObject {
     func updateRecordingStatus(remainingSeconds: Int?, memoryHigh: Bool)
     /// 更新本地 Ollama 健康状态；健康时实现可显示低优先级可用性提示。
     func updateOllamaHealth(isHealthy: Bool)
+    /// 更新当前预览的产品语义强调色。
+    func updateAccent(_ accent: PreviewAccent)
     /// 显示某个状态文案与可选草稿，并让预览可见。
     func show(state: String, draft: String?)
     /// 更新实时预览草稿文本。
@@ -35,4 +42,6 @@ protocol PreviewPresenting: AnyObject {
 extension PreviewPresenting {
     /// 便捷重载：等价于 show(state:draft:nil)，供协议类型调用方省略 draft。
     func show(state: String) { show(state: state, draft: nil) }
+
+    func updateAccent(_ accent: PreviewAccent) {}
 }

@@ -9,9 +9,175 @@ protocol ScreenshotTranslationEngine {
     ) async throws -> SmartTranslationOutput
 }
 
+struct ScreenshotTranslationSourceLine {
+    let id: Int
+    let text: String
+}
+
+struct ScreenshotTranslationSourceChunk {
+    let source: String
+    let lineCount: Int
+    let index: Int
+    let total: Int
+}
+
+struct ScreenshotTranslationSourcePlan {
+    let source: String
+    let originalLineCount: Int
+    let translatedLineCount: Int
+
+    private let translatedIDs: [Int]
+    private let translatedLines: [ScreenshotTranslationSourceLine]
+    private let originalIDsByTranslatedID: [Int: [Int]]
+
+    var didCompress: Bool {
+        translatedLineCount < originalLineCount
+    }
+
+    init(
+        source: String,
+        originalLineCount: Int,
+        translatedLineCount: Int,
+        translatedIDs: [Int],
+        translatedLines: [ScreenshotTranslationSourceLine],
+        originalIDsByTranslatedID: [Int: [Int]]
+    ) {
+        self.source = source
+        self.originalLineCount = originalLineCount
+        self.translatedLineCount = translatedLineCount
+        self.translatedIDs = translatedIDs
+        self.translatedLines = translatedLines
+        self.originalIDsByTranslatedID = originalIDsByTranslatedID
+    }
+
+    func chunks(maxLinesPerChunk: Int = 12, chunkingThreshold: Int = 25) -> [ScreenshotTranslationSourceChunk] {
+        guard maxLinesPerChunk > 0 else {
+            return [Self.chunk(from: translatedLines, index: 1, total: 1)]
+        }
+        guard translatedLines.count > chunkingThreshold else {
+            return [Self.chunk(from: translatedLines, index: 1, total: 1)]
+        }
+
+        let groupedLines = stride(from: 0, to: translatedLines.count, by: maxLinesPerChunk).map { start -> [ScreenshotTranslationSourceLine] in
+            Array(translatedLines[start..<min(start + maxLinesPerChunk, translatedLines.count)])
+        }
+        return groupedLines.enumerated().map { offset, lines in
+            Self.chunk(from: lines, index: offset + 1, total: groupedLines.count)
+        }
+    }
+
+    func expandedTranslatedText(_ translatedText: String) -> String {
+        let buckets = Self.translationBuckets(from: translatedText)
+        var expanded: [String] = []
+        for translatedID in translatedIDs {
+            guard let translatedLine = buckets[translatedID]?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !translatedLine.isEmpty,
+                  let originalIDs = originalIDsByTranslatedID[translatedID] else {
+                continue
+            }
+            for originalID in originalIDs {
+                expanded.append("[[TW_LINE_\(originalID)]] \(translatedLine)")
+            }
+        }
+        return expanded.joined(separator: "\n")
+    }
+
+    private static func chunk(
+        from lines: [ScreenshotTranslationSourceLine],
+        index: Int,
+        total: Int
+    ) -> ScreenshotTranslationSourceChunk {
+        ScreenshotTranslationSourceChunk(
+            source: lines
+                .map { "[[TW_LINE_\($0.id)]] \($0.text)" }
+                .joined(separator: "\n"),
+            lineCount: lines.count,
+            index: index,
+            total: total
+        )
+    }
+
+    private static func translationBuckets(from translatedText: String) -> [Int: String] {
+        let pattern = #"^\s*\[\[TW_LINE_(\d+)\]\]\s*(.*)$"#
+        let regex = try? NSRegularExpression(pattern: pattern)
+        var buckets: [Int: [String]] = [:]
+        var currentID: Int?
+
+        translatedText.components(separatedBy: .newlines).forEach { outputLine in
+            let range = NSRange(outputLine.startIndex..<outputLine.endIndex, in: outputLine)
+            if let match = regex?.firstMatch(in: outputLine, range: range),
+               match.numberOfRanges >= 3,
+               let idRange = Range(match.range(at: 1), in: outputLine),
+               let id = Int(outputLine[idRange]) {
+                currentID = id
+                if let textRange = Range(match.range(at: 2), in: outputLine) {
+                    let text = outputLine[textRange].trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !text.isEmpty {
+                        buckets[id, default: []].append(text)
+                    }
+                }
+            } else if let currentID {
+                let text = outputLine.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !text.isEmpty {
+                    buckets[currentID, default: []].append(text)
+                }
+            }
+        }
+
+        return buckets.mapValues {
+            $0.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+    }
+}
+
+enum ScreenshotTranslationSourcePlanner {
+    static func plan(for lines: [ScreenshotTranslationSourceLine]) -> ScreenshotTranslationSourcePlan {
+        var seenIDsByKey: [String: Int] = [:]
+        var translatedLines: [ScreenshotTranslationSourceLine] = []
+        var originalIDsByTranslatedID: [Int: [Int]] = [:]
+
+        for line in lines {
+            let key = normalizedKey(for: line.text)
+            if let translatedID = seenIDsByKey[key] {
+                originalIDsByTranslatedID[translatedID, default: [translatedID]].append(line.id)
+            } else {
+                seenIDsByKey[key] = line.id
+                translatedLines.append(line)
+                originalIDsByTranslatedID[line.id] = [line.id]
+            }
+        }
+
+        return ScreenshotTranslationSourcePlan(
+            source: translatedLines
+                .map { "[[TW_LINE_\($0.id)]] \($0.text)" }
+                .joined(separator: "\n"),
+            originalLineCount: lines.count,
+            translatedLineCount: translatedLines.count,
+            translatedIDs: translatedLines.map(\.id),
+            translatedLines: translatedLines,
+            originalIDsByTranslatedID: originalIDsByTranslatedID
+        )
+    }
+
+    private static func normalizedKey(for text: String) -> String {
+        var value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        while let first = value.unicodeScalars.first,
+              "✓✔√vV•·'`×xX/\\<>〕]".unicodeScalars.contains(first) {
+            value.removeFirst()
+            value = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let collapsedWhitespace = value
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        return collapsedWhitespace.lowercased()
+    }
+}
+
 enum ScreenshotTranslationPromptBuilder {
     static let triggeredBy = "screenshot_translation"
     static let modeName = "截图英译中"
+    static let localMaxOutputTokens = 1_200
 
     static func prompt(
         source: String,

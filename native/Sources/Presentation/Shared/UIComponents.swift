@@ -105,8 +105,11 @@ func listCard(_ rows: [NSView], hPad: CGFloat = 15, vPad: CGFloat = 3) -> NSView
     stack.translatesAutoresizingMaskIntoConstraints = false
     for (index, row) in rows.enumerated() {
         stack.addArrangedSubview(row)
+        row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         if index < rows.count - 1 {
-            stack.addArrangedSubview(hairlineView())
+            let separator = hairlineView()
+            stack.addArrangedSubview(separator)
+            separator.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         }
     }
     return roundedBox(stack, hPad: hPad, vPad: vPad)

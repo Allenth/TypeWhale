@@ -110,6 +110,9 @@ final class SpeechInputCoordinator {
     private var mainWindowHotkeyBinding = HotkeyBinding.loadOptional(
         storageKey: HotkeyBinding.mainWindowStorageKey
     )
+    private var ideaPillHotkeyBinding = HotkeyBinding.loadOptional(
+        storageKey: HotkeyBinding.ideaPillStorageKey
+    )
 
     init(
         controller: MainViewController,
@@ -147,7 +150,8 @@ final class SpeechInputCoordinator {
             secondaryScreenshot: secondaryScreenshotHotkeyBinding,
             screenshotTranslation: screenshotTranslationHotkeyBinding,
             autoTranslate: autoTranslateHotkeyBinding,
-            mainWindow: mainWindowHotkeyBinding
+            mainWindow: mainWindowHotkeyBinding,
+            ideaPill: ideaPillHotkeyBinding
         )
         hotkey.update(
             primary: primaryHotkeyBinding,
@@ -156,10 +160,15 @@ final class SpeechInputCoordinator {
             secondaryScreenshot: secondaryScreenshotHotkeyBinding,
             screenshotTranslation: screenshotTranslationHotkeyBinding,
             autoTranslate: autoTranslateHotkeyBinding,
-            mainWindow: mainWindowHotkeyBinding
+            mainWindow: mainWindowHotkeyBinding,
+            ideaPill: ideaPillHotkeyBinding
         )
-        hotkey.onDown = { [weak self] channel, binding in self?.handleHotkeyDown(channel: channel, binding: binding) }
-        hotkey.onUp = { [weak self] channel, binding in self?.handleHotkeyUp(channel: channel, binding: binding) }
+        hotkey.onDown = { [weak self] channel, purpose, binding in
+            self?.handleHotkeyDown(channel: channel, purpose: purpose, binding: binding)
+        }
+        hotkey.onUp = { [weak self] channel, purpose, binding in
+            self?.handleHotkeyUp(channel: channel, purpose: purpose, binding: binding)
+        }
         hotkey.onAutoTranslateToggle = { [weak self] in self?.toggleAutoTranslateFromHotkey() }
         hotkey.onScreenshot = { [weak self] in self?.beginScreenshotFromHotkey() }
         hotkey.onScreenshotTranslation = { [weak self] in self?.beginScreenshotTranslationFromHotkey() }
@@ -181,7 +190,7 @@ final class SpeechInputCoordinator {
         controller.onInstallModel = { [weak self] in
             self?.modelInstaller.install()
         }
-        controller.onHotkeysChange = { [weak self] primary, secondary, screenshot, secondaryScreenshot, screenshotTranslation, autoTranslate, mainWindow in
+        controller.onHotkeysChange = { [weak self] primary, secondary, screenshot, secondaryScreenshot, screenshotTranslation, autoTranslate, mainWindow, ideaPill in
             self?.primaryHotkeyBinding = primary
             self?.secondaryHotkeyBinding = secondary
             self?.screenshotHotkeyBinding = screenshot
@@ -189,6 +198,7 @@ final class SpeechInputCoordinator {
             self?.screenshotTranslationHotkeyBinding = screenshotTranslation
             self?.autoTranslateHotkeyBinding = autoTranslate
             self?.mainWindowHotkeyBinding = mainWindow
+            self?.ideaPillHotkeyBinding = ideaPill
             self?.hotkey.update(
                 primary: primary,
                 secondary: secondary,
@@ -196,7 +206,8 @@ final class SpeechInputCoordinator {
                 secondaryScreenshot: secondaryScreenshot,
                 screenshotTranslation: screenshotTranslation,
                 autoTranslate: autoTranslate,
-                mainWindow: mainWindow
+                mainWindow: mainWindow,
+                ideaPill: ideaPill
             )
             self?.startHotkey(reason: "hotkey_update")
             self?.refreshPermissions()
@@ -615,7 +626,7 @@ final class SpeechInputCoordinator {
         trackedTargetApp = nil
     }
 
-    private func handleHotkeyDown(channel: SpeechInputChannel, binding: HotkeyBinding) {
+    private func handleHotkeyDown(channel: SpeechInputChannel, purpose: SpeechInputPurpose, binding: HotkeyBinding) {
         if screenshotCoordinator.isActive { return }
         if binding.kind == .mediaPlay {
             longPressWorkItem?.cancel()
@@ -627,7 +638,8 @@ final class SpeechInputCoordinator {
                 startRecording(
                     instructions: "再次按 \(binding.displayName) 完成录音",
                     activation: .toggle,
-                    channel: channel
+                    channel: channel,
+                    purpose: purpose
                 )
             }
             return
@@ -642,14 +654,15 @@ final class SpeechInputCoordinator {
             self.startRecording(
                 instructions: "松开 \(displayName) 完成录音",
                 activation: .hold,
-                channel: channel
+                channel: channel,
+                purpose: purpose
             )
         }
         longPressWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + Timing.holdToRecordSeconds, execute: workItem)
     }
 
-    private func handleHotkeyUp(channel: SpeechInputChannel, binding: HotkeyBinding) {
+    private func handleHotkeyUp(channel: SpeechInputChannel, purpose: SpeechInputPurpose, binding: HotkeyBinding) {
         if binding.kind == .mediaPlay {
             return
         }
@@ -674,7 +687,8 @@ final class SpeechInputCoordinator {
             startRecording(
                 instructions: "再次按下 \(displayName) 完成录音",
                 activation: .toggle,
-                channel: channel
+                channel: channel,
+                purpose: purpose
             )
         }
     }
@@ -689,6 +703,10 @@ final class SpeechInputCoordinator {
     }
 
     private func cycleSmartRewriteModeFromCapsule() {
+        if activeSession?.purpose == .ideaPill {
+            popup.updateModeName(SpeechInputPurpose.ideaPill.capsuleModeName)
+            return
+        }
         let next = controller.cycleSmartRewritePreference()
         popup.updateModeName(next.displayName)
     }
@@ -812,7 +830,8 @@ final class SpeechInputCoordinator {
     private func startRecording(
         instructions: String,
         activation: RecordingActivation,
-        channel: SpeechInputChannel? = nil
+        channel: SpeechInputChannel? = nil,
+        purpose: SpeechInputPurpose = .dictation
     ) {
         guard !recorder.isRecording else { return }
         switch PermissionDiagnosticsProvider.microphoneAccessState() {
@@ -826,7 +845,7 @@ final class SpeechInputCoordinator {
                 self.refreshPermissions(checkMicrophone: true)
                 LaunchDiagnostics.mark("permission_result service=microphone granted=\(granted)")
                 if granted {
-                    self.startRecording(instructions: instructions, activation: activation, channel: channel)
+                    self.startRecording(instructions: instructions, activation: activation, channel: channel, purpose: purpose)
                 } else {
                     self.controller.setPrimaryStatus("麦克风未授权", detail: "请在系统设置中开启 \(AppBrand.displayName) 麦克风权限", tone: .error)
                 }
@@ -856,6 +875,7 @@ final class SpeechInputCoordinator {
             targetApp: initialTargetApp,
             configuration: ASRConfiguration(languageMode: .chinese, backend: selectedBackend),
             activation: activation,
+            purpose: purpose,
             realtimeEnabled: realtimeEnabled,
             latestPreviewText: ""
         )
@@ -868,13 +888,14 @@ final class SpeechInputCoordinator {
             ? "正在等待第一段实时文本…"
             : (resolvedBackend == .qwen3ASR ? "Qwen3-ASR 模式下实时预览暂不启用" : "胶囊实时预览已关闭"))
         controller.setPrimaryStatus("录音中", detail: instructions, tone: .listening)
-        applyPreviewTheme(controller.previewTheme)
+        applyPreviewTheme(purpose == .ideaPill ? .classic : controller.previewTheme)
+        popup.updateAccent(purpose == .ideaPill ? .ideaPill : .normal)
         popup.show(state: "录音中", draft: "")
         let displayedTargetApp = initialTargetApp ?? frontmostApp
         popup.setContext(
             appIcon: displayedTargetApp?.icon,
             appName: displayNameForSelectedTarget(displayedTargetApp),
-            modeName: controller.smartRewritePreference.displayName,
+            modeName: purpose == .ideaPill ? purpose.capsuleModeName : controller.smartRewritePreference.displayName,
             autoTranslateEnabled: controller.autoTranslateEnabled
         )
         refreshOllamaHealthForCapsuleIfNeeded(force: true)
@@ -955,6 +976,7 @@ final class SpeechInputCoordinator {
         guard let session = activeSession else { return }
         let taskID = session.id
         let configuration = session.configuration
+        let purpose = session.purpose
         let realtimePreviewTextAtFinish = session.committedPreviewText + session.latestPreviewText
         let realtimeVoiceDetectedAtFinish = voiceEverDetected
         let targetApp = currentTargetApp(taskID: taskID, fallback: session.targetApp)
@@ -990,6 +1012,7 @@ final class SpeechInputCoordinator {
             audioURL: url,
             targetApp: targetApp,
             configuration: configuration,
+            purpose: purpose,
             duration: duration,
             finishRequestedAt: Date()
         )
@@ -1331,7 +1354,7 @@ final class SpeechInputCoordinator {
                     )
                 }
             }
-            if controller.autoTranslateEnabled {
+            if controller.autoTranslateEnabled && task.purpose == .dictation {
                 rewriteTranslateAndSubmit(result.text, elapsed: result.recognitionSeconds, task: task)
             } else {
                 rewriteAndSubmit(result.text, elapsed: result.recognitionSeconds, task: task)
@@ -1552,10 +1575,53 @@ final class SpeechInputCoordinator {
             return
         }
         addRecentTranscription(for: result, completedAt: Date())
+        if result.task.purpose == .ideaPill {
+            saveIdeaPill(result)
+            SmartUsageLedgerStore.record(result.usage)
+            finishFinalTask(result.task)
+            return
+        }
         saveBacklogIfRequested(result)
         SmartUsageLedgerStore.record(result.usage)
         pendingPasteResults.append(result)
         drainPendingPasteResultsIfPossible()
+    }
+
+    private func saveIdeaPill(_ result: PendingPasteResult) {
+        do {
+            let content = result.sourceText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                ? result.sourceText ?? result.text
+                : result.text
+            let url = try BacklogWriter.saveIdeaPill(BacklogSaveContext(
+                rawText: result.rawText,
+                finalText: content,
+                modeName: controller.smartRewritePreference.displayName,
+                targetAppName: currentTargetApp(for: result.task)?.localizedName,
+                recordingSessionID: result.task.id
+            ))
+            LaunchDiagnostics.mark("idea_pill_saved task_id=\(result.task.id.uuidString) path=\(url.path)")
+            if shouldUpdateInterface(for: result.task.id) {
+                controller.setPrimaryStatus(
+                    "闪念已保存",
+                    detail: "已保存到闪念胶囊：\(url.lastPathComponent)",
+                    tone: .success,
+                    resetWaveform: true
+                )
+                hidePopup(after: 0, task: result.task)
+            }
+        } catch {
+            LaunchDiagnostics.mark("idea_pill_save_failed task_id=\(result.task.id.uuidString) error=\(error.localizedDescription)")
+            if shouldUpdateInterface(for: result.task.id) {
+                controller.setPrimaryStatus(
+                    "闪念保存失败",
+                    detail: "已保留到最近转录：\(error.localizedDescription)",
+                    tone: .warning,
+                    resetWaveform: true
+                )
+                ToastPresenter.shared.show("闪念保存失败，已存历史", style: .warning)
+                hidePopup(after: 0, task: result.task)
+            }
+        }
     }
 
     private func saveBacklogIfRequested(_ result: PendingPasteResult) {

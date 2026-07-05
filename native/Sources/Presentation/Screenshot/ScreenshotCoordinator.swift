@@ -86,7 +86,9 @@ final class ScreenshotCoordinator {
                 },
                 onCopy: { [weak self] image in self?.copy(image) },
                 onOCR: { [weak self] image in self?.recognizeText(in: image) },
-                onTranslate: { [weak self] image, completion in self?.translateText(in: image, completion: completion) },
+                onTranslate: { [weak self] image, onProgress, completion in
+                    self?.translateText(in: image, onProgress: onProgress, completion: completion)
+                },
                 onSaved: { [weak self] url in self?.saved(url) },
                 onCancel: { [weak self] in self?.cancel() },
                 onStatus: { [weak self] status in self?.emit(status) }
@@ -199,10 +201,11 @@ final class ScreenshotCoordinator {
 
     private func translateText(
         in image: NSImage,
+        onProgress: @escaping (ScreenshotStatus) -> Void,
         completion: @escaping (Result<ScreenshotTranslationResult, Error>) -> Void
     ) {
         let token = operationTokens.start(.translation)
-        emit(.init("截图翻译中", "正在识别选区英文内容", .processing))
+        publish(.init("截图翻译中", "正在识别选区英文内容", .processing), onProgress: onProgress)
         Task { [weak self] in
             guard let self else { return }
             do {
@@ -214,23 +217,48 @@ final class ScreenshotCoordinator {
                     return
                 }
 
-                emit(.init("截图翻译中", "正在翻译为中文", .processing))
-                let source = Self.numberedScreenshotSource(from: ocrResult.lines)
-                let output = try await translationEngine.translateScreenshotOCR(
-                    rawText: source,
-                    context: SmartInputContext(
-                        targetAppName: "截图翻译",
-                        targetBundleIdentifier: "TypeWhale.ScreenshotTranslation"
+                publish(.init("截图翻译中", "正在翻译为中文", .processing), onProgress: onProgress)
+                let sourcePlan = ScreenshotTranslationSourcePlanner.plan(for: Self.screenshotSourceLines(from: ocrResult.lines))
+                if sourcePlan.didCompress {
+                    LaunchDiagnostics.mark(
+                        "screenshot_translation_source_compressed original_lines=\(sourcePlan.originalLineCount) translated_lines=\(sourcePlan.translatedLineCount)"
                     )
-                )
+                }
+                let chunks = sourcePlan.chunks(maxLinesPerChunk: 12, chunkingThreshold: 25)
+                if chunks.count > 1 {
+                    LaunchDiagnostics.mark(
+                        "screenshot_translation_source_chunked chunks=\(chunks.count) max_lines_per_chunk=12 translated_lines=\(sourcePlan.translatedLineCount)"
+                    )
+                }
+                var translatedTexts: [String] = []
+                var usages: [SmartUsage?] = []
+                for chunk in chunks {
+                    guard operationTokens.isCurrent(token) else { return }
+                    if chunks.count > 1 {
+                        publish(
+                            .init("截图翻译中", "正在翻译第 \(chunk.index)/\(chunk.total) 组", .processing),
+                            onProgress: onProgress
+                        )
+                    }
+                    let output = try await translationEngine.translateScreenshotOCR(
+                        rawText: chunk.source,
+                        context: SmartInputContext(
+                            targetAppName: "截图翻译",
+                            targetBundleIdentifier: "TypeWhale.ScreenshotTranslation"
+                        )
+                    )
+                    translatedTexts.append(output.translatedText)
+                    usages.append(output.usage)
+                }
                 guard operationTokens.isCurrent(token) else { return }
-                SmartUsageLedgerStore.record(output.usage)
+                SmartUsageLedgerStore.record(SmartUsage.combined(usages))
+                let expandedTranslatedText = sourcePlan.expandedTranslatedText(translatedTexts.joined(separator: "\n"))
                 let translatedLines = Self.parseScreenshotLineTranslations(
-                    output.translatedText,
+                    expandedTranslatedText,
                     lines: ocrResult.lines
                 )
                 completion(.success(ScreenshotTranslationResult(
-                    translatedText: output.translatedText.trimmingCharacters(in: .whitespacesAndNewlines),
+                    translatedText: expandedTranslatedText.trimmingCharacters(in: .whitespacesAndNewlines),
                     translatedLines: translatedLines
                 )))
             } catch {
@@ -240,10 +268,14 @@ final class ScreenshotCoordinator {
         }
     }
 
-    private static func numberedScreenshotSource(from lines: [ScreenshotOCRLine]) -> String {
+    private func publish(_ status: ScreenshotStatus, onProgress: (ScreenshotStatus) -> Void) {
+        emit(status)
+        onProgress(status)
+    }
+
+    private static func screenshotSourceLines(from lines: [ScreenshotOCRLine]) -> [ScreenshotTranslationSourceLine] {
         lines.enumerated()
-            .map { index, line in "[[TW_LINE_\(index + 1)]] \(line.text)" }
-            .joined(separator: "\n")
+            .map { index, line in ScreenshotTranslationSourceLine(id: index + 1, text: line.text) }
     }
 
     private static func parseScreenshotLineTranslations(
@@ -471,7 +503,11 @@ private final class ScreenshotOverlayWindow: NSPanel {
         onSelectWindow: @escaping (ScreenshotWindowCandidate) -> Void,
         onCopy: @escaping (NSImage) -> Void,
         onOCR: @escaping (NSImage) -> Void,
-        onTranslate: @escaping (NSImage, @escaping (Result<ScreenshotTranslationResult, Error>) -> Void) -> Void,
+        onTranslate: @escaping (
+            NSImage,
+            @escaping (ScreenshotStatus) -> Void,
+            @escaping (Result<ScreenshotTranslationResult, Error>) -> Void
+        ) -> Void,
         onSaved: @escaping (URL) -> Void,
         onCancel: @escaping () -> Void,
         onStatus: @escaping (ScreenshotStatus) -> Void
@@ -631,7 +667,11 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     private let onSelectWindow: (ScreenshotWindowCandidate) -> Void
     private let onCopy: (NSImage) -> Void
     private let onOCR: (NSImage) -> Void
-    private let onTranslate: (NSImage, @escaping (Result<ScreenshotTranslationResult, Error>) -> Void) -> Void
+    private let onTranslate: (
+        NSImage,
+        @escaping (ScreenshotStatus) -> Void,
+        @escaping (Result<ScreenshotTranslationResult, Error>) -> Void
+    ) -> Void
     private let onSaved: (URL) -> Void
     private let onCancel: () -> Void
     private let statusSink: (ScreenshotStatus) -> Void
@@ -659,6 +699,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     private var isSelectionLocked = false
     private var translationLoadingTimer: Timer?
     private var translationLoadingStep = 0
+    private var translationLoadingDetail: String?
     private let clickDragThreshold: CGFloat = 4
 
     init(
@@ -671,7 +712,11 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         onSelectWindow: @escaping (ScreenshotWindowCandidate) -> Void,
         onCopy: @escaping (NSImage) -> Void,
         onOCR: @escaping (NSImage) -> Void,
-        onTranslate: @escaping (NSImage, @escaping (Result<ScreenshotTranslationResult, Error>) -> Void) -> Void,
+        onTranslate: @escaping (
+            NSImage,
+            @escaping (ScreenshotStatus) -> Void,
+            @escaping (Result<ScreenshotTranslationResult, Error>) -> Void
+        ) -> Void,
         onSaved: @escaping (URL) -> Void,
         onCancel: @escaping () -> Void,
         onStatus: @escaping (ScreenshotStatus) -> Void
@@ -1097,7 +1142,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     private func drawTranslationLoadingHintIfNeeded() {
         guard isTranslating, selection.width >= 72, selection.height >= 42 else { return }
         let compact = selection.width < 180 || selection.height < 72
-        let text = compact ? "翻译中" : "正在翻译..."
+        let text = ScreenshotTranslationLoadingDisplay.text(detail: translationLoadingDetail, compact: compact)
         let fontSize: CGFloat = compact ? 12 : 14
         let textAttributes: [NSAttributedString.Key: Any] = [
             .font: fittedSystemFont(for: text, baseSize: fontSize, weight: .semibold, maxWidth: max(44, selection.width - 76)),
@@ -1177,6 +1222,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         translationLoadingTimer?.invalidate()
         translationLoadingTimer = nil
         translationLoadingStep = 0
+        translationLoadingDetail = nil
     }
 
     private func drawSizeLabel() {
@@ -1406,10 +1452,17 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         }
         let token = operationTokens.start(.translation)
         setSessionPhase(.translating)
+        translationLoadingDetail = "正在识别选区英文内容"
         hoveredAction = nil
         onStatus("截图翻译中", "正在识别选区英文内容", .processing)
         needsDisplay = true
-        onTranslate(image) { [weak self] result in
+        onTranslate(image, { [weak self] status in
+            guard let self else { return }
+            guard self.operationTokens.isCurrent(token) else { return }
+            guard status.tone == .processing else { return }
+            self.translationLoadingDetail = status.detail.isEmpty ? status.title : status.detail
+            self.needsDisplay = true
+        }) { [weak self] result in
             guard let self else { return }
             guard self.operationTokens.isCurrent(token) else { return }
             switch result {

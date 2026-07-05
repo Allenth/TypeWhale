@@ -28,14 +28,12 @@ struct SelectedScreenshotTranslationEngineCheck {
     static func main() async throws {
         let deepSeek = ProbeScreenshotTranslationEngine(displayName: "DeepSeek Screenshot Probe")
         let ollama35B = ProbeScreenshotTranslationEngine(displayName: "Ollama Screenshot 35B Probe")
-        let ollama8B = ProbeScreenshotTranslationEngine(displayName: "Ollama Screenshot 8B Probe")
 
         let remoteEngine = SelectedScreenshotTranslationEngine(
             deepSeek: deepSeek,
             ollama: { model in
                 switch model {
                 case .ollamaQwen35B: return ollama35B
-                case .ollamaQwen8B: return ollama8B
                 case .deepSeekV4Flash: return deepSeek
                 }
             },
@@ -56,19 +54,36 @@ struct SelectedScreenshotTranslationEngineCheck {
             ollama: { model in
                 switch model {
                 case .ollamaQwen35B: return ollama35B
-                case .ollamaQwen8B: return ollama8B
                 case .deepSeekV4Flash: return deepSeek
                 }
             },
-            modelProvider: { .ollamaQwen8B }
+            modelProvider: { .ollamaQwen35B }
         )
         let localOutput = try await localEngine.translateScreenshotOCR(
             rawText: "[[TW_LINE_1]] Submit",
             context: context
         )
-        precondition(localEngine.displayName == "Ollama Screenshot 8B Probe")
-        precondition(localOutput.translatedText == "Ollama Screenshot 8B Probe:[[TW_LINE_1]] Submit")
-        precondition(ollama8B.translateCalls == 1)
+        precondition(localEngine.displayName == "Ollama Screenshot 35B Probe")
+        precondition(localOutput.translatedText == "Ollama Screenshot 35B Probe:[[TW_LINE_1]] Submit")
+        precondition(ollama35B.translateCalls == 1)
+
+        let highQualityLocalEngine = SelectedScreenshotTranslationEngine(
+            deepSeek: deepSeek,
+            ollama: { model in
+                switch model {
+                case .ollamaQwen35B: return ollama35B
+                case .deepSeekV4Flash: return deepSeek
+                }
+            },
+            modelProvider: { .ollamaQwen35B }
+        )
+        let fastLocalOutput = try await highQualityLocalEngine.translateScreenshotOCR(
+            rawText: "[[TW_LINE_1]] Continue",
+            context: context
+        )
+        precondition(highQualityLocalEngine.displayName == "Ollama Screenshot 35B Probe")
+        precondition(fastLocalOutput.translatedText == "Ollama Screenshot 35B Probe:[[TW_LINE_1]] Continue")
+        precondition(ollama35B.translateCalls == 2)
 
         print("SelectedScreenshotTranslationEngineCheck passed")
     }

@@ -11,6 +11,7 @@ struct SpeechSession {
     var targetApp: NSRunningApplication?
     let configuration: ASRConfiguration
     let activation: RecordingActivation
+    let purpose: SpeechInputPurpose
     let realtimeEnabled: Bool
     /// 已提交（冻结）的实时预览前缀：滚出当前块的文本，不再重识别、永不跳变。
     var committedPreviewText: String = ""

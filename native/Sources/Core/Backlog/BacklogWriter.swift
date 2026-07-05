@@ -9,6 +9,8 @@ struct BacklogSaveContext {
 }
 
 enum BacklogWriter {
+    private static let ideaPillDirectoryName = "闪念胶囊"
+
     static func shouldSave(rawText: String) -> Bool {
         let text = normalized(rawText)
         return saveIntentTokens.contains { text.contains($0) }
@@ -19,6 +21,21 @@ enum BacklogWriter {
         let title = titleText(from: context.finalText, fallback: context.rawText)
         let fileURL = uniqueFileURL(in: directoryURL, title: title)
         let body = markdown(context: context, title: title)
+        try body.write(to: fileURL, atomically: true, encoding: .utf8)
+        return fileURL
+    }
+
+    static func saveIdeaPill(
+        _ context: BacklogSaveContext,
+        rootDirectory: URL = BacklogDirectoryStore.directory,
+        now: Date = Date()
+    ) throws -> URL {
+        let directoryURL = BacklogDirectoryStore.ensureDirectory(
+            rootDirectory.appendingPathComponent(ideaPillDirectoryName, isDirectory: true)
+        )
+        let title = titleText(from: context.finalText, fallback: context.rawText)
+        let fileURL = uniqueIdeaPillFileURL(in: directoryURL, title: title, now: now)
+        let body = ideaPillMarkdown(context: context, title: title, now: now)
         try body.write(to: fileURL, atomically: true, encoding: .utf8)
         return fileURL
     }
@@ -55,6 +72,32 @@ enum BacklogWriter {
         """
     }
 
+    private static func ideaPillMarkdown(context: BacklogSaveContext, title: String, now: Date) -> String {
+        let createdAt = isoFormatter.string(from: now)
+        let cleanFinal = cleanedContent(context.finalText)
+        let cleanRaw = cleanedContent(context.rawText)
+        let target = context.targetAppName ?? "未知"
+        return """
+        ---
+        type: idea_pill
+        created_at: \(createdAt)
+        source: TypeWhale
+        recording_session_id: \(context.recordingSessionID.uuidString)
+        mode: \(escapeYAML(context.modeName))
+        target_app: \(escapeYAML(target))
+        ---
+
+        # \(title)
+
+        \(cleanFinal.isEmpty ? cleanRaw : cleanFinal)
+
+        ## 原始语音
+
+        \(cleanRaw)
+
+        """
+    }
+
     private static func titleText(from finalText: String, fallback rawText: String) -> String {
         let source = cleanedContent(finalText).isEmpty ? cleanedContent(rawText) : cleanedContent(finalText)
         let firstLine = source
@@ -80,6 +123,20 @@ enum BacklogWriter {
         let timestamp = fileFormatter.string(from: Date())
         let slug = sanitizedFileName(title)
         let baseName = "\(timestamp)-\(slug.isEmpty ? "backlog" : slug)"
+        var candidate = directory.appendingPathComponent("\(baseName).md")
+        var index = 2
+        while FileManager.default.fileExists(atPath: candidate.path) {
+            candidate = directory.appendingPathComponent("\(baseName)-\(index).md")
+            index += 1
+        }
+        return candidate
+    }
+
+    private static func uniqueIdeaPillFileURL(in directory: URL, title: String, now: Date) -> URL {
+        let timestamp = ideaPillFileFormatter.string(from: now)
+        let slug = sanitizedFileName(title)
+        let titlePart = slug.isEmpty ? ideaPillDirectoryName : slug
+        let baseName = "\(timestamp)-\(titlePart)-idea-pill"
         var candidate = directory.appendingPathComponent("\(baseName).md")
         var index = 2
         while FileManager.default.fileExists(atPath: candidate.path) {
@@ -151,6 +208,12 @@ enum BacklogWriter {
     private static let fileFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd-HHmmss"
+        return formatter
+    }()
+
+    private static let ideaPillFileFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyMMdd-HHmm"
         return formatter
     }()
 }

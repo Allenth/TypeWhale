@@ -147,7 +147,6 @@ enum DeveloperLexiconStore {
         DeveloperTerm(canonical: "Qwen", aliases: ["qwen", "千问", "通义千问"], category: .model),
         DeveloperTerm(canonical: "Qwen3-ASR", aliases: ["qwen3 asr", "qwen asr", "q wen asr", "千问 asr", "Qwen ASR", "Qwen3 ASR"], category: .model),
         DeveloperTerm(canonical: "Qwen3.6", aliases: ["qwen3.6", "qwen 3.6", "q wen 3.6", "qwen 三点六", "q wen 三点六", "千问 3.6", "千问三点六"], category: .model),
-        DeveloperTerm(canonical: "Qwen3.6 8B", aliases: ["qwen3.6 8b", "qwen 3.6 8b", "q wen 3.6 8b", "qwen 三点六 8b", "q wen 三点六 八 b", "千问三点六 8b"], category: .model),
         DeveloperTerm(canonical: "Qwen3.6 35B", aliases: ["qwen3.6 35b", "qwen 3.6 35b", "q wen 3.6 35b", "qwen 3.635b", "q wen 3.635b", "qwen 三点六 35b", "q wen 三点六 三十五 b", "千问三点六 35b", "纤问 3.635b", "纤温 3.635b", "千问 3.635b"], category: .model),
         DeveloperTerm(canonical: "SenseVoice", aliases: ["sense voice", "sensevoice", "森斯 voice"], category: .model),
         DeveloperTerm(canonical: "Whisper", aliases: ["whisper", "openai whisper"], category: .model),

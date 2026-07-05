@@ -23,6 +23,7 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
     private var visibilityGeneration = 0
     private var currentStatusBorderColor: NSColor?
     private var ollamaHealthy = false
+    private var accent: PreviewAccent = .normal
 
     /// 点击胶囊上的模式标签时回调，用于手动切换整理模式。
     var onCycleMode: (() -> Void)?
@@ -221,13 +222,25 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
         applyBorderState()
     }
 
+    func updateAccent(_ accent: PreviewAccent) {
+        self.accent = accent
+        applyBorderState()
+    }
+
     private func applyBorderState() {
-        capsule.statusBorderColor = currentStatusBorderColor
+        let accentBorderColor: NSColor?
+        switch accent {
+        case .normal:
+            accentBorderColor = nil
+        case .ideaPill:
+            accentBorderColor = NSColor(calibratedRed: 0.48, green: 0.38, blue: 1.0, alpha: 0.98)
+        }
+        capsule.statusBorderColor = currentStatusBorderColor ?? accentBorderColor
         // 紧急状态边框（倒计时/内存）由胶囊绘制并优先；否则由置顶绿环显示健康呼吸。
-        let healthActive = ollamaHealthy && currentStatusBorderColor == nil
+        let healthActive = ollamaHealthy && currentStatusBorderColor == nil && accent == .normal
         healthBorderOverlay.isActive = healthActive
         // 绿环激活时隐藏胶囊默认白边，避免白边+绿环的双层边框。
-        capsule.defaultBorderHidden = healthActive
+        capsule.defaultBorderHidden = healthActive || accentBorderColor != nil
     }
 
     private func updateTargetApp(appIcon: NSImage?, appName: String?, shouldResize: Bool) {
@@ -274,6 +287,7 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
     func hideAnimated() {
         guard isVisible else { return }
         visibilityGeneration += 1
+        updateAccent(.normal)
         updateOllamaHealth(isHealthy: false)
         let generation = visibilityGeneration
         NSAnimationContext.runAnimationGroup { context in

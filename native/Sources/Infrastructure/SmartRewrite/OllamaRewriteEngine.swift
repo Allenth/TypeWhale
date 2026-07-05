@@ -5,6 +5,7 @@ final class OllamaRewriteEngine: SmartAITextEngine, ScreenshotTranslationEngine 
     private let model: SmartAIModel
     private let session: URLSession
     private let serverRecovery: OllamaServerRecovery
+    private let requestProfile: OllamaRequestProfile
     let displayName: String
     let logName = "ollama"
     let usesLocalCostGuard = false
@@ -13,12 +14,14 @@ final class OllamaRewriteEngine: SmartAITextEngine, ScreenshotTranslationEngine 
         model: SmartAIModel = .ollamaQwen35B,
         endpoint: URL = URL(string: "http://127.0.0.1:11434/api/chat")!,
         session: URLSession = .shared,
-        serverRecovery: OllamaServerRecovery = DefaultOllamaServerRecovery()
+        serverRecovery: OllamaServerRecovery = DefaultOllamaServerRecovery(),
+        requestProfile: OllamaRequestProfile = .standard
     ) {
         self.model = model
         self.endpoint = endpoint
         self.session = session
         self.serverRecovery = serverRecovery
+        self.requestProfile = requestProfile
         self.displayName = model.displayName
     }
 
@@ -207,7 +210,9 @@ final class OllamaRewriteEngine: SmartAITextEngine, ScreenshotTranslationEngine 
             OllamaMessage(role: "system", content: systemPrompt),
             OllamaMessage(role: "user", content: prompt)
         ]
-        var request = URLRequest(url: endpoint, timeoutInterval: 12)
+        let promptLength = systemPrompt.count + prompt.count
+        let timeoutInterval = requestProfile.timeoutInterval(rawTextLength: rawTextLength, promptLength: promptLength)
+        var request = URLRequest(url: endpoint, timeoutInterval: timeoutInterval)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(OllamaChatRequest(
@@ -219,11 +224,11 @@ final class OllamaRewriteEngine: SmartAITextEngine, ScreenshotTranslationEngine 
             options: OllamaChatOptions(
                 temperature: 0.1,
                 topP: 0.9,
-                numPredict: SmartRewriteCostGuard.maxOutputTokens
+                numPredict: requestProfile.maxOutputTokens
             )
         ))
         LaunchDiagnostics.mark(
-            "ollama request_start recording_session_id=\(context.recordingSessionId ?? "--") request_id=\(requestID) triggered_by=\(triggeredBy) model=\(model.engineModelName) mode=\(mode) rawText_length=\(rawTextLength) prompt_length=\(systemPrompt.count + prompt.count)"
+            "ollama request_start recording_session_id=\(context.recordingSessionId ?? "--") request_id=\(requestID) triggered_by=\(triggeredBy) model=\(model.engineModelName) mode=\(mode) rawText_length=\(rawTextLength) prompt_length=\(promptLength) timeout_seconds=\(Int(timeoutInterval))"
         )
 
         let data: Data
@@ -335,6 +340,35 @@ enum OllamaRewriteError: Error {
     case emptyContent
 }
 
+enum OllamaRequestProfile {
+    case standard
+    case screenshotTranslation
+
+    var maxOutputTokens: Int {
+        switch self {
+        case .standard:
+            return SmartRewriteCostGuard.maxOutputTokens
+        case .screenshotTranslation:
+            return ScreenshotTranslationPromptBuilder.localMaxOutputTokens
+        }
+    }
+
+    func timeoutInterval(rawTextLength: Int, promptLength: Int) -> TimeInterval {
+        switch self {
+        case .standard:
+            return 12
+        case .screenshotTranslation:
+            if promptLength >= 2_200 || rawTextLength >= 1_300 {
+                return 30
+            }
+            if promptLength >= 1_600 || rawTextLength >= 800 {
+                return 24
+            }
+            return 12
+        }
+    }
+}
+
 protocol OllamaServerRecovery {
     func prepareForRequest(endpoint: URL, model: SmartAIModel, reason: String) async
     func recoverAfterConnectionFailure(
@@ -346,6 +380,35 @@ protocol OllamaServerRecovery {
         recordingSessionID: String?,
         error: Error
     ) async -> Bool
+}
+
+struct PassiveOllamaServerRecovery: OllamaServerRecovery {
+    func prepareForRequest(endpoint: URL, model: SmartAIModel, reason: String) async {
+        LaunchDiagnostics.mark("ollama passive_prepare reason=\(reason) model=\(model.engineModelName) action=no_launch")
+    }
+
+    func recoverAfterConnectionFailure(
+        endpoint: URL,
+        model: SmartAIModel,
+        requestID: String,
+        triggeredBy: String,
+        mode: String,
+        recordingSessionID: String?,
+        error: Error
+    ) async -> Bool {
+        LaunchDiagnostics.mark(
+            "ollama passive_connection_failed recording_session_id=\(recordingSessionID ?? "--") request_id=\(requestID) triggered_by=\(triggeredBy) model=\(model.engineModelName) mode=\(mode) error=\"\(logSnippet(error.localizedDescription))\" action=no_launch"
+        )
+        return false
+    }
+
+    private func logSnippet(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\n", with: "\\n")
+            .replacingOccurrences(of: "\r", with: "\\r")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+    }
 }
 
 struct OllamaServerHealthProbe {

@@ -7,7 +7,13 @@ final class SelectedScreenshotTranslationEngine: ScreenshotTranslationEngine {
 
     init(
         deepSeek: ScreenshotTranslationEngine = DeepSeekRewriteEngine(),
-        ollama: @escaping (SmartAIModel) -> ScreenshotTranslationEngine = { OllamaRewriteEngine(model: $0) },
+        ollama: @escaping (SmartAIModel) -> ScreenshotTranslationEngine = {
+            OllamaRewriteEngine(
+                model: $0,
+                serverRecovery: PassiveOllamaServerRecovery(),
+                requestProfile: .screenshotTranslation
+            )
+        },
         modelProvider: @escaping () -> SmartAIModel = { SmartAIModelStore.load() }
     ) {
         self.deepSeek = deepSeek
@@ -33,7 +39,7 @@ final class SelectedScreenshotTranslationEngine: ScreenshotTranslationEngine {
 
     private func engine(for model: SmartAIModel) -> ScreenshotTranslationEngine {
         switch model {
-        case .ollamaQwen35B, .ollamaQwen8B:
+        case .ollamaQwen35B:
             return ollama(model)
         case .deepSeekV4Flash:
             return deepSeek

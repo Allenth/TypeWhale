@@ -108,6 +108,7 @@ struct HotkeyBinding: Codable, Equatable {
     static let screenshotTranslationStorageKey = "screenshotTranslationHotkeyBinding"
     static let autoTranslateStorageKey = "autoTranslateHotkeyBinding"
     static let mainWindowStorageKey = "mainWindowHotkeyBinding"
+    static let ideaPillStorageKey = "ideaPillHotkeyBinding"
     static let fnDefaultMigrationKey = "hotkeyDefaultMigration.fnDefault.v1"
     let kind: Kind
     let keyCode: Int?

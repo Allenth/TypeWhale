@@ -61,6 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             LaunchDiagnostics.mark("AppPaths.prepare begin")
             try AppPaths.prepare()
             LaunchDiagnostics.mark("AppPaths.prepare done")
+            _ = controller.managedASRModelDownloader
         } catch {
             LaunchDiagnostics.mark("AppPaths.prepare failed: \(error.localizedDescription)")
             controller.status.stringValue = "无法准备应用目录"

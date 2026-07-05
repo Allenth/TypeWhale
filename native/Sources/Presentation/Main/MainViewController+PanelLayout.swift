@@ -156,10 +156,15 @@ extension MainViewController {
         [
             panel("预览主题", width: 200, buildPreviewThemeContent()),
             panel("整理设置", width: 250, buildComboQuickSmartContent()),
+            panel("模型", width: 390, buildManagedModelContent()),
             panel("快捷键", width: 300, buildHotkeysPanelContent()),
             panel("更多设置", width: 276, buildMiscSettingsContent()),
             panel("状态", width: 204, buildStatusPanelContent()),
         ]
+    }
+
+    private func buildManagedModelContent() -> NSView {
+        managedASRModelListView
     }
 
     // 第二列：预览主题。两张程序绘制的迷你预览，点击切换主题。
@@ -366,6 +371,7 @@ extension MainViewController {
             shortcutRow(title: "翻译截图", captureButton: screenshotTranslationHotkeyCaptureButton, fallbackButton: screenshotTranslationHotkeyResetButton),
             shortcutRow(title: "自动翻译", captureButton: autoTranslateHotkeyCaptureButton, fallbackButton: autoTranslateHotkeyClearButton),
             shortcutRow(title: "唤起主页", captureButton: mainWindowHotkeyCaptureButton, fallbackButton: mainWindowHotkeyResetButton),
+            shortcutRow(title: "闪念胶囊", captureButton: ideaPillHotkeyCaptureButton, fallbackButton: ideaPillHotkeyClearButton),
         ])
     }
 
@@ -381,7 +387,7 @@ extension MainViewController {
     // 快捷键录入按钮的接线与样式（原在偏好弹窗里，现由「快捷键」面板复用）
     func wireHotkeyButtons() {
         [hotkeyValue, secondaryHotkeyValue, screenshotHotkeyValue, secondaryScreenshotHotkeyValue,
-         screenshotTranslationHotkeyValue, autoTranslateHotkeyValue, mainWindowHotkeyValue].forEach {
+         screenshotTranslationHotkeyValue, autoTranslateHotkeyValue, mainWindowHotkeyValue, ideaPillHotkeyValue].forEach {
             $0.lineBreakMode = .byTruncatingMiddle
         }
         hotkeyCaptureButton.target = self; hotkeyCaptureButton.action = #selector(beginHotkeyCapture)
@@ -398,12 +404,14 @@ extension MainViewController {
         autoTranslateHotkeyClearButton.target = self; autoTranslateHotkeyClearButton.action = #selector(clearAutoTranslateHotkey)
         mainWindowHotkeyCaptureButton.target = self; mainWindowHotkeyCaptureButton.action = #selector(beginMainWindowHotkeyCapture)
         mainWindowHotkeyResetButton.target = self; mainWindowHotkeyResetButton.action = #selector(clearMainWindowHotkey)
+        ideaPillHotkeyCaptureButton.target = self; ideaPillHotkeyCaptureButton.action = #selector(beginIdeaPillHotkeyCapture)
+        ideaPillHotkeyClearButton.target = self; ideaPillHotkeyClearButton.action = #selector(clearIdeaPillHotkey)
         let captureButtons = [hotkeyCaptureButton, secondaryHotkeyCaptureButton, screenshotHotkeyCaptureButton,
                               secondaryScreenshotHotkeyCaptureButton, screenshotTranslationHotkeyCaptureButton,
-                              autoTranslateHotkeyCaptureButton, mainWindowHotkeyCaptureButton]
+                              autoTranslateHotkeyCaptureButton, mainWindowHotkeyCaptureButton, ideaPillHotkeyCaptureButton]
         let trailingButtons = [hotkeyResetButton, secondaryHotkeyClearButton, screenshotHotkeyResetButton,
                                secondaryScreenshotHotkeyClearButton, screenshotTranslationHotkeyResetButton,
-                               autoTranslateHotkeyClearButton, mainWindowHotkeyResetButton]
+                               autoTranslateHotkeyClearButton, mainWindowHotkeyResetButton, ideaPillHotkeyClearButton]
         (captureButtons + trailingButtons).forEach {
             $0.bezelStyle = .rounded
             $0.controlSize = .small

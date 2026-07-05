@@ -12,6 +12,7 @@ extension MainViewController {
         developerTermsButton.setAccessibilityLabel("开发术语词库")
         autoTranslate.setAccessibilityLabel("自动翻译")
         autoTranslate.toolTip = "可在快捷键设置中配置快速打开或关闭"
+        ideaPillHotkeyCaptureButton.setAccessibilityLabel("闪念胶囊快捷键")
         translationDirectionMode.setAccessibilityLabel("翻译方向")
         translationPromptButton.setAccessibilityLabel("翻译提示词")
         socialScopeButton.setAccessibilityLabel("社交应用清单")

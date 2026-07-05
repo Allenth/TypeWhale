@@ -1,5 +1,13 @@
 import AppKit
 
+enum ScreenshotTranslationLoadingDisplay {
+    static func text(detail: String?, compact: Bool) -> String {
+        guard !compact else { return "翻译中" }
+        let trimmed = detail?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? "正在翻译..." : trimmed
+    }
+}
+
 enum ScreenshotTranslationLayout {
     static func blockRect(alignedWith lineRect: NSRect, text: String, selectionSize: NSSize) -> NSRect {
         let selectionBounds = NSRect(origin: .zero, size: selectionSize)

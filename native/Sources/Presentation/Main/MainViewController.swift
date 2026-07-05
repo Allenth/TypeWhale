@@ -68,6 +68,11 @@ final class MainViewController: NSViewController {
         size: 13,
         weight: .medium
     )
+    let ideaPillHotkeyValue = label(
+        HotkeyBinding.loadOptional(storageKey: HotkeyBinding.ideaPillStorageKey)?.actionDisplayName ?? "未设置",
+        size: 13,
+        weight: .medium
+    )
     let hotkeyCaptureButton = NSButton(title: "录入", target: nil, action: nil)
     let hotkeyResetButton = NSButton(title: "恢复 Fn", target: nil, action: nil)
     let secondaryHotkeyCaptureButton = NSButton(title: "录入", target: nil, action: nil)
@@ -82,6 +87,8 @@ final class MainViewController: NSViewController {
     let autoTranslateHotkeyClearButton = NSButton(title: "清空", target: nil, action: nil)
     let mainWindowHotkeyCaptureButton = NSButton(title: "未设置", target: nil, action: nil)
     let mainWindowHotkeyResetButton = NSButton(title: "清空", target: nil, action: nil)
+    let ideaPillHotkeyCaptureButton = NSButton(title: "未设置", target: nil, action: nil)
+    let ideaPillHotkeyClearButton = NSButton(title: "清空", target: nil, action: nil)
     let modelValue = label("正在检查模型", size: 12, weight: .medium)
     let modelProgress = NSProgressIndicator()
     let modelInstallButton = NSButton(title: "安装模型", target: nil, action: nil)
@@ -115,7 +122,14 @@ final class MainViewController: NSViewController {
     let memoryLabel = label("内存 -- MB", size: 11, weight: .medium)
     var lastMemoryLevel: MemoryMonitor.Level = .normal
     var onInstallModel: (() -> Void)?
-    var onHotkeysChange: ((HotkeyBinding, HotkeyBinding?, HotkeyBinding, HotkeyBinding?, HotkeyBinding, HotkeyBinding?, HotkeyBinding?) -> Void)?
+    var onHotkeysChange: ((HotkeyBinding, HotkeyBinding?, HotkeyBinding, HotkeyBinding?, HotkeyBinding, HotkeyBinding?, HotkeyBinding?, HotkeyBinding?) -> Void)?
+    lazy var managedASRModelDownloader = ManagedASRModelDownloader()
+    lazy var managedASRModelListView = ManagedASRModelListView(
+        downloader: managedASRModelDownloader,
+        onMessage: { [weak self] message in
+            self?.detail.stringValue = message
+        }
+    )
 
     let modelEntryName = label("SenseVoice int8", size: 13, weight: .semibold)
     let modelEntryStatus = label("检查中", size: 11, weight: .medium)
@@ -157,6 +171,7 @@ final class MainViewController: NSViewController {
         case screenshotTranslation
         case autoTranslate
         case mainWindow
+        case ideaPill
     }
 
     enum MediaKeyCapture {
@@ -243,7 +258,8 @@ final class MainViewController: NSViewController {
                 fallback: .screenshotTranslationDefaultBinding
             ),
             autoTranslate: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.autoTranslateStorageKey),
-            mainWindow: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey)
+            mainWindow: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey),
+            ideaPill: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.ideaPillStorageKey)
         )
         DispatchQueue.main.async { [weak self] in
             _ = self?.versionHistoryViewController.view

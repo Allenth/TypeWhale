@@ -45,13 +45,11 @@ struct SelectedSmartAITextEngineCheck {
     static func main() async throws {
         let deepSeek = ProbeAITextEngine(displayName: "DeepSeek Probe", logName: "deepseek", usesLocalCostGuard: true)
         let ollamaQwen35B = ProbeAITextEngine(displayName: "Ollama 35B Probe", logName: "ollama", usesLocalCostGuard: false)
-        let ollamaQwen8B = ProbeAITextEngine(displayName: "Ollama 8B Probe", logName: "ollama", usesLocalCostGuard: false)
         let engine = SelectedSmartAITextEngine(
             deepSeek: deepSeek,
             ollama: { model in
                 switch model {
                 case .ollamaQwen35B: return ollamaQwen35B
-                case .ollamaQwen8B: return ollamaQwen8B
                 case .deepSeekV4Flash: return deepSeek
                 }
             },
@@ -84,7 +82,6 @@ struct SelectedSmartAITextEngineCheck {
             ollama: { model in
                 switch model {
                 case .ollamaQwen35B: return ollamaQwen35B
-                case .ollamaQwen8B: return ollamaQwen8B
                 case .deepSeekV4Flash: return deepSeek
                 }
             },

@@ -3,6 +3,12 @@ import ApplicationServices
 import Foundation
 
 final class HotkeyMonitor {
+    private struct SpeechBindingTarget {
+        let channel: SpeechInputChannel
+        let purpose: SpeechInputPurpose
+        let binding: HotkeyBinding
+    }
+
     private enum MediaKey {
         static let systemDefinedEventType = CGEventType(rawValue: 14)!
         static let auxControlButtonSubtype = 8
@@ -18,7 +24,11 @@ final class HotkeyMonitor {
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
     private var bindings = [
-        HotkeyBinding.load(storageKey: HotkeyBinding.chineseStorageKey, fallback: .defaultBinding),
+        SpeechBindingTarget(
+            channel: .chinese,
+            purpose: .dictation,
+            binding: HotkeyBinding.load(storageKey: HotkeyBinding.chineseStorageKey, fallback: .defaultBinding)
+        ),
     ]
     private var screenshotBinding = HotkeyBinding.load(
         storageKey: HotkeyBinding.screenshotStorageKey,
@@ -31,6 +41,7 @@ final class HotkeyMonitor {
     )
     private var autoTranslateBinding = HotkeyBinding.loadOptional(storageKey: HotkeyBinding.autoTranslateStorageKey)
     private var mainWindowBinding = HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey)
+    private var ideaPillBinding = HotkeyBinding.loadOptional(storageKey: HotkeyBinding.ideaPillStorageKey)
     private var activeModifierKeyCodes: Set<Int> = []
     private var triggerDown = false
     private var screenshotTriggerDown = false
@@ -43,9 +54,10 @@ final class HotkeyMonitor {
     private var lastScreenshotTranslationTapAt: Date?
     private var actionTapState: [String: (count: Int, lastAt: Date)] = [:]
     private var activeChannel: SpeechInputChannel?
+    private var activePurpose: SpeechInputPurpose?
     private var activeBinding: HotkeyBinding?
-    var onDown: ((SpeechInputChannel, HotkeyBinding) -> Void)?
-    var onUp: ((SpeechInputChannel, HotkeyBinding) -> Void)?
+    var onDown: ((SpeechInputChannel, SpeechInputPurpose, HotkeyBinding) -> Void)?
+    var onUp: ((SpeechInputChannel, SpeechInputPurpose, HotkeyBinding) -> Void)?
     var onAutoTranslateToggle: (() -> Void)?
     var onScreenshot: (() -> Void)?
     var onScreenshotTranslation: (() -> Void)?
@@ -120,7 +132,8 @@ final class HotkeyMonitor {
             secondaryScreenshot: secondaryScreenshotBinding,
             screenshotTranslation: screenshotTranslationBinding,
             autoTranslate: autoTranslateBinding,
-            mainWindow: mainWindowBinding
+            mainWindow: mainWindowBinding,
+            ideaPill: ideaPillBinding
         )
     }
 
@@ -131,14 +144,22 @@ final class HotkeyMonitor {
         secondaryScreenshot: HotkeyBinding? = nil,
         screenshotTranslation: HotkeyBinding,
         autoTranslate: HotkeyBinding? = nil,
-        mainWindow: HotkeyBinding? = nil
+        mainWindow: HotkeyBinding? = nil,
+        ideaPill: HotkeyBinding? = nil
     ) {
-        self.bindings = [primary] + (secondary.map { [$0] } ?? [])
+        self.bindings = [
+            SpeechBindingTarget(channel: .chinese, purpose: .dictation, binding: primary),
+        ] + (secondary.map {
+            [SpeechBindingTarget(channel: .chinese, purpose: .dictation, binding: $0)]
+        } ?? []) + (ideaPill.map {
+            [SpeechBindingTarget(channel: .chinese, purpose: .ideaPill, binding: $0)]
+        } ?? [])
         self.screenshotBinding = screenshot
         self.secondaryScreenshotBinding = secondaryScreenshot
         self.screenshotTranslationBinding = screenshotTranslation
         self.autoTranslateBinding = autoTranslate
         self.mainWindowBinding = mainWindow
+        self.ideaPillBinding = ideaPill
         activeModifierKeyCodes.removeAll()
         triggerDown = false
         screenshotTriggerDown = false
@@ -151,6 +172,7 @@ final class HotkeyMonitor {
         lastScreenshotTranslationTapAt = nil
         actionTapState.removeAll()
         activeChannel = nil
+        activePurpose = nil
         activeBinding = nil
     }
 
@@ -228,20 +250,21 @@ final class HotkeyMonitor {
         ) {
             return true
         }
-        if triggerDown, let activeChannel, let activeBinding {
+        if triggerDown, let activeChannel, let activePurpose, let activeBinding {
             if !isBindingDown(activeBinding, keyCode: keyCode, eventFlags: eventFlags) {
-                return updateTrigger(isDown: false, channel: activeChannel, binding: activeBinding)
+                return updateTrigger(isDown: false, channel: activeChannel, purpose: activePurpose, binding: activeBinding)
             }
             return true
         }
 
-        if let binding = bindings.first(where: { isBindingDown($0, keyCode: keyCode, eventFlags: eventFlags) }) {
-            return updateTrigger(isDown: true, channel: .chinese, binding: binding)
+        if let target = bindings.first(where: { isBindingDown($0.binding, keyCode: keyCode, eventFlags: eventFlags) }) {
+            return updateTrigger(isDown: true, channel: target.channel, purpose: target.purpose, binding: target.binding)
         }
 
-        if !bindings.contains(where: { requiredModifiersAreActive(for: $0, eventFlags: eventFlags) }) {
+        if !bindings.contains(where: { requiredModifiersAreActive(for: $0.binding, eventFlags: eventFlags) }) {
             triggerDown = false
             activeChannel = nil
+            activePurpose = nil
             activeBinding = nil
         }
         return false
@@ -308,20 +331,21 @@ final class HotkeyMonitor {
         if !isDown,
            triggerDown,
            let activeChannel,
+           let activePurpose,
            let activeBinding,
            activeBinding.kind == .combo,
            activeBinding.keyCode == eventKeyCode {
-            return updateTrigger(isDown: false, channel: activeChannel, binding: activeBinding)
+            return updateTrigger(isDown: false, channel: activeChannel, purpose: activePurpose, binding: activeBinding)
         }
 
-        guard let binding = bindings.first(where: { binding in
-            binding.kind == .combo &&
-            binding.keyCode == eventKeyCode &&
-            requiredModifiersAreActive(for: binding, eventFlags: event.flags)
+        guard let target = bindings.first(where: { target in
+            target.binding.kind == .combo &&
+            target.binding.keyCode == eventKeyCode &&
+            requiredModifiersAreActive(for: target.binding, eventFlags: event.flags)
         }) else {
             return false
         }
-        return updateTrigger(isDown: isDown, channel: .chinese, binding: binding)
+        return updateTrigger(isDown: isDown, channel: target.channel, purpose: target.purpose, binding: target.binding)
     }
 
     private func handleSystemDefined(event: CGEvent) -> Bool {
@@ -353,10 +377,10 @@ final class HotkeyMonitor {
         if handleScreenshotMedia(binding: screenshotTranslationBinding, isDown: isDown, triggerDown: &screenshotTranslationTriggerDown, action: { [weak self] in self?.onScreenshotTranslation?() }) {
             return true
         }
-        guard let binding = bindings.first(where: { $0.kind == .mediaPlay }) else {
+        guard let target = bindings.first(where: { $0.binding.kind == .mediaPlay }) else {
             return false
         }
-        return updateTrigger(isDown: isDown, channel: .chinese, binding: binding)
+        return updateTrigger(isDown: isDown, channel: target.channel, purpose: target.purpose, binding: target.binding)
     }
 
     private func handleScreenshotFlagsChanged(
@@ -517,7 +541,7 @@ final class HotkeyMonitor {
     }
 
     private func screenshotConflictsWithSpeechBinding(_ binding: HotkeyBinding) -> Bool {
-        bindings.contains(binding)
+        bindings.contains { $0.binding == binding }
     }
 
     private func isBindingDown(_ binding: HotkeyBinding, keyCode: Int, eventFlags: CGEventFlags) -> Bool {
@@ -545,19 +569,22 @@ final class HotkeyMonitor {
         }
     }
 
-    private func updateTrigger(isDown: Bool, channel: SpeechInputChannel, binding: HotkeyBinding) -> Bool {
+    private func updateTrigger(isDown: Bool, channel: SpeechInputChannel, purpose: SpeechInputPurpose, binding: HotkeyBinding) -> Bool {
         guard isDown != triggerDown else { return true }
         triggerDown = isDown
         if isDown {
             activeChannel = channel
+            activePurpose = purpose
             activeBinding = binding
-            onDown?(channel, binding)
+            onDown?(channel, purpose, binding)
         } else {
             let channelToEnd = activeChannel ?? channel
+            let purposeToEnd = activePurpose ?? purpose
             let bindingToEnd = activeBinding ?? binding
             activeChannel = nil
+            activePurpose = nil
             activeBinding = nil
-            onUp?(channelToEnd, bindingToEnd)
+            onUp?(channelToEnd, purposeToEnd, bindingToEnd)
         }
         return true
     }

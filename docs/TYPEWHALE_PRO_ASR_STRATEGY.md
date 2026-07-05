@@ -1,6 +1,6 @@
 # TypeWhale Pro 中英混合与热词 ASR 改造策略
 
-最后更新：2026-07-01  
+最后更新：2026-07-05
 适用分支：`codex/typewhale-pro-asr-hotwords`  
 状态：产品与技术决策记录，尚未代表已实现功能。
 
@@ -67,6 +67,62 @@ KWS 或 CTC Word Spotter 的意义是直接从音频中检测候选热词，而�
 FunASR runtime 支持 online/offline/2pass 服务模式，适合作为中文 ASR 工程对照。参考：[FunASR online runtime guide](https://github.com/alibaba-damo-academy/FunASR/blob/main/runtime/docs/SDK_advanced_guide_online.md)。
 
 但技术社区中有在线模式 hotword 是否生效的疑问，因此不能未经验证就作为 Pro 主线。参考：[FunASR issue #2713](https://github.com/modelscope/FunASR/issues/2713)。
+
+### 3.6 2026-07-05 下载前模型边界确认
+
+本轮下载前确认的原则是：只把官方路径中明确暴露 `hotwords`、`--hotword` 或 contextual hotword 能力的模型列入主测试；仅有普通中英识别能力、但没有可验证热词入口的模型，不进入热词主测试。
+
+| 模型 / 路径 | 类型 | 热词能力边界 | 中英混合边界 | 下载决策 |
+| --- | --- | --- | --- | --- |
+| Fun-ASR-Nano-2512 PyTorch / AutoModel | LLM-ASR，约 800M 参数 | 官方 AutoModel 与 vLLM 示例暴露 `hotwords=[...]`，可作为热词主候选 | 官方说明支持中文、英文、日文；中文含方言和口音，适合先测开发场景专有词 | 下载，作为 Pro 主候选 |
+| Fun-ASR-Nano-2512 GGUF / llama.cpp | CPU / edge 量化路径 | 官方示例未暴露热词参数；不能作为热词主验证 | 可作为后续 CPU 低内存路线评估 | 第一轮不下载或只作为性能备选 |
+| Paraformer contextual hotword | Contextual Paraformer / 中文 ASR 热词模型 | FunASR runtime 明确支持 `--hotword` 文件与权重，官方文档指定 contextual hotword 模型 | 中文主路强，英文专有词需实测，适合作为中文骨架 + 热词召回候选 | 下载，作为热词主候选 |
+| paraformer-zh | 普通 Paraformer 中文 / 中英 ASR | Python `generate(..., hotword=...)` 有官方教程入口，但主验证仍应优先 contextual hotword 或 runtime 路径 | 官方 HF 卡片标注 Chinese + English mixed recognition | 下载，作为 Paraformer 对照 |
+| fsmn-vad | VAD 辅助模型 | 不支持热词；只做分段 | 不承担识别 | 下载，供 FunASR pipeline 使用 |
+| ct-punc | 标点恢复模型 | 不支持热词；只做标点 | 可改善最终文本可读性 | 可延后；第一轮热词召回不依赖它 |
+| Paraformer quant ONNX | 量化 ONNX 快速路径 | 未确认完整 hotword/contextual 能力 | 只适合 smoke test | 不进入第一轮主测试 |
+
+下载位置统一使用 Pro 用户级模型目录，避免把未验证模型放进 App bundle 或仓库：
+
+```text
+/Users/waykingah/Library/Application Support/TypeWhale Pro/Models/funasr/
+  fun-asr-nano-2512/
+  paraformer-hotword-contextual/
+  paraformer-zh/
+  fsmn-vad/
+  ct-punc/
+```
+
+第一轮下载顺序：
+
+1. `FunAudioLLM/Fun-ASR-Nano-2512`：验证中英混合和 `hotwords` 对 `Codex`、`Obsidian`、`Qwen3-ASR`、`SpeechInputCoordinator` 的召回。
+2. `damo/speech_paraformer-large-contextual_asr_nat-zh-cn-16k-common-vocab8404`：验证 FunASR runtime `--hotword` 权重文件是否能在音频/解码阶段提升热词召回。
+3. `damo/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch`：作为非 contextual Paraformer 对照，验证普通 pipeline 与 contextual 路线差异。
+4. `damo/speech_fsmn_vad_zh-cn-16k-common-onnx`：仅作为 FunASR pipeline 分段依赖。
+5. `damo/punc_ct-transformer_cn-en-common-vocab471067-large-onnx`：如果第一轮只看热词召回，可延后下载。
+
+### 3.7 本地打包与 App 联动边界
+
+技术结论：FunASR / Fun-ASR-Nano 可以与 TypeWhale Pro 在本地联动；但第一阶段不应直接把 PyTorch / FunASR 大模型完整塞进稳定 App bundle 作为默认分发形态。
+
+推荐顺序：
+
+1. 用户级模型目录 + 本地 ASR sidecar worker：模型放在 `/Users/waykingah/Library/Application Support/TypeWhale Pro/Models/funasr/`，App 通过本机进程、stdin/stdout、HTTP 或 WebSocket 调用。音频不出本机，便于实验热词、日志、崩溃隔离和替换模型。
+2. App 管理下载和完整性校验：下载后记录模型 ID、revision、文件大小、hash、license note；主 App 只负责选择 provider、传入音频和 hotwords、接收结果。
+3. 稳定后再评估内置资源：如果选定的是 ONNX / GGUF / 可签名的轻量 runtime，可以像当前 SenseVoice / VAD 一样打进 `Contents/Resources/Models`；如果仍依赖 PyTorch / Python / vLLM，则不建议作为普通 macOS App 的默认内置形态。
+
+工程边界：
+
+- 当前 TypeWhale Pro 已支持内置模型资源和用户级模型目录两类来源；新增 FunASR provider 应复用这个模式。
+- Fun-ASR-Nano PyTorch 路径依赖 Python、FunASR、PyTorch/torchaudio 和模型 remote code，适合作为本地 sidecar 或实验 provider，不适合直接混进主 App 进程。
+- Contextual Paraformer 的 runtime / server 形态适合先作为本地 sidecar 验证 `--hotword`，待热词效果确认后再考虑是否改成更轻的本地 runtime。
+- 用户可见承诺应写成“本地使用 / 音频不离开本机”，不要在授权未闭环前写成“模型已随商业版永久授权分发”。
+
+商业分发边界：
+
+- FunASR 模型协议允许在协议下使用、复制、修改和分享，并要求注明来源、作者信息并保留相关模型名称。
+- 但协议包含“参考和学习使用”、自担风险、自动终止和后续修订等自定义条款；正式付费公开分发前，应保存明确授权确认，或采用用户安装/首次下载模型的方式降低再分发风险。
+- 内测、开发机、董事长独享 Pro 版本可以先使用用户目录下载和本地 sidecar；公开售卖版本需补齐 `THIRD_PARTY_NOTICES.md`、应用内第三方授权页、模型 license / revision / hash 记录。
 
 ## 4. 推荐架构
 

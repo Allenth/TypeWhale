@@ -170,7 +170,7 @@ struct OllamaRewriteEngineCheck {
         StubURLProtocol.requestCount = 0
         let retryRecovery = ProbeOllamaServerRecovery()
         let retryEngine = OllamaRewriteEngine(
-            model: .ollamaQwen8B,
+            model: .ollamaQwen35B,
             endpoint: URL(string: "http://127.0.0.1:11434/api/chat")!,
             session: session,
             serverRecovery: retryRecovery
@@ -185,6 +185,59 @@ struct OllamaRewriteEngineCheck {
         precondition(StubURLProtocol.requestCount == 2)
         precondition(retryRecovery.prepareCalls == 1)
         precondition(retryRecovery.recoverCalls == 1)
+
+        StubURLProtocol.lastBody = nil
+        StubURLProtocol.responseBody = Data()
+        StubURLProtocol.responseError = URLError(.cannotConnectToHost)
+        StubURLProtocol.requestCount = 0
+        let passiveScreenshotEngine = OllamaRewriteEngine(
+            model: .ollamaQwen35B,
+            endpoint: URL(string: "http://127.0.0.1:11434/api/chat")!,
+            session: session,
+            serverRecovery: PassiveOllamaServerRecovery(),
+            requestProfile: .screenshotTranslation
+        )
+        do {
+            _ = try await passiveScreenshotEngine.translateScreenshotOCR(
+                rawText: "[[TW_LINE_1]] Continue",
+                context: context
+            )
+            preconditionFailure("passive screenshot translation should surface connection failure")
+        } catch {
+            precondition((error as NSError).code == NSURLErrorCannotConnectToHost)
+        }
+        precondition(StubURLProtocol.requestCount == 1)
+        guard let screenshotBody = StubURLProtocol.lastBody,
+              let screenshotJSON = try JSONSerialization.jsonObject(with: screenshotBody) as? [String: Any] else {
+            preconditionFailure("missing passive screenshot request body")
+        }
+        precondition(screenshotJSON["model"] as? String == "qwen3.6:35b-mlx")
+        let screenshotOptions = screenshotJSON["options"] as? [String: Any]
+        precondition(screenshotOptions?["num_predict"] as? Int == ScreenshotTranslationPromptBuilder.localMaxOutputTokens)
+        precondition(StubURLProtocol.lastRequest?.timeoutInterval == 12)
+
+        StubURLProtocol.lastBody = nil
+        StubURLProtocol.responseBody = """
+        {
+          "message": {
+            "role": "assistant",
+            "content": "[[TW_LINE_1]] 翻译完成"
+          },
+          "total_duration": 12000000000,
+          "prompt_eval_count": 1000,
+          "eval_count": 180
+        }
+        """.data(using: .utf8)!
+        StubURLProtocol.responseError = nil
+        StubURLProtocol.requestCount = 0
+        let largeScreenshotSource = (1...35)
+            .map { "[[TW_LINE_\($0)]] Access to all models and features" }
+            .joined(separator: "\n")
+        _ = try await passiveScreenshotEngine.translateScreenshotOCR(
+            rawText: largeScreenshotSource,
+            context: context
+        )
+        precondition(StubURLProtocol.lastRequest?.timeoutInterval == 30)
 
         print("OllamaRewriteEngineCheck passed")
     }

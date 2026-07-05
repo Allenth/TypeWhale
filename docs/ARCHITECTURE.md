@@ -169,6 +169,7 @@ Preview non-goals:
 ### Historical Decisions Still Active
 
 - Final transcription is independent from realtime preview.
+- Speech input tasks may carry a product purpose. Normal dictation can paste to the target app; `ideaPill` reuses recording, final ASR, realtime preview, and smart rewrite, but saves Markdown notes and must not enter the automatic paste queue.
 - Screenshot overlay must not activate or reorder the TypeWhale main window.
 - Automatic smart rewrite rules may match target context and content text separately.
 - Capsule preview is a presentation pipeline with bounded realtime work and stale-callback protection.

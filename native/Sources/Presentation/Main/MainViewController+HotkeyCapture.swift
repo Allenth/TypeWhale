@@ -31,6 +31,10 @@ extension MainViewController {
         beginHotkeyCaptureForSlot(.mainWindow)
     }
 
+    @objc func beginIdeaPillHotkeyCapture() {
+        beginHotkeyCaptureForSlot(.ideaPill)
+    }
+
     func beginHotkeyCaptureForSlot(_ slot: HotkeySlot) {
         guard !isCapturingHotkey else { return }
         isCapturingHotkey = true
@@ -45,6 +49,7 @@ extension MainViewController {
         screenshotTranslationHotkeyCaptureButton.isEnabled = false
         autoTranslateHotkeyCaptureButton.isEnabled = false
         mainWindowHotkeyCaptureButton.isEnabled = false
+        ideaPillHotkeyCaptureButton.isEnabled = false
         startHotkeyCaptureTap()
         hotkeyCaptureMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged, .systemDefined]) { [weak self] event in
             guard let self else { return event }
@@ -86,6 +91,13 @@ extension MainViewController {
         emitHotkeysChange()
     }
 
+    @objc func clearIdeaPillHotkey() {
+        endHotkeyCapture()
+        HotkeyBinding.clear(storageKey: HotkeyBinding.ideaPillStorageKey)
+        refreshHotkeyLabels()
+        emitHotkeysChange()
+    }
+
     @objc func clearSecondaryHotkey() {
         endHotkeyCapture()
         HotkeyBinding.clear(storageKey: HotkeyBinding.secondaryChineseStorageKey)
@@ -99,7 +111,8 @@ extension MainViewController {
                 fallback: .screenshotTranslationDefaultBinding
             ),
             autoTranslate: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.autoTranslateStorageKey),
-            mainWindow: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey)
+            mainWindow: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey),
+            ideaPill: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.ideaPillStorageKey)
         )
         emitHotkeysChange()
     }
@@ -111,7 +124,8 @@ extension MainViewController {
         secondaryScreenshot: HotkeyBinding?,
         screenshotTranslation: HotkeyBinding,
         autoTranslate: HotkeyBinding?,
-        mainWindow: HotkeyBinding?
+        mainWindow: HotkeyBinding?,
+        ideaPill: HotkeyBinding?
     ) {
         hotkeyValue.stringValue = primary.displayName
         hotkeyValue.textColor = NSColor(calibratedWhite: 1, alpha: 0.92)
@@ -141,6 +155,10 @@ extension MainViewController {
         mainWindowHotkeyValue.textColor = mainWindow == nil ? .tertiaryLabelColor : NSColor(calibratedWhite: 1, alpha: 0.92)
         mainWindowHotkeyCaptureButton.title = mainWindow?.actionDisplayName ?? "未设置"
         mainWindowHotkeyCaptureButton.toolTip = "点击录入唤起主页快捷键，可使用耳机播放键"
+        ideaPillHotkeyValue.stringValue = ideaPill?.actionDisplayName ?? "未设置"
+        ideaPillHotkeyValue.textColor = ideaPill == nil ? .tertiaryLabelColor : NSColor(calibratedWhite: 1, alpha: 0.92)
+        ideaPillHotkeyCaptureButton.title = ideaPill?.actionDisplayName ?? "未设置"
+        ideaPillHotkeyCaptureButton.toolTip = "点击录入闪念胶囊快捷键，可使用耳机播放键"
         detail.stringValue = "\(primary.displayName) 录音"
     }
 
@@ -155,7 +173,8 @@ extension MainViewController {
                 fallback: .screenshotTranslationDefaultBinding
             ),
             autoTranslate: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.autoTranslateStorageKey),
-            mainWindow: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey)
+            mainWindow: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey),
+            ideaPill: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.ideaPillStorageKey)
         )
     }
 
@@ -363,6 +382,8 @@ extension MainViewController {
             binding.save(storageKey: HotkeyBinding.autoTranslateStorageKey)
         case .mainWindow:
             binding.save(storageKey: HotkeyBinding.mainWindowStorageKey)
+        case .ideaPill:
+            binding.save(storageKey: HotkeyBinding.ideaPillStorageKey)
         }
         refreshHotkeyLabels()
         emitHotkeysChange()
@@ -386,6 +407,7 @@ extension MainViewController {
         screenshotTranslationHotkeyCaptureButton.isEnabled = true
         autoTranslateHotkeyCaptureButton.isEnabled = true
         mainWindowHotkeyCaptureButton.isEnabled = true
+        ideaPillHotkeyCaptureButton.isEnabled = true
         captureModifierKeyCodes.removeAll()
     }
 
@@ -400,7 +422,8 @@ extension MainViewController {
                 fallback: .screenshotTranslationDefaultBinding
             ),
             autoTranslate: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.autoTranslateStorageKey),
-            mainWindow: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey)
+            mainWindow: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey),
+            ideaPill: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.ideaPillStorageKey)
         )
     }
 
@@ -415,7 +438,8 @@ extension MainViewController {
                 fallback: .screenshotTranslationDefaultBinding
             ),
             HotkeyBinding.loadOptional(storageKey: HotkeyBinding.autoTranslateStorageKey),
-            HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey)
+            HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey),
+            HotkeyBinding.loadOptional(storageKey: HotkeyBinding.ideaPillStorageKey)
         )
     }
 
@@ -435,6 +459,8 @@ extension MainViewController {
             return autoTranslateHotkeyCaptureButton
         case .mainWindow:
             return mainWindowHotkeyCaptureButton
+        case .ideaPill:
+            return ideaPillHotkeyCaptureButton
         case nil:
             return nil
         }
