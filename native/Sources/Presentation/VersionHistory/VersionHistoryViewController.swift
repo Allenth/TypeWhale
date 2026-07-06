@@ -9,6 +9,15 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.9.3 (Build 540)",
+            date: "2026-07-06",
+            changes: [
+                "继续执行 Pro ASR 热词计划 Task 2，新增 ASR provider 能力元数据。",
+                "明确当前 SenseVoice / Qwen3-ASR 路径不承诺热词能力，只作为稳定 fallback；Paraformer Contextual 标记为已验证热词候选，Fun-ASR-Nano 标记为待 runtime 验证的中英混合 sidecar 候选。",
+                "新增 ASRProviderCapabilitiesCheck，防止后续把不支持 hotwords 的模型静默接成热词主路。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.9.3 (Build 539)",
             date: "2026-07-06",
             changes: [
