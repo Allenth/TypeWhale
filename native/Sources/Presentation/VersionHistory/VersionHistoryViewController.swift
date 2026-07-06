@@ -9,6 +9,15 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.9.7 (Build 552)",
+            date: "2026-07-06",
+            changes: [
+                "修正 GitHub DMG 打包策略：安装包保留基础 ASR 与 VAD 模型，下载后可直接使用本地语音输入。",
+                "安装包继续排除 Ollama / LLM 大语言模型，避免把几十 GB 的本地整理模型打进分发包。",
+                "新增打包策略检查，防止后续误删整个 Resources/Models 目录导致核心识别不可用。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.9.7 (Build 551)",
             date: "2026-07-06",
             changes: [

@@ -27,11 +27,34 @@ DMG="$DIST/TypeWhale-Pro-$ver-$bld.dmg"
 staging="$(mktemp -d)"
 trap 'rm -rf "$staging"' EXIT
 ditto "$APP" "$staging/TypeWhale Pro.app"
-rm -rf "$staging/TypeWhale Pro.app/Contents/Resources/Models"
+STAGED_APP="$staging/TypeWhale Pro.app"
+STAGED_MODELS="$STAGED_APP/Contents/Resources/Models"
+REQUIRED_MODEL_FILES=(
+  "$STAGED_MODELS/sensevoice-native/model.onnx"
+  "$STAGED_MODELS/vad/silero_vad.onnx"
+)
+for required_model in "${REQUIRED_MODEL_FILES[@]}"; do
+  if [[ ! -f "$required_model" ]]; then
+    echo "打包缺少必需模型：$required_model" >&2
+    exit 1
+  fi
+done
+
+# GitHub 安装包必须保留基础 ASR/VAD；只排除本地 LLM 或实验 ASR 大模型目录。
+LLM_EXCLUDE_DIRS=(
+  "$STAGED_MODELS/funasr"
+  "$STAGED_MODELS/ollama"
+  "$STAGED_MODELS/llm"
+  "$STAGED_MODELS/qwen"
+  "$STAGED_MODELS/deepseek"
+)
+for excluded_model_dir in "${LLM_EXCLUDE_DIRS[@]}"; do
+  rm -rf "$excluded_model_dir"
+done
 SIGN_IDENTITY="${TYPESPEAKER_SIGN_IDENTITY:-$(security find-identity -v -p codesigning | awk -F'"' '/Apple Development/ {print $2; exit}')}"
 SIGN_IDENTITY="${SIGN_IDENTITY:--}"
-codesign --force --deep --sign "$SIGN_IDENTITY" "$staging/TypeWhale Pro.app" >/dev/null
-codesign --verify --deep --strict "$staging/TypeWhale Pro.app"
+codesign --force --deep --sign "$SIGN_IDENTITY" "$STAGED_APP" >/dev/null
+codesign --verify --deep --strict "$STAGED_APP"
 ln -s /Applications "$staging/Applications"
 
 rm -f "$DMG"
