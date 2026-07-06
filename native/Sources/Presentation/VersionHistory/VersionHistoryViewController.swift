@@ -9,6 +9,15 @@ final class VersionHistoryViewController: NSViewController {
 
     private static let entries = [
         VersionEntry(
+            version: "版本 1.9.3 (Build 541)",
+            date: "2026-07-06",
+            changes: [
+                "继续执行 Pro ASR 热词计划 Task 3，新增离线 ASR 评测 runner 的 dry-run 合同。",
+                "新增 tools/asr-eval/run_funasr_eval.py 和 hotwords-dev.txt，可把评测 manifest 输出为结构化 JSONL 结果。",
+                "缺少本地录音时 runner 会输出 skipped / audio_missing 行，不会崩溃或伪造识别结果，为后续真实 FunASR 模型对比做准备。"
+            ]
+        ),
+        VersionEntry(
             version: "版本 1.9.3 (Build 540)",
             date: "2026-07-06",
             changes: [

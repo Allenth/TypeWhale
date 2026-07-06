@@ -122,17 +122,17 @@ Expected: PASS.
 - Consumes: manifest cases with `audioPath` pointing to local WAV files.
 - Produces: JSONL rows with `caseId`, `provider`, `rawText`, `elapsedMs`, `requiredHotwordHits`, `missingHotwords`, `error`.
 
-- [ ] **Step 1: Write contract test**
+- [x] **Step 1: Write contract test**
 
 Run: `bash native/Tests/FunASREvalRunnerContractCheck.sh`
 
 Expected: FAIL because runner is missing.
 
-- [ ] **Step 2: Implement runner shell**
+- [x] **Step 2: Implement runner shell**
 
 The runner must support `--manifest`, `--provider`, `--model-dir`, `--hotwords`, and `--output`. It may skip cases without audio and must write a structured skipped row instead of crashing.
 
-- [ ] **Step 3: Run without model dependency**
+- [x] **Step 3: Run without model dependency**
 
 Run: `python3 tools/asr-eval/run_funasr_eval.py --manifest docs/asr-eval/pro-hotword-eval-cases.json --provider dry-run --output /tmp/typewhale-asr-eval.jsonl`
 

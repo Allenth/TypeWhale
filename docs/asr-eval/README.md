@@ -53,3 +53,23 @@ For every provider and case, record:
 - model/runtime error
 
 The first provider allowed into an experimental final-ASR switch must beat the current baseline on required hotword recall without obvious Chinese skeleton regression.
+
+## Dry-Run Runner
+
+Before wiring Python FunASR runtime, verify the manifest and result contract with:
+
+```bash
+python3 tools/asr-eval/run_funasr_eval.py \
+  --manifest docs/asr-eval/pro-hotword-eval-cases.json \
+  --provider dry-run \
+  --hotwords tools/asr-eval/hotwords-dev.txt \
+  --output /tmp/typewhale-asr-eval.jsonl
+```
+
+Expected first-version behavior:
+
+- One JSONL row per manifest case.
+- Missing local audio produces `status: "skipped"` and an `audio_missing` error.
+- Rows always include `caseId`, `provider`, `rawText`, `elapsedMs`, `requiredHotwordHits`, `missingHotwords`, and `error`.
+
+After recordings exist, the same runner contract will be reused for `paraformer-hotword-contextual`, `fun-asr-nano-2512`, and `paraformer-zh`.
