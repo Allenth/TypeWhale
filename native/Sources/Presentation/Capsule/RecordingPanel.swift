@@ -24,6 +24,8 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
     private var currentStatusBorderColor: NSColor?
     private var ollamaHealthy = false
     private var accent: PreviewAccent = .normal
+    private var modeTitleText = "自动"
+    private var modeEmphasis: PreviewModeEmphasis = .normal
 
     /// 点击胶囊上的模式标签时回调，用于手动切换整理模式。
     var onCycleMode: (() -> Void)?
@@ -147,9 +149,21 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
     }
 
     private func setModeTitle(_ text: String) {
-        modeButton.attributedTitle = NSAttributedString(string: text, attributes: [
+        modeTitleText = text
+        refreshModeTitle()
+    }
+
+    private func refreshModeTitle() {
+        let color: NSColor
+        switch modeEmphasis {
+        case .normal:
+            color = NSColor(calibratedWhite: 1, alpha: 0.96)
+        case .automaticResolved:
+            color = NSColor(calibratedRed: 1.0, green: 0.82, blue: 0.36, alpha: 0.98)
+        }
+        modeButton.attributedTitle = NSAttributedString(string: modeTitleText, attributes: [
             .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
-            .foregroundColor: NSColor(calibratedWhite: 1, alpha: 0.96),
+            .foregroundColor: color,
         ])
     }
 
@@ -177,6 +191,11 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
     func updateModeName(_ modeName: String) {
         setModeTitle(modeName)
         if hasContext { resizeAndPosition() }
+    }
+
+    func updateModeEmphasis(_ emphasis: PreviewModeEmphasis) {
+        modeEmphasis = emphasis
+        refreshModeTitle()
     }
 
     func updateAutoTranslateEnabled(_ enabled: Bool) {

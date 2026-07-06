@@ -191,8 +191,8 @@ cat > "$CONTENTS/Info.plist" <<'PLIST'
 <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
 <key>CFBundleName</key><string>TypeWhale Pro</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>1.9.3</string>
-<key>CFBundleVersion</key><string>541</string>
+<key>CFBundleShortVersionString</key><string>1.9.7</string>
+<key>CFBundleVersion</key><string>551</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSMicrophoneUsageDescription</key><string>TypeWhale Pro 需要使用麦克风进行本地语音转文字。</string>

@@ -42,8 +42,11 @@ final class ScreenshotCoordinator {
     private var escapeKeyLocalMonitor: Any?
     private var escapeKeyGlobalMonitor: Any?
     private var operationTokens = ScreenshotOperationTokens()
+    private var activeArchiveCount = 0
+    private var archiveCompletionGeneration = 0
     private let ocrRecognizer = ScreenshotOCRRecognizer()
     private let translationEngine = SelectedScreenshotTranslationEngine()
+    private let archiveRouter = SmartInputRouter(engine: SelectedSmartAITextEngine())
     private let onStatus: (ScreenshotStatus) -> Void
     private static let escapeKeyCode: UInt16 = 53
 
@@ -86,6 +89,7 @@ final class ScreenshotCoordinator {
                 },
                 onCopy: { [weak self] image in self?.copy(image) },
                 onOCR: { [weak self] image in self?.recognizeText(in: image) },
+                onArchive: { [weak self] image in self?.archiveKnowledge(in: image) },
                 onTranslate: { [weak self] image, onProgress, completion in
                     self?.translateText(in: image, onProgress: onProgress, completion: completion)
                 },
@@ -196,6 +200,92 @@ final class ScreenshotCoordinator {
                 guard operationTokens.isCurrent(token) else { return }
                 showTransientStatus("OCR 识别失败", error.localizedDescription, .error)
             }
+        }
+    }
+
+    private func archiveKnowledge(in image: NSImage) {
+        closeAll()
+        let archiveID = UUID()
+        beginArchiveProcessingStatus("正在识别选区文字")
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let ocrText = try await ocrRecognizer.recognize(image: image).text
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !ocrText.isEmpty else {
+                    finishArchiveProcessingStatus("未识别到文字", "可以调整截图范围后再试一次", .warning)
+                    return
+                }
+
+                let archivePreference = ScreenshotArchiveModeStore.load()
+                let archiveModeName = archivePreference.displayName
+                updateArchiveProcessingStatus("正在按\(archiveModeName)整理")
+                let result = await archiveRouter.rewrite(
+                    rawText: ocrText,
+                    preference: archivePreference,
+                    context: SmartInputContext(
+                        targetAppName: "知识点",
+                        targetBundleIdentifier: "TypeWhale.ScreenshotArchive",
+                        windowTitle: "截图 OCR 归档",
+                        recordingSessionId: archiveID.uuidString
+                    )
+                )
+                SmartUsageLedgerStore.record(result.usage)
+
+                let finalText = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                let url = try BacklogWriter.saveKnowledgeArchive(BacklogSaveContext(
+                    rawText: ocrText,
+                    finalText: finalText.isEmpty ? ocrText : finalText,
+                    modeName: archiveModeName,
+                    targetAppName: "知识点",
+                    recordingSessionID: archiveID
+                ))
+
+                if result.didFallback {
+                    finishArchiveProcessingStatus("归档已保存", "\(archiveModeName)整理未完成，已保存 OCR 原文：\(url.lastPathComponent)", .warning)
+                } else {
+                    finishArchiveProcessingStatus("归档已保存", "已写入需求池：\(url.lastPathComponent)", .success)
+                }
+            } catch {
+                finishArchiveProcessingStatus("归档失败", error.localizedDescription, .error)
+            }
+        }
+    }
+
+    private func beginArchiveProcessingStatus(_ detail: String) {
+        activeArchiveCount += 1
+        updateArchiveProcessingStatus(detail)
+    }
+
+    private func updateArchiveProcessingStatus(_ detail: String) {
+        if activeArchiveCount > 1 {
+            emit(.init("归档整理中", "正在整理 \(activeArchiveCount) 条截图归档", .processing))
+        } else {
+            emit(.init("归档整理中", detail, .processing))
+        }
+        ToastPresenter.shared.show("归档整理中", style: .info, duration: nil)
+    }
+
+    private func finishArchiveProcessingStatus(_ title: String, _ detail: String, _ tone: ScreenshotStatusTone) {
+        activeArchiveCount = max(0, activeArchiveCount - 1)
+        if activeArchiveCount > 0 {
+            emit(.init("归档整理中", "\(title)：\(detail)。仍有 \(activeArchiveCount) 条归档整理中", .processing))
+            return
+        }
+        showArchiveCompletionStatus(title, detail, tone)
+    }
+
+    private func showArchiveCompletionStatus(_ title: String, _ detail: String, _ tone: ScreenshotStatusTone) {
+        archiveCompletionGeneration += 1
+        let generation = archiveCompletionGeneration
+        let status = ScreenshotStatus(title, detail, tone)
+        emit(status)
+        ToastPresenter.shared.show(title, style: tone.toastStyle)
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_800_000_000)
+            guard let self, archiveCompletionGeneration == generation else { return }
+            guard !isActive else { return }
+            emit(.init("截图状态已清理", "", .idle))
         }
     }
 
@@ -496,6 +586,7 @@ private final class ScreenshotOverlayWindow: NSPanel {
         onSelectWindow: @escaping (ScreenshotWindowCandidate) -> Void,
         onCopy: @escaping (NSImage) -> Void,
         onOCR: @escaping (NSImage) -> Void,
+        onArchive: @escaping (NSImage) -> Void,
         onTranslate: @escaping (
             NSImage,
             @escaping (ScreenshotStatus) -> Void,
@@ -516,6 +607,7 @@ private final class ScreenshotOverlayWindow: NSPanel {
             onSelectWindow: onSelectWindow,
             onCopy: onCopy,
             onOCR: onOCR,
+            onArchive: onArchive,
             onTranslate: onTranslate,
             onSaved: onSaved,
             onCancel: onCancel,
@@ -581,6 +673,7 @@ private extension ScreenshotToolbarCommand {
         case .save: return "保存本地"
         case .ocr: return "OCR"
         case .translate: return "翻译"
+        case .archive: return "归档"
         case .annotate: return "标注"
         case .rectangle: return "矩形"
         case .arrow: return "箭头"
@@ -598,6 +691,7 @@ private extension ScreenshotToolbarCommand {
         case .save: return "square.and.arrow.down"
         case .ocr: return "text.viewfinder"
         case .translate: return "character.book.closed"
+        case .archive: return "tray.and.arrow.down"
         case .annotate: return "pencil.and.outline"
         case .rectangle: return "rectangle"
         case .arrow: return "arrow.up.right"
@@ -673,6 +767,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     private let onSelectWindow: (ScreenshotWindowCandidate) -> Void
     private let onCopy: (NSImage) -> Void
     private let onOCR: (NSImage) -> Void
+    private let onArchive: (NSImage) -> Void
     private let onTranslate: (
         NSImage,
         @escaping (ScreenshotStatus) -> Void,
@@ -718,6 +813,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         onSelectWindow: @escaping (ScreenshotWindowCandidate) -> Void,
         onCopy: @escaping (NSImage) -> Void,
         onOCR: @escaping (NSImage) -> Void,
+        onArchive: @escaping (NSImage) -> Void,
         onTranslate: @escaping (
             NSImage,
             @escaping (ScreenshotStatus) -> Void,
@@ -736,6 +832,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         self.onSelectWindow = onSelectWindow
         self.onCopy = onCopy
         self.onOCR = onOCR
+        self.onArchive = onArchive
         self.onTranslate = onTranslate
         self.onSaved = onSaved
         self.onCancel = onCancel
@@ -1264,20 +1361,23 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     }
 
     private func drawToolbar() {
-        let annotationActions: [ToolAction] = [.rectangle, .arrow, .pen, .text, .ocr, .translate]
+        let annotationActions: [ToolAction] = [.rectangle, .arrow, .pen, .text, .ocr, .translate, .archive]
         let functionActions: [ToolAction] = [.copy, .undo, .save, .cancel]
-        let buttonWidth: CGFloat = 68
         let buttonHeight: CGFloat = 50
         let spacing: CGFloat = 7
         let separatorWidth: CGFloat = 1
         let groupSpacing: CGFloat = 15
         let actions = annotationActions + functionActions
-        let totalWidth =
-            CGFloat(actions.count) * buttonWidth
-            + CGFloat(actions.count - 2) * spacing
+        let fixedWidth =
+            CGFloat(actions.count - 2) * spacing
             + groupSpacing * 2
             + separatorWidth
             + 14
+        let availableButtonWidth = floor((bounds.width - 16 - fixedWidth) / CGFloat(actions.count))
+        let buttonWidth = min(CGFloat(68), max(CGFloat(58), availableButtonWidth))
+        let totalWidth =
+            CGFloat(actions.count) * buttonWidth
+            + fixedWidth
         let x = min(max(selection.maxX - totalWidth, 8), bounds.width - totalWidth - 8)
         let y = min(selection.maxY + 10, bounds.height - buttonHeight - 14)
         let toolbarRect = NSRect(x: x, y: y, width: totalWidth, height: buttonHeight + 12)
@@ -1430,6 +1530,14 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             onOCR(image)
         case .translate:
             translateSelection()
+        case .archive:
+            guard let image = selectedImage() else {
+                setSessionPhase(.failed)
+                onStatus("无法归档截图", "未能读取选区截图，请检查屏幕录制权限", .error)
+                return
+            }
+            setSessionPhase(.completed)
+            onArchive(image)
         case .startAnnotation(let tool):
             isAnnotating = true
             annotationTool = annotationTool(from: tool)

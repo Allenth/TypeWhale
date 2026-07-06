@@ -26,6 +26,7 @@ extension MainViewController {
             translationDirection: translationDirection,
             previewTheme: selectedPreviewTheme
         ))
+        ScreenshotArchiveModeStore.save(screenshotArchivePreference)
         SmartAIModelStore.save(nextSmartAIModel)
         if previousAudioInputUID != nextAudioInputUID {
             let mode = nextAudioInputUID.isEmpty ? "system_default" : "manual"
@@ -468,6 +469,12 @@ extension MainViewController {
 
     var smartAIModel: SmartAIModel {
         SmartAIModel.fromMenuTag(smartAIModelMode.selectedItem?.tag ?? 0)
+    }
+
+    var screenshotArchivePreference: SmartRewritePreference {
+        SmartRewritePreference.fromMenuTag(
+            screenshotArchiveMode.selectedItem?.tag ?? ScreenshotArchiveModeStore.defaultMode.menuTag
+        )
     }
 
     /// 循环切换到下一个整理模式，持久化并返回新模式（供胶囊手动切换调用）。

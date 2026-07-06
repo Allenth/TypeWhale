@@ -182,6 +182,7 @@ extension MainViewController {
         smartRewriteMode.widthAnchor.constraint(equalToConstant: 96).isActive = true
         translationDirectionMode.widthAnchor.constraint(equalToConstant: 88).isActive = true
         screenshotSaveLocationButton.widthAnchor.constraint(equalToConstant: 120).isActive = true
+        screenshotArchiveMode.widthAnchor.constraint(equalToConstant: 120).isActive = true
         audioInputDeviceMode.widthAnchor.constraint(equalToConstant: 142).isActive = true
         audioInputRefreshButton.widthAnchor.constraint(equalToConstant: 30).isActive = true
         audioInputRefreshButton.heightAnchor.constraint(equalToConstant: 24).isActive = true
@@ -275,7 +276,7 @@ extension MainViewController {
         return inspectorGroupBox(stack, prominence: prominence)
     }
 
-    // 第二列：预览主题。两张程序绘制的迷你预览，点击切换主题。
+    // 第二列：预览主题。两张程序绘制的迷你预览并排显示，点击切换主题。
     private func buildPreviewThemeContent() -> NSView {
         let classicTile = ThemePreviewTile(kind: .classic, title: "默认胶囊")
         let notchTile = ThemePreviewTile(kind: .notch, title: "刘海主题")
@@ -288,13 +289,11 @@ extension MainViewController {
         notchTile.isSelected = current == .notch
 
         let stack = NSStackView(views: [classicTile, notchTile])
-        stack.orientation = .vertical
-        stack.alignment = .leading
+        stack.orientation = .horizontal
+        stack.alignment = .top
+        stack.distribution = .fillEqually
         stack.spacing = 12
         stack.translatesAutoresizingMaskIntoConstraints = false
-        for tile in [classicTile, notchTile] {
-            tile.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-        }
         return stack
     }
 
@@ -345,6 +344,7 @@ extension MainViewController {
 
     private func buildScreenshotSettingsContent() -> NSView {
         return rowStack([
+            optionRow("归档整理", screenshotArchiveMode),
             optionRow("保存位置", screenshotSaveLocationButton),
         ])
     }

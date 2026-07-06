@@ -8,6 +8,7 @@ enum RecordingActivation {
 
 struct SpeechSession {
     let id: UUID
+    let channel: SpeechInputChannel
     var targetApp: NSRunningApplication?
     let configuration: ASRConfiguration
     let activation: RecordingActivation
@@ -19,6 +20,10 @@ struct SpeechSession {
     var latestPreviewText: String
     /// 当前正在识别的块序号；用于丢弃已提交块的滞后快照。
     var currentChunkIndex: Int = 0
+
+    func matchesTrigger(channel: SpeechInputChannel, purpose: SpeechInputPurpose) -> Bool {
+        self.channel == channel && self.purpose == purpose
+    }
 }
 
 struct RealtimeSnapshotRequest {

@@ -18,7 +18,7 @@ final class ThemePreviewTile: NSView {
         super.init(frame: .zero)
         wantsLayer = true
         translatesAutoresizingMaskIntoConstraints = false
-        heightAnchor.constraint(equalToConstant: 98).isActive = true
+        heightAnchor.constraint(equalToConstant: 78).isActive = true
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }

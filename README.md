@@ -4,13 +4,13 @@ TypeWhale Pro is a local-first desktop speech input tool. It records from the mi
 
 ## Download
 
-[Download TypeWhale-1.3.0-208.dmg](https://github.com/Allenth/TypeWhale/releases/download/v1.3.0-build208/TypeWhale-1.3.0-208.dmg)
+[Download TypeWhale-Pro-1.9.7-551.dmg](https://github.com/Allenth/TypeWhale/releases/download/v1.9.7-build551/TypeWhale-Pro-1.9.7-551.dmg)
 
-This is a public test build. It is not notarized with Developer ID yet, so macOS may require manual approval in System Settings.
+This is a public Pro test build. It is not notarized with Developer ID yet, so macOS may require manual approval in System Settings.
 
-中文用户可以直接点击上面的链接下载安装包。如果浏览器没有开始下载，请右键链接选择“链接另存为”，或打开 [TypeWhale 1.3.0 (208) Test Release](https://github.com/Allenth/TypeWhale/releases/tag/v1.3.0-build208) 页面，在 **Assets** 区域下载 `TypeWhale-1.3.0-208.dmg`。
+中文用户可以直接点击上面的链接下载安装包。如果浏览器没有开始下载，请右键链接选择“链接另存为”，或打开 [TypeWhale Pro 1.9.7 (551) Test Release](https://github.com/Allenth/TypeWhale/releases/tag/v1.9.7-build551) 页面，在 **Assets** 区域下载 `TypeWhale-Pro-1.9.7-551.dmg`。
 
-Current local release build in this repository is `1.9.3 (541)`. It has been built and installed locally from source. The public GitHub DMG link above still points to the last uploaded public test artifact; local DMG artifacts are created only when a packaging step is run explicitly.
+Current local release build in this repository is `1.9.7 (551)`. It has been built, installed locally from source, and packaged as `dist/TypeWhale-Pro-1.9.7-551.dmg`. The DMG intentionally does not bundle large ASR/VAD model files; prepare models separately as described in [docs/MODEL_SETUP.md](docs/MODEL_SETUP.md).
 
 This branch builds the standalone Pro app identity: `TypeWhale Pro.app`, bundle identifier `com.waykingah.typewhale.pro`, and default install path `/Applications/TypeWhale Pro.app`. It can coexist with the regular TypeWhale app.
 
@@ -124,19 +124,19 @@ TypeWhale 是一个本地优先的桌面语音输入工具。它会在本机录�
 
 测试版 DMG 可以在 GitHub Releases 下载：
 
-[TypeWhale 1.3.0 (208) Test Release](https://github.com/Allenth/TypeWhale/releases/tag/v1.3.0-build208)
+[TypeWhale Pro 1.9.7 (551) Test Release](https://github.com/Allenth/TypeWhale/releases/tag/v1.9.7-build551)
 
 当前测试版 DMG 直链：
 
-[TypeWhale-1.3.0-208.dmg](https://github.com/Allenth/TypeWhale/releases/download/v1.3.0-build208/TypeWhale-1.3.0-208.dmg)
+[TypeWhale-Pro-1.9.7-551.dmg](https://github.com/Allenth/TypeWhale/releases/download/v1.9.7-build551/TypeWhale-Pro-1.9.7-551.dmg)
 
-如果点击直链没有反应，可以打开 Release 页面，在底部 **Assets** 区域下载 `TypeWhale-1.3.0-208.dmg`，或右键链接选择“链接另存为”。
+如果点击直链没有反应，可以打开 Release 页面，在底部 **Assets** 区域下载 `TypeWhale-Pro-1.9.7-551.dmg`，或右键链接选择“链接另存为”。
 
 下载后：
 
 1. 打开 `TypeWhale-*.dmg`。
-2. 将 `TypeWhale.app` 拖到 `Applications` 文件夹。
-3. 从 `Applications` 启动 TypeWhale。
+2. 将 `TypeWhale Pro.app` 拖到 `Applications` 文件夹。
+3. 从 `Applications` 启动 TypeWhale Pro。
 
 注意：当前公开 DMG 是测试版，还没有 Developer ID 公证。macOS 可能提示“无法打开”或“来自未知开发者”。如果你信任该测试包，可以在：
 
@@ -303,7 +303,7 @@ TypeWhale 的设计目标是本地优先：
 
 ## 模型和授权说明
 
-开源仓库不包含模型文件和运行时二进制。测试版 DMG 可能包含本地识别所需的运行库和模型。
+开源仓库不包含模型文件和运行时二进制。`TypeWhale-Pro-1.9.7-551.dmg` 不内置大模型；安装后请按 [docs/MODEL_SETUP.md](docs/MODEL_SETUP.md) 准备本地 ASR/VAD 模型。
 
 第三方组件和模型来源见：
 

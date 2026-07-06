@@ -27,6 +27,11 @@ DMG="$DIST/TypeWhale-Pro-$ver-$bld.dmg"
 staging="$(mktemp -d)"
 trap 'rm -rf "$staging"' EXIT
 ditto "$APP" "$staging/TypeWhale Pro.app"
+rm -rf "$staging/TypeWhale Pro.app/Contents/Resources/Models"
+SIGN_IDENTITY="${TYPESPEAKER_SIGN_IDENTITY:-$(security find-identity -v -p codesigning | awk -F'"' '/Apple Development/ {print $2; exit}')}"
+SIGN_IDENTITY="${SIGN_IDENTITY:--}"
+codesign --force --deep --sign "$SIGN_IDENTITY" "$staging/TypeWhale Pro.app" >/dev/null
+codesign --verify --deep --strict "$staging/TypeWhale Pro.app"
 ln -s /Applications "$staging/Applications"
 
 rm -f "$DMG"

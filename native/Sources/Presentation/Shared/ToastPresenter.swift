@@ -101,7 +101,7 @@ final class ToastPresenter {
         panel.contentView = content
     }
 
-    func show(_ message: String, style: ToastStyle = .success, duration: TimeInterval = 1.6) {
+    func show(_ message: String, style: ToastStyle = .success, duration: TimeInterval? = 1.6) {
         let config = NSImage.SymbolConfiguration(pointSize: 13, weight: .semibold)
         iconView.image = NSImage(systemSymbolName: style.symbolName, accessibilityDescription: nil)?
             .withSymbolConfiguration(config)
@@ -123,6 +123,10 @@ final class ToastPresenter {
         }
 
         dismissWorkItem?.cancel()
+        guard let duration else {
+            dismissWorkItem = nil
+            return
+        }
         let work = DispatchWorkItem { [weak self] in
             guard let self, current == self.generation else { return }
             self.dismiss(generation: current)

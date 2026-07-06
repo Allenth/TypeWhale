@@ -5,6 +5,11 @@ enum PreviewAccent {
     case ideaPill
 }
 
+enum PreviewModeEmphasis {
+    case normal
+    case automaticResolved
+}
+
 /// 实时预览窗的能力抽象。
 ///
 /// 把预览窗的全部功能从具体 UI（默认胶囊 / 刘海主题）中剥离：协调器只依赖本协议，
@@ -19,6 +24,8 @@ protocol PreviewPresenting: AnyObject {
     func updateTargetApp(appIcon: NSImage?, appName: String?)
     /// 更新整理模式名称。
     func updateModeName(_ modeName: String)
+    /// 更新整理模式的视觉强调；自动模式解析出的真实模式使用高亮提示。
+    func updateModeEmphasis(_ emphasis: PreviewModeEmphasis)
     /// 更新是否启用自动翻译。
     func updateAutoTranslateEnabled(_ enabled: Bool)
     /// 更新录音状态（剩余秒数、内存高压提示）。
@@ -44,4 +51,6 @@ extension PreviewPresenting {
     func show(state: String) { show(state: state, draft: nil) }
 
     func updateAccent(_ accent: PreviewAccent) {}
+
+    func updateModeEmphasis(_ emphasis: PreviewModeEmphasis) {}
 }

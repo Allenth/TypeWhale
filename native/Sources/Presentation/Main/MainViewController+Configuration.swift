@@ -17,6 +17,7 @@ extension MainViewController {
         translationPromptButton.setAccessibilityLabel("翻译提示词")
         socialScopeButton.setAccessibilityLabel("社交应用清单")
         screenshotSaveLocationButton.setAccessibilityLabel("截图保存位置")
+        screenshotArchiveMode.setAccessibilityLabel("截图归档整理模式")
         backlogDirectoryButton.setAccessibilityLabel("需求池目录")
         realtime.setAccessibilityLabel("胶囊实时预览")
         autoFinish.setAccessibilityLabel("停顿自动完成")
@@ -234,6 +235,22 @@ extension MainViewController {
         screenshotSaveLocationButton.controlSize = .regular
         screenshotSaveLocationButton.font = .systemFont(ofSize: 12, weight: .medium)
         refreshScreenshotSaveLocationButton()
+    }
+
+    func configureScreenshotArchiveModeMenu(_ preference: SmartRewritePreference) {
+        screenshotArchiveMode.removeAllItems()
+        for item in ScreenshotArchiveModeStore.supportedModes {
+            screenshotArchiveMode.addItem(withTitle: item.displayName)
+            screenshotArchiveMode.lastItem?.tag = item.menuTag
+        }
+        let selected = ScreenshotArchiveModeStore.supportedModes.contains(preference)
+            ? preference
+            : ScreenshotArchiveModeStore.defaultMode
+        screenshotArchiveMode.selectItem(withTag: selected.menuTag)
+        screenshotArchiveMode.toolTip = "截图归档 OCR 后使用的智能整理模式"
+        screenshotArchiveMode.bezelStyle = .rounded
+        screenshotArchiveMode.controlSize = .regular
+        screenshotArchiveMode.font = .systemFont(ofSize: 12, weight: .medium)
     }
 
     func configureBacklogDirectoryButton() {

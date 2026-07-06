@@ -125,6 +125,38 @@ enum ScreenshotSaveLocationStore {
     }
 }
 
+enum ScreenshotArchiveModeStore {
+    private static let modeKey = "screenshotArchiveRewriteMode"
+    static let defaultMode: SmartRewritePreference = .exhaustiveSummary
+    static let supportedModes: [SmartRewritePreference] = [
+        .exhaustiveSummary,
+        .developerRequirement,
+        .polish,
+        .raw,
+    ]
+
+    static func load() -> SmartRewritePreference {
+        guard let rawValue = UserDefaults.standard.string(forKey: modeKey),
+              let mode = SmartRewritePreference(rawValue: rawValue),
+              supportedModes.contains(mode) else {
+            return defaultMode
+        }
+        return mode
+    }
+
+    static func save(_ mode: SmartRewritePreference) {
+        guard supportedModes.contains(mode) else {
+            reset()
+            return
+        }
+        UserDefaults.standard.set(mode.rawValue, forKey: modeKey)
+    }
+
+    static func reset() {
+        UserDefaults.standard.removeObject(forKey: modeKey)
+    }
+}
+
 enum BacklogDirectoryStore {
     private static let directoryKey = "backlogDirectory"
 

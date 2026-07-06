@@ -23,6 +23,11 @@ final class SpeechInputCoordinator {
         static let startupHotkeyRecoveryDelays: [TimeInterval] = [0.5, 1.5, 3, 6, 10]
     }
 
+    private struct CapsuleModePresentation {
+        let modeName: String
+        let emphasis: PreviewModeEmphasis
+    }
+
     private var recordingStartedAt: Date?
     private var lastCapsuleStatusUpdateAt: Date?
     private var lastVoiceAt: Date?
@@ -523,6 +528,12 @@ final class SpeechInputCoordinator {
             appIcon: display?.icon,
             appName: displayNameForSelectedTarget(display)
         )
+        if let session = activeSession {
+            updateCapsuleModePresentation(
+                purpose: session.purpose,
+                targetApp: trackedTargetApp ?? session.targetApp
+            )
+        }
     }
 
     private func currentTargetApp(for task: RecordingTask) -> NSRunningApplication? {
@@ -632,7 +643,17 @@ final class SpeechInputCoordinator {
             longPressWorkItem?.cancel()
             longPressWorkItem = nil
             hotkeyIsPressed = false
-            if activeSession != nil || recorder.isRecording {
+            if let activeSession {
+                finishRecording()
+                if !activeSession.matchesTrigger(channel: channel, purpose: purpose) {
+                    startRecording(
+                        instructions: "再次按 \(binding.displayName) 完成录音",
+                        activation: .toggle,
+                        channel: channel,
+                        purpose: purpose
+                    )
+                }
+            } else if recorder.isRecording {
                 finishRecording()
             } else {
                 startRecording(
@@ -646,9 +667,26 @@ final class SpeechInputCoordinator {
         }
         hotkeyIsPressed = true
         longPressWorkItem?.cancel()
-        guard activeSession == nil, !recorder.isRecording else { return }
 
         let displayName = binding.displayName
+        if let activeSession {
+            // 我开、我关：同一入口按下不结束，仍交给 key-up 按 toggle 语义收尾。
+            // 我开、他开：不同入口按下先提交当前录音，再立即开启新入口。
+            if activeSession.matchesTrigger(channel: channel, purpose: purpose) {
+                return
+            }
+            finishRecording()
+            suppressNextHotkeyUp = true
+            startRecording(
+                instructions: "再次按下 \(displayName) 完成录音",
+                activation: .toggle,
+                channel: channel,
+                purpose: purpose
+            )
+            return
+        }
+        guard !recorder.isRecording else { return }
+
         let workItem = DispatchWorkItem { [weak self] in
             guard let self, self.hotkeyIsPressed, !self.recorder.isRecording else { return }
             self.startRecording(
@@ -678,7 +716,16 @@ final class SpeechInputCoordinator {
 
         switch activeSession?.activation {
         case .hold, .toggle:
+            let shouldStartReplacement = shouldReplaceActiveRecording(channel: channel, purpose: purpose)
             finishRecording()
+            if shouldStartReplacement {
+                startRecording(
+                    instructions: "再次按下 \(displayName) 完成录音",
+                    activation: .toggle,
+                    channel: channel,
+                    purpose: purpose
+                )
+            }
         case nil:
             guard !recorder.isRecording else {
                 finishRecording()
@@ -705,10 +752,59 @@ final class SpeechInputCoordinator {
     private func cycleSmartRewriteModeFromCapsule() {
         if activeSession?.purpose == .ideaPill {
             popup.updateModeName(SpeechInputPurpose.ideaPill.capsuleModeName)
+            popup.updateModeEmphasis(.normal)
             return
         }
         let next = controller.cycleSmartRewritePreference()
-        popup.updateModeName(next.displayName)
+        let presentation = capsuleModePresentation(
+            preference: next,
+            purpose: .dictation,
+            targetApp: trackedTargetApp ?? activeSession?.targetApp
+        )
+        popup.updateModeName(presentation.modeName)
+        popup.updateModeEmphasis(presentation.emphasis)
+    }
+
+    private func updateCapsuleModePresentation(
+        purpose: SpeechInputPurpose,
+        targetApp: NSRunningApplication?
+    ) {
+        let presentation = capsuleModePresentation(
+            preference: controller.smartRewritePreference,
+            purpose: purpose,
+            targetApp: targetApp
+        )
+        popup.updateModeName(presentation.modeName)
+        popup.updateModeEmphasis(presentation.emphasis)
+    }
+
+    private func capsuleModePresentation(
+        preference: SmartRewritePreference,
+        purpose: SpeechInputPurpose,
+        targetApp: NSRunningApplication?
+    ) -> CapsuleModePresentation {
+        if purpose == .ideaPill {
+            return CapsuleModePresentation(
+                modeName: purpose.capsuleModeName,
+                emphasis: .normal
+            )
+        }
+
+        guard preference == .automatic else {
+            return CapsuleModePresentation(
+                modeName: preference.displayName,
+                emphasis: .normal
+            )
+        }
+
+        let progress = smartInputRouter.progressInfo(
+            preference: preference,
+            context: SmartInputContext(targetApp: targetApp)
+        )
+        return CapsuleModePresentation(
+            modeName: progress.mode.displayName,
+            emphasis: .automaticResolved
+        )
     }
 
     /// 重连预览回调（主题切换换实现后需重设）。
@@ -872,6 +968,7 @@ final class SpeechInputCoordinator {
         )
         let session = SpeechSession(
             id: taskID,
+            channel: channel ?? .chinese,
             targetApp: initialTargetApp,
             configuration: ASRConfiguration(languageMode: .chinese, backend: selectedBackend),
             activation: activation,
@@ -892,12 +989,18 @@ final class SpeechInputCoordinator {
         popup.updateAccent(purpose == .ideaPill ? .ideaPill : .normal)
         popup.show(state: "录音中", draft: "")
         let displayedTargetApp = initialTargetApp ?? frontmostApp
+        let modePresentation = capsuleModePresentation(
+            preference: controller.smartRewritePreference,
+            purpose: purpose,
+            targetApp: initialTargetApp
+        )
         popup.setContext(
             appIcon: displayedTargetApp?.icon,
             appName: displayNameForSelectedTarget(displayedTargetApp),
-            modeName: purpose == .ideaPill ? purpose.capsuleModeName : controller.smartRewritePreference.displayName,
+            modeName: modePresentation.modeName,
             autoTranslateEnabled: controller.autoTranslateEnabled
         )
+        popup.updateModeEmphasis(modePresentation.emphasis)
         refreshOllamaHealthForCapsuleIfNeeded(force: true)
         outputAudioDucker.duckIfNeeded(enabled: controller.duckSystemAudioWhileRecordingEnabled)
         do {
@@ -969,6 +1072,11 @@ final class SpeechInputCoordinator {
             controller.setPrimaryStatus("无法开始录音", detail: error.localizedDescription, tone: .error, resetWaveform: true)
             popup.show(state: "录音失败")
         }
+    }
+
+    private func shouldReplaceActiveRecording(channel: SpeechInputChannel, purpose: SpeechInputPurpose) -> Bool {
+        guard let activeSession else { return false }
+        return !activeSession.matchesTrigger(channel: channel, purpose: purpose)
     }
 
     private func finishRecording() {
@@ -1855,13 +1963,17 @@ final class SpeechInputCoordinator {
 
     private func hidePopup(after delay: TimeInterval, task: RecordingTask) {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            guard self?.shouldUpdateInterface(for: task.id) == true else { return }
+            guard self?.shouldHidePopup(for: task.id) == true else { return }
             self?.popup.hideAnimated()
         }
     }
 
     private func shouldUpdateInterface(for taskID: UUID) -> Bool {
         workflowState.shouldUpdateInterface(for: taskID, isRecording: recorder.isRecording)
+    }
+
+    private func shouldHidePopup(for taskID: UUID) -> Bool {
+        workflowState.canHidePopup(for: taskID, isRecording: recorder.isRecording)
     }
 
     private func markFinalTaskForSubmission(_ taskID: UUID) -> Bool {

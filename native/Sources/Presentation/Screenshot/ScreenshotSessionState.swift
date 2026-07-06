@@ -5,6 +5,7 @@ enum ScreenshotToolbarCommand: CaseIterable {
     case save
     case ocr
     case translate
+    case archive
     case annotate
     case rectangle
     case arrow
@@ -35,6 +36,7 @@ enum ScreenshotCommandEffect: Equatable {
     case save
     case ocr
     case translate
+    case archive
     case startAnnotation(ScreenshotAnnotationTool)
     case selectAnnotationTool(ScreenshotAnnotationTool)
     case undo
@@ -65,6 +67,8 @@ enum ScreenshotCommandDispatcher {
             return .ocr
         case .translate:
             return .translate
+        case .archive:
+            return .archive
         case .annotate:
             return .startAnnotation(.rectangle)
         case .rectangle:
@@ -89,6 +93,7 @@ enum ScreenshotOperationKind: Equatable {
     case windowRecapture
     case ocr
     case translation
+    case archive
     case transientStatus
 }
 
