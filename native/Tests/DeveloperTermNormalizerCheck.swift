@@ -62,6 +62,73 @@ struct DeveloperTermNormalizerCheck {
             normalizer.normalize("打开 Osing 的知识库", context: context).text,
             equals: "打开 Obsidian 的知识库"
         )
+        assert(
+            normalizer.normalize("用奥拉马跑本地模型", context: context).text,
+            equals: "用 Ollama 跑本地模型"
+        )
+        assert(
+            normalizer.normalize("用 ollma 跑本地模型", context: context).text,
+            equals: "用 Ollama 跑本地模型"
+        )
+        assert(
+            normalizer.normalize("用 ollma 检查 q wen 三点六 三十五 b", context: context).text,
+            equals: "用 Ollama 检查 Qwen3.6 35B"
+        )
+        assert(
+            normalizer.normalize("用 Alama 检查纤问 3.635B。用拉马检查 Qwen3.6 35B 用 Alma 检查纤温 3.635B。", context: context).text,
+            equals: "用 Ollama 检查 Qwen3.6 35B。用 Ollama 检查 Qwen3.6 35B 用 Ollama 检查 Qwen3.6 35B。"
+        )
+        assert(
+            normalizer.normalize("使用 Check Full Question 3.635B。", context: context).text,
+            equals: "用 Ollama 检查 Qwen3.6 35B。"
+        )
+        assert(
+            normalizer.normalize("Check Full Question 3.635B。", context: context).text,
+            equals: "Ollama 检查 Qwen3.6 35B。"
+        )
+        assert(
+            normalizer.normalize("接一下迪普西克 v4 flash", context: context).text,
+            equals: "接一下 DeepSeek v4 flash"
+        )
+        assert(
+            normalizer.normalize("比较迷你麦克斯 m2 和 q wen 三点六 三十五 b", context: context).text,
+            equals: "比较 MiniMax M2 和 Qwen3.6 35B"
+        )
+        assert(
+            normalizer.normalize("排查 sceen capture kit 截图权限", context: context).text,
+            equals: "排查 ScreenCaptureKit 截图权限"
+        )
+        let exactOnlyNormalizer = DeveloperTermNormalizer(termsProvider: {
+            [
+                DeveloperTerm(canonical: "ScreenerKit", aliases: ["screener kit"], category: .framework)
+            ]
+        })
+        assert(
+            exactOnlyNormalizer.normalize("排查 screner kit 截图权限", context: context).text,
+            equals: "排查 screner kit 截图权限"
+        )
+        let explicitFuzzyNormalizer = DeveloperTermNormalizer(termsProvider: {
+            [
+                DeveloperTerm(
+                    canonical: "ScreenerKit",
+                    aliases: ["screener kit"],
+                    category: .framework,
+                    allowsFuzzy: true
+                )
+            ]
+        })
+        assert(
+            explicitFuzzyNormalizer.normalize("排查 screner kit 截图权限", context: context).text,
+            equals: "排查 ScreenerKit 截图权限"
+        )
+        assert(
+            normalizer.normalize("检查 user defaults 和 info plist 的版本号", context: context).text,
+            equals: "检查 UserDefaults 和 Info.plist 的版本号"
+        )
+        assert(
+            normalizer.normalize("刷新 onnxruntime 和 mlx 的加载流程", context: context).text,
+            equals: "刷新 ONNX Runtime 和 MLX 的加载流程"
+        )
 
         let storageKey = "developerLexicon.terms.v1"
         let originalData = UserDefaults.standard.data(forKey: storageKey)

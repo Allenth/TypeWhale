@@ -2,29 +2,41 @@ import AppKit
 
 @MainActor
 enum UITheme {
-    // Logo palette: warm golden "sky" (primary) + teal "water" (secondary accent).
+    // Logo palette: warm golden "sky" (primary) + vivid soft green (secondary accent).
     static let brandYellow = NSColor(calibratedRed: 1.0, green: 0.753, blue: 0.18, alpha: 1)
     static let brandTint = NSColor(calibratedRed: 1.0, green: 0.753, blue: 0.18, alpha: 0.06)
-    static let brandTeal = NSColor(calibratedRed: 0.17, green: 0.72, blue: 0.71, alpha: 1)
-    static let brandTealTint = NSColor(calibratedRed: 0.17, green: 0.72, blue: 0.71, alpha: 0.08)
-    static let cardFill = NSColor(calibratedWhite: 1, alpha: 0.06)
-    static let cardBorder = NSColor(calibratedWhite: 1, alpha: 0.12)
-    static let hairline = NSColor(calibratedWhite: 1, alpha: 0.08)
-    static let sectionTitle = NSColor(calibratedWhite: 1, alpha: 0.42)
-    static let keycapFill = NSColor(calibratedWhite: 1, alpha: 0.10)
-    static let keycapBorder = NSColor(calibratedWhite: 1, alpha: 0.16)
+    static let brandGreen = NSColor(calibratedRed: 0.12, green: 0.90, blue: 0.52, alpha: 1)
+    static let brandGreenTint = NSColor(calibratedRed: 0.12, green: 0.90, blue: 0.52, alpha: 0.10)
+    /// 胶囊「本地服务健康」呼吸边框专用绿：比 brandGreen 更柔和的祖母绿/薄荷绿，
+    /// 在深色 HUD 上更耐看，不刺眼。仅用于健康边框，避免影响权限点/刘海脉冲等处的品牌绿。
+    static let healthGreen = NSColor(calibratedRed: 0.34, green: 0.84, blue: 0.63, alpha: 1)
+    /// 录音胶囊毛玻璃背景的圆角半径。RecordingPanel 的圆角裁剪与健康绿环需共用同一值，避免各画各的。
+    /// nonisolated：允许在非主线程隔离的静态初始化（如 HealthBorderOverlayView.Metrics）中直接引用。
+    nonisolated static let capsuleCornerRadius: CGFloat = 21
+    static let brandTeal = brandGreen
+    static let brandTealTint = brandGreenTint
+    static let cardFill = NSColor(calibratedWhite: 1, alpha: 0.082)
+    static let cardBorder = NSColor(calibratedWhite: 1, alpha: 0.24)
+    static let hairline = NSColor(calibratedWhite: 1, alpha: 0.17)
+    static let sectionTitle = NSColor(calibratedWhite: 1, alpha: 0.68)
+    static let keycapFill = NSColor(calibratedWhite: 1, alpha: 0.13)
+    static let keycapBorder = NSColor(calibratedWhite: 1, alpha: 0.24)
     static let iconTint = NSColor(calibratedWhite: 1, alpha: 0.5)
 }
 
 /// Shared layout scale so cards, rows and gaps stay on one consistent grid.
 @MainActor
 enum UILayout {
-    static let cornerRadius: CGFloat = 10
+    static let cornerRadius: CGFloat = 8
     static let rowHeight: CGFloat = 30
+    static let compactRowHeight: CGFloat = 26
+    static let controlLabelWidth: CGFloat = 160
+    static let compactControlLabelWidth: CGFloat = 132
     static let cardPadH: CGFloat = 12
     static let cardPadV: CGFloat = 4
     static let sectionSpacing: CGFloat = 16
-    static let groupSpacing: CGFloat = 10
+    static let groupSpacing: CGFloat = 14
+    static let compactGroupSpacing: CGFloat = 10
     static let headerSpacing: CGFloat = 8
 }
 
@@ -33,6 +45,87 @@ func sectionHeader(_ text: String) -> NSTextField {
     let value = label(text, size: 12, weight: .medium)
     value.textColor = UITheme.sectionTitle
     return value
+}
+
+@MainActor
+func panelTitleLabel(_ text: String) -> NSTextField {
+    let value = label(text, size: 12, weight: .semibold)
+    value.textColor = UITheme.sectionTitle
+    value.maximumNumberOfLines = 1
+    value.lineBreakMode = .byTruncatingTail
+    return value
+}
+
+@MainActor
+func inspectorGroupTitleLabel(_ text: String) -> NSTextField {
+    let value = label(text, size: 11, weight: .semibold)
+    value.textColor = UITheme.sectionTitle
+    value.maximumNumberOfLines = 1
+    value.lineBreakMode = .byTruncatingTail
+    return value
+}
+
+@MainActor
+func controlRowLabel(_ text: String, compact: Bool = false) -> NSTextField {
+    let value = label(text, size: 11, weight: .medium)
+    value.textColor = compact ? NSColor(calibratedWhite: 1, alpha: 0.72) : NSColor(calibratedWhite: 1, alpha: 0.86)
+    value.maximumNumberOfLines = 1
+    value.lineBreakMode = .byTruncatingTail
+    value.setContentCompressionResistancePriority(.required, for: .horizontal)
+    value.widthAnchor.constraint(equalToConstant: compact ? UILayout.compactControlLabelWidth : UILayout.controlLabelWidth).isActive = true
+    return value
+}
+
+@MainActor
+func controlCaptionLabel(_ text: String) -> NSTextField {
+    let value = label(text, size: 10, weight: .medium)
+    value.textColor = UITheme.sectionTitle
+    value.maximumNumberOfLines = 1
+    value.lineBreakMode = .byTruncatingTail
+    return value
+}
+
+@MainActor
+func inspectorTabTitleAttributes(isSelected: Bool) -> [NSAttributedString.Key: Any] {
+    [
+        .font: NSFont.systemFont(ofSize: 12, weight: .semibold),
+        .foregroundColor: isSelected ? UITheme.brandYellow : NSColor.secondaryLabelColor,
+    ]
+}
+
+@MainActor
+func inspectorGroupBox(_ content: NSView, prominence: InspectorGroupProminence = .standard) -> NSView {
+    let box = roundedBox(content, hPad: 12, vPad: prominence.verticalPadding)
+    box.layer?.backgroundColor = prominence.fillColor.cgColor
+    box.layer?.borderColor = prominence.borderColor.cgColor
+    return box
+}
+
+@MainActor
+enum InspectorGroupProminence {
+    case lead
+    case standard
+
+    var verticalPadding: CGFloat {
+        switch self {
+        case .lead: return 11
+        case .standard: return 9
+        }
+    }
+
+    var fillColor: NSColor {
+        switch self {
+        case .lead: return NSColor(calibratedWhite: 1, alpha: 0.088)
+        case .standard: return UITheme.cardFill
+        }
+    }
+
+    var borderColor: NSColor {
+        switch self {
+        case .lead: return NSColor(calibratedWhite: 1, alpha: 0.28)
+        case .standard: return UITheme.cardBorder
+        }
+    }
 }
 
 @MainActor
@@ -97,8 +190,11 @@ func listCard(_ rows: [NSView], hPad: CGFloat = 15, vPad: CGFloat = 3) -> NSView
     stack.translatesAutoresizingMaskIntoConstraints = false
     for (index, row) in rows.enumerated() {
         stack.addArrangedSubview(row)
+        row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         if index < rows.count - 1 {
-            stack.addArrangedSubview(hairlineView())
+            let separator = hairlineView()
+            stack.addArrangedSubview(separator)
+            separator.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         }
     }
     return roundedBox(stack, hPad: hPad, vPad: vPad)
@@ -261,7 +357,7 @@ final class MiniWaveformView: NSView {
         path.lineWidth = 2
         path.lineCapStyle = .round
         path.lineJoinStyle = .round
-        UITheme.brandTeal.withAlphaComponent(0.5 + 0.5 * Double(activity)).setStroke()
+        UITheme.brandGreen.withAlphaComponent(0.5 + 0.5 * Double(activity)).setStroke()
         path.stroke()
     }
 }

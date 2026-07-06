@@ -6,7 +6,7 @@ BUILD_SCRIPT="$ROOT/native/build_native_app.sh"
 README="$ROOT/README.md"
 MACOS_README="$ROOT/macos/README.md"
 VERSION_HISTORY="$ROOT/native/Sources/Presentation/VersionHistory/VersionHistoryViewController.swift"
-INSTALL_APP_PATH="${TYPESPEAKER_INSTALL_APP_PATH:-/Applications/TypeWhale.app}"
+INSTALL_APP_PATH="${TYPESPEAKER_INSTALL_APP_PATH:-/Applications/TypeWhale Pro.app}"
 
 mode="full-version"
 for arg in "$@"; do
@@ -29,13 +29,23 @@ if [[ -z "$current_version" || -z "$current_build" ]]; then
   exit 1
 fi
 
-IFS='.' read -r major minor patch <<< "$current_version"
-if [[ -z "${major:-}" || -z "${minor:-}" || -z "${patch:-}" ]]; then
-  echo "Unexpected version format: $current_version" >&2
-  exit 1
-fi
+next_full_version() {
+  local version="$1"
+  if [[ ! "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+    echo "Unexpected version format: $version" >&2
+    return 1
+  fi
 
-next_patch=$((patch + 1))
+  local major="${match[1]}"
+  local minor="${match[2]}"
+  local patch="${match[3]}"
+  local patch_number=$((10#$patch))
+
+  patch_number=$((patch_number + 1))
+
+  echo "$major.$minor.$patch_number"
+}
+
 next_build=$((current_build + 1))
 if [[ -n "${TYPEWHALE_NEXT_VERSION:-}" ]]; then
   mode="full-version"
@@ -44,7 +54,11 @@ fi
 if [[ "$mode" == "build-only" ]]; then
   next_version="$current_version"
 else
-  next_version="${TYPEWHALE_NEXT_VERSION:-${major}.${minor}.${next_patch}}"
+  if [[ -n "${TYPEWHALE_NEXT_VERSION:-}" ]]; then
+    next_version="$TYPEWHALE_NEXT_VERSION"
+  else
+    next_version="$(next_full_version "$current_version")"
+  fi
 fi
 
 if [[ -n "${TYPEWHALE_NEXT_VERSION:-}" && ! "$TYPEWHALE_NEXT_VERSION" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then
@@ -70,7 +84,7 @@ perl -0pi -e "s{(<key>CFBundleVersion</key><string>)\\Q$current_build\\E}{\${1}$
 
 if [[ -f "$README" ]]; then
   perl -0pi -e 's{Current local release build in this repository is `[^`]+`}{Current local release build in this repository is `'"$next_version ($next_build)"'`}' "$README"
-  perl -0pi -e "s{dist/TypeWhale-[0-9]+\\.[0-9]+\\.[0-9]+-[0-9]+\\.dmg}{dist/TypeWhale-$next_version-$next_build.dmg}g" "$README"
+  perl -0pi -e "s{dist/TypeWhale(?:-Pro)?-[0-9]+\\.[0-9]+(?:\\.[0-9]+)?-[0-9]+\\.dmg}{dist/TypeWhale-Pro-$next_version-$next_build.dmg}g" "$README"
 fi
 
 if [[ -f "$MACOS_README" ]]; then
@@ -78,9 +92,9 @@ if [[ -f "$MACOS_README" ]]; then
 fi
 
 if [[ "$mode" == "build-only" ]]; then
-  echo "Bumped TypeWhale build to $next_version ($next_build)"
+  echo "Bumped TypeWhale Pro build to $next_version ($next_build)"
 else
-  echo "Bumped TypeWhale version to $next_version ($next_build)"
+  echo "Bumped TypeWhale Pro version to $next_version ($next_build)"
 fi
 "$BUILD_SCRIPT"
 sleep 0.8

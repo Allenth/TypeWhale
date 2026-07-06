@@ -4,6 +4,7 @@ import QuartzCore
 final class RecordingPanel: NSPanel, PreviewPresenting {
     private let visualBackground = NSVisualEffectView()
     private let capsule = RecordingCapsuleView()
+    private let healthBorderOverlay = HealthBorderOverlayView()
     private let infoBar = NSStackView()
     private let appIconView = NSImageView()
     private let appNameLabel = NSTextField(labelWithString: "")
@@ -20,6 +21,11 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
     private let fadeDuration: TimeInterval = 0.25
     private let resizeDuration: TimeInterval = 0.18
     private var visibilityGeneration = 0
+    private var currentStatusBorderColor: NSColor?
+    private var ollamaHealthy = false
+    private var accent: PreviewAccent = .normal
+    private var modeTitleText = "自动"
+    private var modeEmphasis: PreviewModeEmphasis = .normal
 
     /// 点击胶囊上的模式标签时回调，用于手动切换整理模式。
     var onCycleMode: (() -> Void)?
@@ -46,7 +52,7 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
         visualBackground.state = .active
         visualBackground.appearance = NSAppearance(named: .vibrantDark)
         visualBackground.wantsLayer = true
-        visualBackground.layer?.cornerRadius = 21
+        visualBackground.layer?.cornerRadius = UITheme.capsuleCornerRadius
         visualBackground.layer?.masksToBounds = true
 
         capsule.frame = visualBackground.bounds
@@ -54,6 +60,12 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
         visualBackground.addSubview(capsule)
 
         configureInfoBar()
+
+        // 健康呼吸绿环置于最上层（信息条之后添加），确保绿边渲染在毛玻璃与文字之前。
+        healthBorderOverlay.frame = visualBackground.bounds
+        healthBorderOverlay.autoresizingMask = [.width, .height]
+        visualBackground.addSubview(healthBorderOverlay)
+
         contentView = visualBackground
     }
 
@@ -109,7 +121,7 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
 
         // 实时输入电平（dBFS），等宽数字 + 固定宽度避免数值变化时胶囊抖动；用于肉眼分辨近场/远场强弱。
         levelLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
-        levelLabel.textColor = NSColor(calibratedRed: 0.30, green: 0.82, blue: 0.80, alpha: 0.98)
+        levelLabel.textColor = UITheme.brandGreen.withAlphaComponent(0.98)
         levelLabel.maximumNumberOfLines = 1
         levelLabel.alignment = .right
         levelLabel.toolTip = "实时输入电平（dBFS），越接近 0 越响"
@@ -137,9 +149,21 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
     }
 
     private func setModeTitle(_ text: String) {
-        modeButton.attributedTitle = NSAttributedString(string: text, attributes: [
+        modeTitleText = text
+        refreshModeTitle()
+    }
+
+    private func refreshModeTitle() {
+        let color: NSColor
+        switch modeEmphasis {
+        case .normal:
+            color = NSColor(calibratedWhite: 1, alpha: 0.96)
+        case .automaticResolved:
+            color = NSColor(calibratedRed: 1.0, green: 0.82, blue: 0.36, alpha: 0.98)
+        }
+        modeButton.attributedTitle = NSAttributedString(string: modeTitleText, attributes: [
             .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
-            .foregroundColor: NSColor(calibratedWhite: 1, alpha: 0.96),
+            .foregroundColor: color,
         ])
     }
 
@@ -167,6 +191,11 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
     func updateModeName(_ modeName: String) {
         setModeTitle(modeName)
         if hasContext { resizeAndPosition() }
+    }
+
+    func updateModeEmphasis(_ emphasis: PreviewModeEmphasis) {
+        modeEmphasis = emphasis
+        refreshModeTitle()
     }
 
     func updateAutoTranslateEnabled(_ enabled: Bool) {
@@ -202,8 +231,35 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
         statusBadge.textColor = badgeColor
         statusBadge.isHidden = !(hasStatus && hasContext)
         statusDotLabel.isHidden = !(hasStatus && hasContext)
-        capsule.statusBorderColor = hasStatus ? borderColor : nil
+        currentStatusBorderColor = hasStatus ? borderColor : nil
+        applyBorderState()
         if hasContext { resizeAndPosition() }
+    }
+
+    func updateOllamaHealth(isHealthy: Bool) {
+        ollamaHealthy = isHealthy
+        applyBorderState()
+    }
+
+    func updateAccent(_ accent: PreviewAccent) {
+        self.accent = accent
+        applyBorderState()
+    }
+
+    private func applyBorderState() {
+        let accentBorderColor: NSColor?
+        switch accent {
+        case .normal:
+            accentBorderColor = nil
+        case .ideaPill:
+            accentBorderColor = NSColor(calibratedRed: 0.48, green: 0.38, blue: 1.0, alpha: 0.98)
+        }
+        capsule.statusBorderColor = currentStatusBorderColor ?? accentBorderColor
+        // 紧急状态边框（倒计时/内存）由胶囊绘制并优先；否则由置顶绿环显示健康呼吸。
+        let healthActive = ollamaHealthy && currentStatusBorderColor == nil && accent == .normal
+        healthBorderOverlay.isActive = healthActive
+        // 绿环激活时隐藏胶囊默认白边，避免白边+绿环的双层边框。
+        capsule.defaultBorderHidden = healthActive || accentBorderColor != nil
     }
 
     private func updateTargetApp(appIcon: NSImage?, appName: String?, shouldResize: Bool) {
@@ -250,6 +306,8 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
     func hideAnimated() {
         guard isVisible else { return }
         visibilityGeneration += 1
+        updateAccent(.normal)
+        updateOllamaHealth(isHealthy: false)
         let generation = visibilityGeneration
         NSAnimationContext.runAnimationGroup { context in
             context.duration = fadeDuration

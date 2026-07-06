@@ -198,7 +198,8 @@ final class TestLogsViewController: NSViewController {
         let reports = files
             .filter { url in
                 let name = url.lastPathComponent.lowercased()
-                return name.hasPrefix("typewhale") && (name.hasSuffix(".ips") || name.hasSuffix(".crash"))
+                return (name.hasPrefix(AppBrand.crashReportFilePrefix) || name.hasPrefix("typewhale"))
+                    && (name.hasSuffix(".ips") || name.hasSuffix(".crash"))
             }
             .sorted { lhs, rhs in
                 modificationDate(lhs) > modificationDate(rhs)
@@ -207,7 +208,7 @@ final class TestLogsViewController: NSViewController {
 
         guard !reports.isEmpty else {
             return (
-                "未找到 TypeWhale 崩溃报告\n\(directory.path)",
+                "未找到 \(AppBrand.displayName) 崩溃报告\n\(directory.path)",
                 directory.path
             )
         }
@@ -264,7 +265,7 @@ final class TestLogsViewController: NSViewController {
             .appendingPathComponent("Models", isDirectory: true)
 
         var lines: [String] = [
-            "App：TypeWhale \(version) (\(build))",
+            "App：\(AppBrand.displayName) \(version) (\(build))",
             "最低系统：macOS \(minimum)",
             "当前系统：\(process.operatingSystemVersionString)",
             "Bundle：\(Bundle.main.bundlePath)",

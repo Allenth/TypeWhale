@@ -44,8 +44,15 @@ private final class ProbeAITextEngine: SmartAITextEngine {
 struct SelectedSmartAITextEngineCheck {
     static func main() async throws {
         let deepSeek = ProbeAITextEngine(displayName: "DeepSeek Probe", logName: "deepseek", usesLocalCostGuard: true)
+        let ollamaQwen35B = ProbeAITextEngine(displayName: "Ollama 35B Probe", logName: "ollama", usesLocalCostGuard: false)
         let engine = SelectedSmartAITextEngine(
             deepSeek: deepSeek,
+            ollama: { model in
+                switch model {
+                case .ollamaQwen35B: return ollamaQwen35B
+                case .deepSeekV4Flash: return deepSeek
+                }
+            },
             modelProvider: { .deepSeekV4Flash }
         )
         let context = SmartInputContext(targetAppName: "Test", targetBundleIdentifier: "test")
@@ -65,10 +72,32 @@ struct SelectedSmartAITextEngineCheck {
             rawText: "Settings",
             direction: .englishToChinese,
             context: context,
-            triggeredBy: "screenshot_translation"
+            triggeredBy: "final_translation"
         )
         precondition(translationOutput.translatedText == "DeepSeek Probe:Settings")
         precondition(deepSeek.translateCalls == 1)
+
+        let localEngine = SelectedSmartAITextEngine(
+            deepSeek: deepSeek,
+            ollama: { model in
+                switch model {
+                case .ollamaQwen35B: return ollamaQwen35B
+                case .deepSeekV4Flash: return deepSeek
+                }
+            },
+            modelProvider: { .ollamaQwen35B }
+        )
+        precondition(localEngine.displayName == "Ollama 35B Probe")
+        precondition(localEngine.logName == "ollama")
+        precondition(!localEngine.usesLocalCostGuard)
+        let localOutput = try await localEngine.rewrite(
+            rawText: "本地整理",
+            mode: .polish,
+            context: context,
+            preference: .polish
+        )
+        precondition(localOutput.text == "Ollama 35B Probe:本地整理")
+        precondition(ollamaQwen35B.rewriteCalls == 1)
         print("SelectedSmartAITextEngineCheck passed")
     }
 }

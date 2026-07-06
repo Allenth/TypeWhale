@@ -2,28 +2,40 @@ import Foundation
 
 enum SmartAIProvider: String, Codable {
     case deepSeek
+    case ollama
 
     var displayName: String {
         switch self {
         case .deepSeek: return "DeepSeek"
+        case .ollama: return "Ollama"
         }
     }
 }
 
 enum SmartAIModel: String, CaseIterable, Codable {
+    case ollamaQwen35B = "ollama-qwen3.6-35b-mlx"
     case deepSeekV4Flash = "deepseek-v4-flash"
 
-    static let defaultModel: SmartAIModel = .deepSeekV4Flash
+    static let defaultModel: SmartAIModel = .ollamaQwen35B
 
     var provider: SmartAIProvider {
         switch self {
+        case .ollamaQwen35B: return .ollama
         case .deepSeekV4Flash: return .deepSeek
         }
     }
 
     var displayName: String {
         switch self {
+        case .ollamaQwen35B: return "本地 Qwen3.6 35B"
         case .deepSeekV4Flash: return "DeepSeek v4 flash"
+        }
+    }
+
+    var engineModelName: String {
+        switch self {
+        case .ollamaQwen35B: return "qwen3.6:35b-mlx"
+        case .deepSeekV4Flash: return rawValue
         }
     }
 
@@ -33,6 +45,8 @@ enum SmartAIModel: String, CaseIterable, Codable {
 
     var supportsUsageSummary: Bool {
         switch self {
+        case .ollamaQwen35B:
+            return false
         case .deepSeekV4Flash:
             return true
         }
@@ -45,6 +59,10 @@ enum SmartAIModel: String, CaseIterable, Codable {
         switch rawValue {
         case "MiniMax-M2", "MiniMax-M2.5-highspeed":
             return .deepSeekV4Flash
+        case "qwen3.6:35b-mlx", "Qwen3.6-35B-A3B-MLX-8bit":
+            return .ollamaQwen35B
+        case "ollama-qwen3-8b", "qwen3:8b", "Qwen3-8B":
+            return .ollamaQwen35B
         default:
             return nil
         }

@@ -2,7 +2,7 @@ import AppKit
 
 extension MainViewController {
     @objc func openPreferences() {
-        scrollToConfigPanels()
+        selectInspectorTab(.common)
     }
 
     func section(_ title: String, _ card: NSView) -> NSView {
@@ -19,13 +19,13 @@ extension MainViewController {
         captureButton: NSButton,
         fallbackButton: NSButton
     ) -> NSView {
-        let titleLabel = label(title, size: 12)
+        let titleLabel = controlRowLabel(title)
         titleLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
 
         let row = NSStackView(views: [titleLabel, flexSpacer(), captureButton, fallbackButton])
         row.orientation = .horizontal
         row.alignment = .centerY
-        row.spacing = 6
+        row.spacing = 8
         row.translatesAutoresizingMaskIntoConstraints = false
         row.setContentCompressionResistancePriority(.required, for: .vertical)
         row.heightAnchor.constraint(equalToConstant: UILayout.rowHeight).isActive = true
@@ -33,35 +33,31 @@ extension MainViewController {
     }
 
     func optionRow(_ title: String, _ control: NSView) -> NSView {
-        let titleLabel = label(title, size: 12)
+        let titleLabel = controlRowLabel(title)
+        control.translatesAutoresizingMaskIntoConstraints = false
+        control.setAccessibilityLabel(title)
+        let row = NSStackView(views: [titleLabel, flexSpacer(), control])
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 10
+        row.heightAnchor.constraint(equalToConstant: UILayout.rowHeight).isActive = true
+        return row
+    }
+
+    func compactOptionRow(_ title: String, _ control: NSView) -> NSView {
+        let titleLabel = controlRowLabel(title, compact: true)
         control.translatesAutoresizingMaskIntoConstraints = false
         control.setAccessibilityLabel(title)
         let row = NSStackView(views: [titleLabel, flexSpacer(), control])
         row.orientation = .horizontal
         row.alignment = .centerY
         row.spacing = 8
-        row.heightAnchor.constraint(equalToConstant: UILayout.rowHeight).isActive = true
-        return row
-    }
-
-    func compactOptionRow(_ title: String, _ control: NSView) -> NSView {
-        let titleLabel = label(title, size: 10, weight: .medium)
-        titleLabel.textColor = NSColor(calibratedWhite: 1, alpha: 0.72)
-        titleLabel.maximumNumberOfLines = 1
-        titleLabel.lineBreakMode = .byTruncatingTail
-        control.translatesAutoresizingMaskIntoConstraints = false
-        control.setAccessibilityLabel(title)
-        let row = NSStackView(views: [titleLabel, flexSpacer(), control])
-        row.orientation = .horizontal
-        row.alignment = .centerY
-        row.spacing = 5
-        row.heightAnchor.constraint(equalToConstant: 24).isActive = true
+        row.heightAnchor.constraint(equalToConstant: UILayout.compactRowHeight).isActive = true
         return row
     }
 
     func stackedOptionRow(_ title: String, _ control: NSView) -> NSView {
-        let titleLabel = label(title, size: 12, weight: .medium)
-        titleLabel.textColor = .secondaryLabelColor
+        let titleLabel = controlRowLabel(title)
         control.translatesAutoresizingMaskIntoConstraints = false
         control.setAccessibilityLabel(title)
         let row = NSStackView(views: [titleLabel, control])

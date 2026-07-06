@@ -1,16 +1,16 @@
 import Foundation
 
 enum LaunchDiagnostics {
-    private static let subsystem = "TypeWhale"
+    private static let subsystem = AppBrand.logsDirectoryName
 
-    /// 日志根目录：~/Library/Logs/TypeWhale
+    /// 日志根目录：~/Library/Logs/<AppBrand.logsDirectoryName>
     static var baseDirectory: URL {
         FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Logs", isDirectory: true)
             .appendingPathComponent(subsystem, isDirectory: true)
     }
 
-    /// 当前 build 的日志文件：~/Library/Logs/TypeWhale/<YYYY-MM-DD>/<version>-<build>.log
+    /// 当前 build 的日志文件：~/Library/Logs/<AppBrand.logsDirectoryName>/<YYYY-MM-DD>/<version>-<build>.log
     /// 每天一个文件夹、每个 build 一个文件；与 C 端 LaunchProbe 计算同一布局。
     static var logFileURL: URL {
         let day = dayFormatter.string(from: Date())
@@ -19,7 +19,7 @@ enum LaunchDiagnostics {
             .appendingPathComponent("\(appVersion)-\(appBuild).log")
     }
 
-    /// 固定入口软链：~/Library/Logs/TypeWhale/latest.log → 当前 build 文件。
+    /// 固定入口软链：~/Library/Logs/<AppBrand.logsDirectoryName>/latest.log → 当前 build 文件。
     static var latestSymlinkURL: URL {
         baseDirectory.appendingPathComponent("latest.log")
     }

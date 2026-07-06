@@ -1,6 +1,6 @@
 # TypeWhale Architecture
 
-Last updated: 2026-06-30
+Last updated: 2026-07-01
 
 This document is the single current architecture source for TypeWhale. Older architecture notes and ADR files are historical context only. If code or product behavior changes an architecture boundary, update this file and record the concrete work in `docs/开发日志.md`.
 
@@ -105,20 +105,46 @@ Preview non-goals:
 
 - Screenshot mode observes the desktop; entering it must not show, hide, restore, or otherwise manage the TypeWhale main window.
 - Screenshot overlay may become key enough to receive input without activating the main TypeWhale app window.
+- Screenshot presentation must not depend on `MainViewController`, main-panel status tones, or app reopen suppression. Screenshot status is screenshot-owned and may use non-activating transient feedback only.
+- Screenshot overlay windows must remain non-activating panels; they must not become the app's main window.
 - Window-level capture may raise the explicitly selected target window and recapture in place.
 - During screenshot OCR/translation pending state, actions that export or mutate unstable output must be disabled or guarded. Cancel remains allowed.
 - Stale OCR/translation callbacks must be ignored after cancel or superseding operations.
+- Screenshot translation is a separate OCR workflow. It must use the ScreenshotTranslation prompt/engine path, default to English OCR -> Chinese translation, and preserve OCR line ids for layout. Do not route it through the voice SmartTranslation prompt builder with a special `triggeredBy` branch.
 - Screenshot translation layout and product acceptance details live in `docs/SCREENSHOT_TRANSLATION_SPEC.md`.
 
 ### Main Window Lifecycle
 
 - Main-window visibility is governed only by explicit user actions, the configured main-window shortcut, status-item/menu commands, and approved first-install/default-open behavior.
 - Login-item/background launch must not unexpectedly surface the main window.
-- Screenshot and recording flows must not take ownership of main-window visibility.
+- Screenshot and recording flows must not take ownership of main-window visibility. Screenshot close/copy/save/OCR/translation/cancel paths must not register reopen suppression or call `showMainWindow()`.
+- Main-window layout follows the Classic Mac inspector direction: left side is the stable current-session workspace, right side is a tabbed control panel with vertical scrolling only. Do not reintroduce a horizontal settings panel scroller or navigation by horizontal scroll position.
+
+### Smart Rewrite
+
+- Prompt rendering is layered as global safety contract, mode contract, editable template, and final raw-text block. The raw-text block is appended last and must not participate in placeholder substitution, so literal strings such as `{rawText}`, `{targetAppName}`, and `{developerGlossary}` inside dictated content remain user content.
+- `ModeContract` is reserved for non-negotiable product boundaries, not default wording style. `developerRequirement` keeps only the invariants needed for coding-agent requests: first-person task/feedback voice, semantic understanding before cleanup, speaking-position preservation, judgment intensity, no invented solution, feedback not being forced into commands, and prompt/rule-block preservation.
+- Default templates own tone and output structure. They can say when to use one sentence, 2-4 sentences, bullets, or a complex goal/phenomenon/expectation/constraint structure, but should not duplicate global safety or mode boundaries.
+- Default templates must not contain `原始语音文本：{rawText}`. Raw text is appended only by `RawTextBlock.render(rawText)` after template rendering.
+- `raw` and `command` do not use the Smart Rewrite prompt chain. `raw` is a bypass that returns the original text; future command-agent behavior should use a separate command prompt builder instead of inheriting Smart Rewrite's "do not execute commands" safety contract.
+- Developer requirement mode is designed for text that may be pasted directly into Codex, Cursor, Claude Code, ChatGPT, terminals, IDEs, or other coding agents.
+- Developer requirement mode defaults to lightweight task cleanup, not requirements-document generation. Structure is a tool for complex or explicitly requested cases, not the default output shape.
+- Developer requirement mode must understand product/technical meaning before rewriting. It should correct context-supported Chinese ASR homophones and near-sound errors instead of mechanically copying wrong characters after removing fillers.
+- Voice language translation belongs to the SmartInput/Smart Rewrite product surface: its prompts and settings stay with intelligent text processing. It handles recognized speech text and must not carry screenshot OCR layout rules.
+- Developer requirement mode inherits the 1.4.20 semantic-preservation lesson: preserve explicit tasks, background reasons, constraints, ordering, risks, acceptance hints, subjective experience, and judgment intensity. Short content may stay short, but short content with cause, feeling, constraint, order, or risk must not be compressed into a single command.
+- Semantic correction is not only a fixed replacement list. When the ASR literal text is incoherent but the development-feedback context has an obvious homophone or near-sound candidate, restore the user's likely intent while preserving uncertain code, paths, commands, logs, and proper nouns.
+- Developer requirement output must preserve the user's speaking position. First-person and second-person expressions such as "我觉得", "我要求", "你看", "告诉我", "我们开始", and "给我" must not be rewritten into third-person summaries such as "用户要求" or "要求对方告知".
+- Short developer directions must stay short. If the raw text is a single brief direction, command, or intent, such as "先从模型段解决文同", rewrite only speech-recognition errors, terminology, punctuation, and word order; do not expand it into goal/context/constraints/completion-standard fields.
+- Multiple tasks may use short bullets. Full goal/context/constraints/completion-standard templates are allowed only when the user explicitly asks for a full requirement, acceptance criteria, or plan, or when the raw text already contains enough fields to justify that structure.
+- If the raw text itself contains a prompt, rule block, boundary note, or bullet list intended for a coding agent, preserve the original directive tone, bullet structure, and first/second-person stance. Do not collapse it into a generic summary like "用户要求优化提示词".
+- These guardrails apply both to manual developer requirement mode and to automatic mode when target/context rules choose developer requirement mode.
+- Custom template required-placeholder injection is mode-specific. Developer requirement, developer statement, and code commit templates are auto-patched with `{developerGlossary}` if missing; polish and exhaustive summary templates are respected as written.
+- Term normalizer fuzzy matching is opt-in per term through `DeveloperTerm.allowsFuzzy`. User-created aliases default to exact matching to avoid accidental English-word rewrites.
 
 ### AI Providers
 
-- DeepSeek v4 flash is the only active user-facing AI text provider.
+- Ollama local Qwen is the default user-facing AI text provider for smart rewrite, voice translation, and screenshot translation.
+- DeepSeek v4 flash remains an explicit paid cloud option, not an automatic fallback from local failures.
 - The provider boundary stays in code through `SelectedSmartAITextEngine`.
 - MiniMax remains non-user-facing unless it later passes intent-preservation tests.
 - Future providers must enter through adapter/strategy boundaries and pass smart rewrite, voice translation, and screenshot translation quality fixtures before becoming visible.
@@ -144,6 +170,7 @@ Preview non-goals:
 ### Historical Decisions Still Active
 
 - Final transcription is independent from realtime preview.
+- Speech input tasks may carry a product purpose. Normal dictation can paste to the target app; `ideaPill` reuses recording, final ASR, realtime preview, and smart rewrite, but saves Markdown notes and must not enter the automatic paste queue.
 - Screenshot overlay must not activate or reorder the TypeWhale main window.
 - Automatic smart rewrite rules may match target context and content text separately.
 - Capsule preview is a presentation pipeline with bounded realtime work and stale-callback protection.
@@ -170,6 +197,7 @@ These items come from the code review before the next refactor pass. They are co
 #### Version A Resolved In First Pass
 
 - `TypeSpeakerApp.applicationDidFinishLaunching` no longer calls `lifecycle.showMainWindow()` unconditionally. Launch now records an explicit hidden-by-default launch visibility policy.
+- Dock/Finder reopen is an explicit user entry point and should call `AppLifecycleCoordinator.showMainWindow()`. Screenshot overlay shutdown no longer registers reopen suppression; screenshot copy/cancel/save/OCR/translation paths stay outside main-window lifecycle.
 - `SpeechInputCoordinator.beginScreenshotFromHotkey(...)` no longer calls `hideMainWindow()` before entering screenshot mode. Screenshot entry keeps the TypeWhale main-window state unchanged.
 - `ScreenshotOverlayView` now limits toolbar interaction during translation pending state to cancel only. Copy, save, OCR, annotation, undo, and done are disabled while translation is in flight.
 - Screenshot translation callbacks are guarded by an overlay-local generation token and are invalidated on close, cancel, replace/recapture, and pending recapture.
@@ -246,6 +274,8 @@ Exit criteria for Version B:
 - `SpeechInputCoordinator` still owns final VAD gating, UI progress, smart rewrite/translation, paste submission, target app lookup, and memory safety. The final recognition boundary now returns only `recognized`, `empty`, or `failed`.
 - `FinalRecognitionUseCaseCheck` covers successful final recognition parsing, empty-result classification, model error propagation, and the fake-ASR callback path.
 - Build 457 tightened microphone input release: `AudioRecorder` now tracks tap installation, logs explicit input-session release reasons, performs delayed idle release after stop/cancel, and lets background health checks clear any idle residual input session.
+- Build 458 added a startup route-stability guard for Bluetooth microphones: `AudioRecorder` snapshots the intended input device at recording start and ignores same-device `AVAudioEngineConfigurationChange` / device-list churn during the short startup window, while still cancelling on real input switches.
+- Build 459 made that guard recoverable: if the same-device startup configuration change leaves `AVAudioEngine` stopped, `AudioRecorder` immediately attempts to restart the engine before falling back to route-change cancellation.
 
 #### Version C Next Review Items
 

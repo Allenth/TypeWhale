@@ -2,7 +2,7 @@ import Foundation
 import Security
 
 enum MinimaxAPIKeyStore {
-    private static let service = "com.waykingah.typewhale.minimax"
+    private static let service = "com.waykingah.typewhale.pro.minimax"
     private static let account = "api-key"
 
     static func load() -> String? {

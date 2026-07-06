@@ -5,7 +5,7 @@ struct ScreenshotSessionStateCheck {
     static func main() {
         let allCommands = ScreenshotToolbarCommand.allCases
         let outputCommands: [ScreenshotToolbarCommand] = [
-            .copy, .save, .ocr, .translate, .annotate, .rectangle, .arrow, .pen, .text, .undo, .done
+            .copy, .save, .ocr, .translate, .archive, .annotate, .rectangle, .arrow, .pen, .text, .undo, .done
         ]
 
         let idle = ScreenshotSessionState(phase: .idle, hasSelection: false)
@@ -41,6 +41,7 @@ struct ScreenshotSessionStateCheck {
         precondition(ScreenshotCommandDispatcher.effect(for: .save, in: selectedContext) == .save)
         precondition(ScreenshotCommandDispatcher.effect(for: .ocr, in: selectedContext) == .ocr)
         precondition(ScreenshotCommandDispatcher.effect(for: .translate, in: selectedContext) == .translate)
+        precondition(ScreenshotCommandDispatcher.effect(for: .archive, in: selectedContext) == .archive)
         precondition(ScreenshotCommandDispatcher.effect(for: .annotate, in: selectedContext) == .startAnnotation(.rectangle))
         precondition(ScreenshotCommandDispatcher.effect(for: .pen, in: selectedContext) == .selectAnnotationTool(.pen))
         precondition(ScreenshotCommandDispatcher.effect(for: .done, in: selectedContext) == .done)

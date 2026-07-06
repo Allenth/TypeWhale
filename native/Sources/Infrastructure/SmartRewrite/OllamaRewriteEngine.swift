@@ -1,0 +1,570 @@
+import Foundation
+
+final class OllamaRewriteEngine: SmartAITextEngine, ScreenshotTranslationEngine {
+    private let endpoint: URL
+    private let model: SmartAIModel
+    private let session: URLSession
+    private let serverRecovery: OllamaServerRecovery
+    private let requestProfile: OllamaRequestProfile
+    let displayName: String
+    let logName = "ollama"
+    let usesLocalCostGuard = false
+
+    init(
+        model: SmartAIModel = .ollamaQwen35B,
+        endpoint: URL = URL(string: "http://127.0.0.1:11434/api/chat")!,
+        session: URLSession = .shared,
+        serverRecovery: OllamaServerRecovery = DefaultOllamaServerRecovery(),
+        requestProfile: OllamaRequestProfile = .standard
+    ) {
+        self.model = model
+        self.endpoint = endpoint
+        self.session = session
+        self.serverRecovery = serverRecovery
+        self.requestProfile = requestProfile
+        self.displayName = model.displayName
+    }
+
+    static func warmUp(
+        model: SmartAIModel,
+        endpoint: URL = URL(string: "http://127.0.0.1:11434/api/chat")!,
+        session: URLSession = .shared,
+        serverRecovery: OllamaServerRecovery = DefaultOllamaServerRecovery(),
+        reason: String
+    ) async {
+        guard model.provider == .ollama else { return }
+        var request = URLRequest(url: endpoint, timeoutInterval: 25)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        do {
+            request.httpBody = try JSONEncoder().encode(OllamaChatRequest(
+                model: model.engineModelName,
+                messages: [
+                    OllamaMessage(role: "system", content: "只输出 OK。"),
+                    OllamaMessage(role: "user", content: "OK")
+                ],
+                stream: false,
+                think: false,
+                keepAlive: "30m",
+                options: OllamaChatOptions(
+                    temperature: 0.0,
+                    topP: 0.9,
+                    numPredict: 2
+                )
+            ))
+            LaunchDiagnostics.mark("ollama warmup_start reason=\(reason) model=\(model.engineModelName)")
+            let (data, response) = try await sendWithRecovery(
+                request,
+                endpoint: endpoint,
+                session: session,
+                serverRecovery: serverRecovery,
+                model: model,
+                requestID: "warmup-\(UUID().uuidString)",
+                triggeredBy: "warmup_\(reason)",
+                mode: "warmup",
+                recordingSessionID: nil
+            )
+            guard let httpResponse = response as? HTTPURLResponse,
+                  200..<300 ~= httpResponse.statusCode else {
+                let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+                let body = String(data: data.prefix(300), encoding: .utf8) ?? ""
+                LaunchDiagnostics.mark(
+                    "ollama warmup_failed reason=\(reason) model=\(model.engineModelName) http_status=\(status) body=\"\(logSnippet(body))\""
+                )
+                return
+            }
+            let decoded = try? JSONDecoder().decode(OllamaChatResponse.self, from: data)
+            LaunchDiagnostics.mark(
+                "ollama warmup_done reason=\(reason) model=\(model.engineModelName) prompt_eval_count=\(decoded?.promptEvalCount ?? -1) eval_count=\(decoded?.evalCount ?? -1) total_duration_ns=\(decoded?.totalDuration ?? -1)"
+            )
+        } catch {
+            LaunchDiagnostics.mark(
+                "ollama warmup_failed reason=\(reason) model=\(model.engineModelName) error=\"\(logSnippet(error.localizedDescription))\""
+            )
+        }
+    }
+
+    func rewrite(
+        rawText: String,
+        mode: RewriteMode,
+        context: SmartInputContext,
+        preference: SmartRewritePreference
+    ) async throws -> SmartRewriteEngineOutput {
+        guard model.provider == .ollama else {
+            throw OllamaRewriteError.unsupportedModel(model.rawValue)
+        }
+        let prompt = SmartRewritePromptBuilder.prompt(
+            rawText: rawText,
+            mode: mode,
+            context: context,
+            preference: preference
+        )
+        return try await complete(
+            prompt: prompt,
+            systemPrompt: rewriteSystemPrompt,
+            mode: mode.displayName,
+            triggeredBy: "final_smart_rewrite",
+            rawTextLength: rawText.count,
+            context: context
+        )
+    }
+
+    func translate(
+        rawText: String,
+        direction: SmartTranslationDirection,
+        context: SmartInputContext,
+        triggeredBy: String = "final_translation"
+    ) async throws -> SmartTranslationOutput {
+        let source = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !source.isEmpty else {
+            throw OllamaRewriteError.emptyContent
+        }
+        let prompt = SmartTranslationPromptBuilder.prompt(
+            source: source,
+            direction: direction,
+            context: context,
+            triggeredBy: triggeredBy
+        )
+        let translated = try await complete(
+            prompt: prompt,
+            systemPrompt: translationSystemPrompt,
+            mode: direction.displayName,
+            triggeredBy: triggeredBy,
+            rawTextLength: source.count,
+            context: context
+        )
+        return SmartTranslationOutput(
+            sourceText: source,
+            translatedText: translated.text,
+            direction: direction,
+            modelName: displayName,
+            usage: nil
+        )
+    }
+
+    func translateScreenshotOCR(
+        rawText: String,
+        context: SmartInputContext
+    ) async throws -> SmartTranslationOutput {
+        let source = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !source.isEmpty else {
+            throw OllamaRewriteError.emptyContent
+        }
+        let prompt = ScreenshotTranslationPromptBuilder.prompt(
+            source: source,
+            context: context
+        )
+        let translated = try await complete(
+            prompt: prompt,
+            systemPrompt: screenshotTranslationSystemPrompt,
+            mode: ScreenshotTranslationPromptBuilder.modeName,
+            triggeredBy: ScreenshotTranslationPromptBuilder.triggeredBy,
+            rawTextLength: source.count,
+            context: context
+        )
+        return SmartTranslationOutput(
+            sourceText: source,
+            translatedText: translated.text,
+            direction: .englishToChinese,
+            modelName: displayName,
+            usage: nil
+        )
+    }
+
+    private var rewriteSystemPrompt: String {
+        """
+        你是 TypeWhale 的本地语音文本整理层，只整理原始语音文本，不回答、不执行、不扩写知识。
+        如果原文说“帮我回答”“告诉用户”“你就说”，不要改成直接对最终用户说话；只整理成用户要表达的意图或待办。
+        合格示例：回复用户退订会员咨询：请引导其打开设置，点击订阅选项后取消，并安抚对方无需担忧。
+        不合格示例：您可以打开设置，点击订阅，然后取消，请不用担心。
+        忠实保留叙述主体；原文没有明确说“对方、客户、用户、团队、他、她”时，不要主动补出这些主体。
+        不要为了结构完整而补“无明确行动项”或泛化风险。
+        主体不明参考：原文“没有准确理解并妥善处理我表达的内容，而且沟通里还有曲解。”合格输出“我的表达内容没有被准确理解和妥善处理，沟通中还存在曲解。”不合格输出“对方未准确理解并妥善处理我表达的内容，且在沟通中存在曲解。”
+        保持输入主要语言，\(SmartRewriteSafetyPrompt.languageLock)
+        只输出最终正文，不输出分析、标签、Markdown 或规则解释。
+        """
+    }
+
+    private var translationSystemPrompt: String {
+        SmartRewriteSafetyPrompt.translationSystemPrompt(
+            lead: "你是 TypeWhale 的本地快速语音翻译层，使用非推理模式工作。"
+        )
+    }
+
+    private var screenshotTranslationSystemPrompt: String {
+        ScreenshotTranslationPromptBuilder.systemPrompt(
+            lead: "你是 TypeWhale 的本地快速截图 OCR 英译中层，使用非推理模式工作。"
+        )
+    }
+
+    private func complete(
+        prompt: String,
+        systemPrompt: String,
+        mode: String,
+        triggeredBy: String,
+        rawTextLength: Int,
+        context: SmartInputContext
+    ) async throws -> SmartRewriteEngineOutput {
+        let requestID = UUID().uuidString
+        let messages = [
+            OllamaMessage(role: "system", content: systemPrompt),
+            OllamaMessage(role: "user", content: prompt)
+        ]
+        let promptLength = systemPrompt.count + prompt.count
+        let timeoutInterval = requestProfile.timeoutInterval(rawTextLength: rawTextLength, promptLength: promptLength)
+        var request = URLRequest(url: endpoint, timeoutInterval: timeoutInterval)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(OllamaChatRequest(
+            model: model.engineModelName,
+            messages: messages,
+            stream: false,
+            think: false,
+            keepAlive: "30m",
+            options: OllamaChatOptions(
+                temperature: 0.1,
+                topP: 0.9,
+                numPredict: requestProfile.maxOutputTokens
+            )
+        ))
+        LaunchDiagnostics.mark(
+            "ollama request_start recording_session_id=\(context.recordingSessionId ?? "--") request_id=\(requestID) triggered_by=\(triggeredBy) model=\(model.engineModelName) mode=\(mode) rawText_length=\(rawTextLength) prompt_length=\(promptLength) timeout_seconds=\(Int(timeoutInterval))"
+        )
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await Self.sendWithRecovery(
+                request,
+                endpoint: endpoint,
+                session: session,
+                serverRecovery: serverRecovery,
+                model: model,
+                requestID: requestID,
+                triggeredBy: triggeredBy,
+                mode: mode,
+                recordingSessionID: context.recordingSessionId
+            )
+        } catch {
+            LaunchDiagnostics.mark(
+                "ollama request_failed recording_session_id=\(context.recordingSessionId ?? "--") request_id=\(requestID) triggered_by=\(triggeredBy) model=\(model.engineModelName) mode=\(mode) error=\"\(Self.logSnippet(error.localizedDescription))\""
+            )
+            throw error
+        }
+        guard let httpResponse = response as? HTTPURLResponse else {
+            LaunchDiagnostics.mark(
+                "ollama request_failed recording_session_id=\(context.recordingSessionId ?? "--") request_id=\(requestID) triggered_by=\(triggeredBy) model=\(model.engineModelName) mode=\(mode) error=invalid_response"
+            )
+            throw OllamaRewriteError.invalidResponse
+        }
+        guard 200..<300 ~= httpResponse.statusCode else {
+            let body = String(data: data.prefix(500), encoding: .utf8) ?? ""
+            LaunchDiagnostics.mark(
+                "ollama request_failed recording_session_id=\(context.recordingSessionId ?? "--") request_id=\(requestID) triggered_by=\(triggeredBy) model=\(model.engineModelName) mode=\(mode) http_status=\(httpResponse.statusCode) body=\"\(Self.logSnippet(body))\""
+            )
+            throw OllamaRewriteError.httpStatus(httpResponse.statusCode)
+        }
+
+        let decoded = try JSONDecoder().decode(OllamaChatResponse.self, from: data)
+        let content = SmartRewriteOutputSanitizer.cleanLocalModel(
+            decoded.message.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+        guard !content.isEmpty else {
+            throw OllamaRewriteError.emptyContent
+        }
+        LaunchDiagnostics.mark(
+            "ollama request_done recording_session_id=\(context.recordingSessionId ?? "--") request_id=\(requestID) triggered_by=\(triggeredBy) model=\(model.engineModelName) mode=\(mode) prompt_eval_count=\(decoded.promptEvalCount ?? -1) eval_count=\(decoded.evalCount ?? -1) total_duration_ns=\(decoded.totalDuration ?? -1)"
+        )
+        return SmartRewriteEngineOutput(text: content, usage: nil)
+    }
+
+    private static func logSnippet(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\n", with: "\\n")
+            .replacingOccurrences(of: "\r", with: "\\r")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+    }
+
+    private static func sendWithRecovery(
+        _ request: URLRequest,
+        endpoint: URL,
+        session: URLSession,
+        serverRecovery: OllamaServerRecovery,
+        model: SmartAIModel,
+        requestID: String,
+        triggeredBy: String,
+        mode: String,
+        recordingSessionID: String?
+    ) async throws -> (Data, URLResponse) {
+        await serverRecovery.prepareForRequest(endpoint: endpoint, model: model, reason: triggeredBy)
+        do {
+            return try await session.data(for: request)
+        } catch {
+            guard isConnectionUnavailable(error) else { throw error }
+            let recovered = await serverRecovery.recoverAfterConnectionFailure(
+                endpoint: endpoint,
+                model: model,
+                requestID: requestID,
+                triggeredBy: triggeredBy,
+                mode: mode,
+                recordingSessionID: recordingSessionID,
+                error: error
+            )
+            guard recovered else { throw error }
+            LaunchDiagnostics.mark(
+                "ollama request_retry recording_session_id=\(recordingSessionID ?? "--") request_id=\(requestID) triggered_by=\(triggeredBy) model=\(model.engineModelName) mode=\(mode)"
+            )
+            return try await session.data(for: request)
+        }
+    }
+
+    private static func isConnectionUnavailable(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        guard nsError.domain == NSURLErrorDomain else { return false }
+        return [
+            NSURLErrorCannotConnectToHost,
+            NSURLErrorCannotFindHost,
+            NSURLErrorDNSLookupFailed,
+            NSURLErrorNetworkConnectionLost,
+            NSURLErrorNotConnectedToInternet,
+            NSURLErrorTimedOut,
+        ].contains(nsError.code)
+    }
+}
+
+enum OllamaRewriteError: Error {
+    case unsupportedModel(String)
+    case invalidResponse
+    case httpStatus(Int)
+    case emptyContent
+}
+
+enum OllamaRequestProfile {
+    case standard
+    case screenshotTranslation
+
+    var maxOutputTokens: Int {
+        switch self {
+        case .standard:
+            return SmartRewriteCostGuard.maxOutputTokens
+        case .screenshotTranslation:
+            return ScreenshotTranslationPromptBuilder.localMaxOutputTokens
+        }
+    }
+
+    func timeoutInterval(rawTextLength: Int, promptLength: Int) -> TimeInterval {
+        switch self {
+        case .standard:
+            return 12
+        case .screenshotTranslation:
+            if promptLength >= 2_200 || rawTextLength >= 1_300 {
+                return 30
+            }
+            if promptLength >= 1_600 || rawTextLength >= 800 {
+                return 24
+            }
+            return 12
+        }
+    }
+}
+
+protocol OllamaServerRecovery {
+    func prepareForRequest(endpoint: URL, model: SmartAIModel, reason: String) async
+    func recoverAfterConnectionFailure(
+        endpoint: URL,
+        model: SmartAIModel,
+        requestID: String,
+        triggeredBy: String,
+        mode: String,
+        recordingSessionID: String?,
+        error: Error
+    ) async -> Bool
+}
+
+struct PassiveOllamaServerRecovery: OllamaServerRecovery {
+    func prepareForRequest(endpoint: URL, model: SmartAIModel, reason: String) async {
+        LaunchDiagnostics.mark("ollama passive_prepare reason=\(reason) model=\(model.engineModelName) action=no_launch")
+    }
+
+    func recoverAfterConnectionFailure(
+        endpoint: URL,
+        model: SmartAIModel,
+        requestID: String,
+        triggeredBy: String,
+        mode: String,
+        recordingSessionID: String?,
+        error: Error
+    ) async -> Bool {
+        LaunchDiagnostics.mark(
+            "ollama passive_connection_failed recording_session_id=\(recordingSessionID ?? "--") request_id=\(requestID) triggered_by=\(triggeredBy) model=\(model.engineModelName) mode=\(mode) error=\"\(logSnippet(error.localizedDescription))\" action=no_launch"
+        )
+        return false
+    }
+
+    private func logSnippet(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\n", with: "\\n")
+            .replacingOccurrences(of: "\r", with: "\\r")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+    }
+}
+
+struct OllamaServerHealthProbe {
+    private let endpoint: URL
+    private let session: URLSession
+    private let timeout: TimeInterval
+
+    init(
+        endpoint: URL = URL(string: "http://127.0.0.1:11434/api/chat")!,
+        session: URLSession = .shared,
+        timeout: TimeInterval = 0.8
+    ) {
+        self.endpoint = endpoint
+        self.session = session
+        self.timeout = timeout
+    }
+
+    func isHealthy() async -> Bool {
+        guard let probeURL = URL(string: "/api/version", relativeTo: endpoint)?.absoluteURL else {
+            return false
+        }
+        var request = URLRequest(url: probeURL, timeoutInterval: timeout)
+        request.httpMethod = "GET"
+        do {
+            let (_, response) = try await session.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else { return false }
+            return 200..<300 ~= httpResponse.statusCode
+        } catch {
+            return false
+        }
+    }
+}
+
+struct DefaultOllamaServerRecovery: OllamaServerRecovery {
+    private let appName = "Ollama"
+    private let probeTimeout: TimeInterval = 1.0
+    private let startupWaitSeconds: TimeInterval = 7.0
+    private let pollIntervalNanoseconds: UInt64 = 350_000_000
+
+    func prepareForRequest(endpoint: URL, model: SmartAIModel, reason: String) async {
+        guard !(await isServerReady(endpoint: endpoint)) else { return }
+        LaunchDiagnostics.mark("ollama server_unavailable reason=\(reason) model=\(model.engineModelName) action=launch_app")
+        launchOllamaApp(reason: reason, model: model)
+        _ = await waitUntilReady(endpoint: endpoint, model: model, reason: reason)
+    }
+
+    func recoverAfterConnectionFailure(
+        endpoint: URL,
+        model: SmartAIModel,
+        requestID: String,
+        triggeredBy: String,
+        mode: String,
+        recordingSessionID: String?,
+        error: Error
+    ) async -> Bool {
+        LaunchDiagnostics.mark(
+            "ollama connection_failed recording_session_id=\(recordingSessionID ?? "--") request_id=\(requestID) triggered_by=\(triggeredBy) model=\(model.engineModelName) mode=\(mode) error=\"\(logSnippet(error.localizedDescription))\" action=launch_retry"
+        )
+        launchOllamaApp(reason: "connection_failed", model: model)
+        return await waitUntilReady(endpoint: endpoint, model: model, reason: "connection_failed")
+    }
+
+    private func launchOllamaApp(reason: String, model: SmartAIModel) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        process.arguments = ["-gj", "-a", appName]
+        do {
+            try process.run()
+            LaunchDiagnostics.mark("ollama launch_requested reason=\(reason) model=\(model.engineModelName)")
+        } catch {
+            LaunchDiagnostics.mark("ollama launch_failed reason=\(reason) model=\(model.engineModelName) error=\"\(logSnippet(error.localizedDescription))\"")
+        }
+    }
+
+    private func waitUntilReady(endpoint: URL, model: SmartAIModel, reason: String) async -> Bool {
+        let deadline = Date().addingTimeInterval(startupWaitSeconds)
+        while Date() < deadline {
+            if await isServerReady(endpoint: endpoint) {
+                LaunchDiagnostics.mark("ollama server_ready reason=\(reason) model=\(model.engineModelName)")
+                return true
+            }
+            try? await Task.sleep(nanoseconds: pollIntervalNanoseconds)
+        }
+        LaunchDiagnostics.mark("ollama server_unavailable_after_launch reason=\(reason) model=\(model.engineModelName)")
+        return false
+    }
+
+    private func isServerReady(endpoint: URL) async -> Bool {
+        guard let probeURL = URL(string: "/api/version", relativeTo: endpoint)?.absoluteURL else {
+            return false
+        }
+        var request = URLRequest(url: probeURL, timeoutInterval: probeTimeout)
+        request.httpMethod = "GET"
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else { return false }
+            return 200..<300 ~= httpResponse.statusCode
+        } catch {
+            return false
+        }
+    }
+
+    private func logSnippet(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\n", with: "\\n")
+            .replacingOccurrences(of: "\r", with: "\\r")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+    }
+}
+
+private struct OllamaChatRequest: Encodable {
+    let model: String
+    let messages: [OllamaMessage]
+    let stream: Bool
+    let think: Bool
+    let keepAlive: String
+    let options: OllamaChatOptions
+
+    enum CodingKeys: String, CodingKey {
+        case model
+        case messages
+        case stream
+        case think
+        case keepAlive = "keep_alive"
+        case options
+    }
+}
+
+private struct OllamaChatOptions: Encodable {
+    let temperature: Double
+    let topP: Double
+    let numPredict: Int
+
+    enum CodingKeys: String, CodingKey {
+        case temperature
+        case topP = "top_p"
+        case numPredict = "num_predict"
+    }
+}
+
+private struct OllamaMessage: Codable {
+    let role: String
+    let content: String
+}
+
+private struct OllamaChatResponse: Decodable {
+    let message: OllamaMessage
+    let totalDuration: Int?
+    let promptEvalCount: Int?
+    let evalCount: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case message
+        case totalDuration = "total_duration"
+        case promptEvalCount = "prompt_eval_count"
+        case evalCount = "eval_count"
+    }
+}

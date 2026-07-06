@@ -2,7 +2,7 @@ import Foundation
 import Security
 
 enum DeepSeekAPIKeyStore {
-    private static let service = "com.waykingah.typewhale.deepseek"
+    private static let service = "com.waykingah.typewhale.pro.deepseek"
     private static let account = "api-key"
 
     static func load() -> String? {

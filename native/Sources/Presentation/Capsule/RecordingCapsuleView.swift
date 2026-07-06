@@ -1,5 +1,4 @@
 import AppKit
-import QuartzCore
 
 final class RecordingCapsuleView: NSView {
     private enum Metrics {
@@ -36,6 +35,14 @@ final class RecordingCapsuleView: NSView {
     /// 状态边框颜色：录音倒计时临近/内存偏高时高亮整圈边框作为状态提示；nil 为默认白色描边。
     var statusBorderColor: NSColor? {
         didSet { needsDisplay = true }
+    }
+
+    /// 健康呼吸绿环激活时置 true：隐藏默认白色描边，让置顶绿环成为唯一边框，避免内外双层边框。
+    var defaultBorderHidden = false {
+        didSet {
+            guard oldValue != defaultBorderHidden else { return }
+            needsDisplay = true
+        }
     }
 
     override var isOpaque: Bool { false }
@@ -113,7 +120,7 @@ final class RecordingCapsuleView: NSView {
             statusBorderColor.setStroke()
             path.lineWidth = 1.8
             path.stroke()
-        } else {
+        } else if !defaultBorderHidden {
             NSColor(calibratedWhite: 1, alpha: 0.48).setStroke()
             path.lineWidth = 1.2
             path.stroke()

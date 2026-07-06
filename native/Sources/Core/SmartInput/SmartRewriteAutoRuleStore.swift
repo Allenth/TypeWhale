@@ -66,12 +66,13 @@ struct SmartRewriteAutoConfiguration: Codable, Equatable {
 
 enum SmartRewriteAutoRuleStore {
     private static let storageKey = "smartRewriteAutoConfiguration.v1"
+    private static let retiredDefaultRuleIDs: Set<String> = ["notes", "chat"]
 
     static let selectableModes: [RewriteMode] = [
         .polish,
         .developerRequirement,
-        .note,
-        .chat,
+        .developerStatement,
+        .codeCommit,
         .exhaustiveSummary,
         .raw,
     ]
@@ -102,20 +103,6 @@ enum SmartRewriteAutoRuleStore {
                     mode: .developerRequirement,
                     isEnabled: true
                 ),
-                SmartRewriteAutoRule(
-                    id: "notes",
-                    title: "笔记窗口",
-                    keywords: ["obsidian", "notion", "notes"],
-                    mode: .note,
-                    isEnabled: true
-                ),
-                SmartRewriteAutoRule(
-                    id: "chat",
-                    title: "聊天窗口",
-                    keywords: ["wechat", "telegram", "messages", "com.apple.mobilesms"],
-                    mode: .chat,
-                    isEnabled: true
-                ),
             ],
             fallbackMode: .polish
         )
@@ -131,21 +118,9 @@ enum SmartRewriteAutoRuleStore {
 
     static func save(_ configuration: SmartRewriteAutoConfiguration) {
         let normalized = SmartRewriteAutoConfiguration(
-            rules: configuration.rules.map { rule in
-                SmartRewriteAutoRule(
-                    id: rule.id,
-                    title: rule.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        ? "未命名范围"
-                        : rule.title.trimmingCharacters(in: .whitespacesAndNewlines),
-                    keywords: rule.keywords
-                        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                        .filter { !$0.isEmpty },
-                    mode: selectableModes.contains(rule.mode) ? rule.mode : .polish,
-                    isEnabled: rule.isEnabled,
-                    matchTarget: rule.matchTarget,
-                    matchContent: rule.matchContent
-                )
-            },
+            rules: configuration.rules
+                .filter { !retiredDefaultRuleIDs.contains($0.id) }
+                .map(normalizedRule),
             fallbackMode: selectableModes.contains(configuration.fallbackMode) ? configuration.fallbackMode : .polish
         )
         if let data = try? JSONEncoder().encode(normalized) {
@@ -179,17 +154,36 @@ enum SmartRewriteAutoRuleStore {
     }
 
     private static func mergedWithDefaults(_ configuration: SmartRewriteAutoConfiguration) -> SmartRewriteAutoConfiguration {
-        var rulesByID = Dictionary(uniqueKeysWithValues: configuration.rules.map { ($0.id, $0) })
+        let migratedRules = configuration.rules
+            .filter { !retiredDefaultRuleIDs.contains($0.id) }
+            .map(normalizedRule)
+        var rulesByID = Dictionary(uniqueKeysWithValues: migratedRules.map { ($0.id, $0) })
         for defaultRule in defaultConfiguration.rules where rulesByID[defaultRule.id] == nil {
             rulesByID[defaultRule.id] = defaultRule
         }
         let orderedRules = defaultConfiguration.rules.compactMap { rulesByID[$0.id] }
-        let customRules = configuration.rules.filter { rule in
+        let customRules = migratedRules.filter { rule in
             !defaultConfiguration.rules.contains { $0.id == rule.id }
         }
         return SmartRewriteAutoConfiguration(
             rules: orderedRules + customRules,
             fallbackMode: selectableModes.contains(configuration.fallbackMode) ? configuration.fallbackMode : .polish
+        )
+    }
+
+    private static func normalizedRule(_ rule: SmartRewriteAutoRule) -> SmartRewriteAutoRule {
+        SmartRewriteAutoRule(
+            id: rule.id,
+            title: rule.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? "未命名范围"
+                : rule.title.trimmingCharacters(in: .whitespacesAndNewlines),
+            keywords: rule.keywords
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty },
+            mode: selectableModes.contains(rule.mode) ? rule.mode : .polish,
+            isEnabled: rule.isEnabled,
+            matchTarget: rule.matchTarget,
+            matchContent: rule.matchContent
         )
     }
 }

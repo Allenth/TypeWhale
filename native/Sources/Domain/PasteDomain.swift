@@ -14,4 +14,17 @@ enum PasteOutcome {
             return nil
         }
     }
+
+    var logName: String {
+        switch self {
+        case .directInserted:
+            return "direct_inserted"
+        case .restored:
+            return "restored"
+        case .preservedUserClipboard:
+            return "preserved_user_clipboard"
+        case .failed(let reason):
+            return "failed:\(reason)"
+        }
+    }
 }

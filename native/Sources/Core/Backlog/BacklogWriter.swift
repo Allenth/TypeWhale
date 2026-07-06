@@ -9,6 +9,9 @@ struct BacklogSaveContext {
 }
 
 enum BacklogWriter {
+    private static let ideaPillDirectoryName = "闪念胶囊"
+    private static let knowledgeArchiveDirectoryName = "归档（未处理）"
+
     static func shouldSave(rawText: String) -> Bool {
         let text = normalized(rawText)
         return saveIntentTokens.contains { text.contains($0) }
@@ -19,6 +22,34 @@ enum BacklogWriter {
         let title = titleText(from: context.finalText, fallback: context.rawText)
         let fileURL = uniqueFileURL(in: directoryURL, title: title)
         let body = markdown(context: context, title: title)
+        try body.write(to: fileURL, atomically: true, encoding: .utf8)
+        return fileURL
+    }
+
+    static func saveIdeaPill(
+        _ context: BacklogSaveContext,
+        rootDirectory: URL = BacklogDirectoryStore.directory,
+        now: Date = Date()
+    ) throws -> URL {
+        let directoryURL = BacklogDirectoryStore.ensureDirectory(
+            rootDirectory.appendingPathComponent(ideaPillDirectoryName, isDirectory: true)
+        )
+        let title = titleText(from: context.finalText, fallback: context.rawText)
+        let fileURL = uniqueIdeaPillFileURL(in: directoryURL, title: title, now: now)
+        let body = ideaPillMarkdown(context: context, title: title, now: now)
+        try body.write(to: fileURL, atomically: true, encoding: .utf8)
+        return fileURL
+    }
+
+    static func saveKnowledgeArchive(
+        _ context: BacklogSaveContext,
+        rootDirectory: URL = BacklogDirectoryStore.defaultDirectory,
+        now: Date = Date()
+    ) throws -> URL {
+        let directoryURL = knowledgeArchiveDayDirectory(in: rootDirectory, now: now)
+        let title = titleText(from: context.finalText, fallback: context.rawText)
+        let fileURL = uniqueKnowledgeArchiveFileURL(in: directoryURL, title: title, now: now)
+        let body = knowledgeArchiveMarkdown(context: context, title: title, now: now)
         try body.write(to: fileURL, atomically: true, encoding: .utf8)
         return fileURL
     }
@@ -55,6 +86,60 @@ enum BacklogWriter {
         """
     }
 
+    private static func ideaPillMarkdown(context: BacklogSaveContext, title: String, now: Date) -> String {
+        let createdAt = isoFormatter.string(from: now)
+        let cleanFinal = cleanedContent(context.finalText)
+        let cleanRaw = cleanedContent(context.rawText)
+        let target = context.targetAppName ?? "未知"
+        return """
+        ---
+        type: idea_pill
+        created_at: \(createdAt)
+        source: TypeWhale
+        recording_session_id: \(context.recordingSessionID.uuidString)
+        mode: \(escapeYAML(context.modeName))
+        target_app: \(escapeYAML(target))
+        ---
+
+        # \(title)
+
+        \(cleanFinal.isEmpty ? cleanRaw : cleanFinal)
+
+        ## 原始语音
+
+        \(cleanRaw)
+
+        """
+    }
+
+    private static func knowledgeArchiveMarkdown(context: BacklogSaveContext, title: String, now: Date) -> String {
+        let createdAt = isoFormatter.string(from: now)
+        let cleanFinal = cleanedContent(context.finalText)
+        let cleanRaw = cleanedContent(context.rawText)
+        let target = context.targetAppName ?? "知识点"
+        return """
+        ---
+        type: knowledge_archive
+        created_at: \(createdAt)
+        source: TypeWhale Screenshot Archive
+        recording_session_id: \(context.recordingSessionID.uuidString)
+        mode: \(escapeYAML(context.modeName))
+        target_app: \(escapeYAML(target))
+        ---
+
+        # \(title)
+
+        ## 知识点
+
+        \(cleanFinal.isEmpty ? cleanRaw : cleanFinal)
+
+        ## OCR 原文
+
+        \(cleanRaw)
+
+        """
+    }
+
     private static func titleText(from finalText: String, fallback rawText: String) -> String {
         let source = cleanedContent(finalText).isEmpty ? cleanedContent(rawText) : cleanedContent(finalText)
         let firstLine = source
@@ -76,10 +161,47 @@ enum BacklogWriter {
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private static func uniqueFileURL(in directory: URL, title: String) -> URL {
-        let timestamp = fileFormatter.string(from: Date())
+    private static func uniqueFileURL(in directory: URL, title: String, now: Date = Date()) -> URL {
+        let timestamp = fileFormatter.string(from: now)
         let slug = sanitizedFileName(title)
         let baseName = "\(timestamp)-\(slug.isEmpty ? "backlog" : slug)"
+        var candidate = directory.appendingPathComponent("\(baseName).md")
+        var index = 2
+        while FileManager.default.fileExists(atPath: candidate.path) {
+            candidate = directory.appendingPathComponent("\(baseName)-\(index).md")
+            index += 1
+        }
+        return candidate
+    }
+
+    private static func knowledgeArchiveDayDirectory(in rootDirectory: URL, now: Date) -> URL {
+        let day = knowledgeArchiveDayFormatter.string(from: now)
+        return BacklogDirectoryStore.ensureDirectory(
+            rootDirectory
+                .appendingPathComponent(knowledgeArchiveDirectoryName, isDirectory: true)
+                .appendingPathComponent(day, isDirectory: true)
+        )
+    }
+
+    private static func uniqueKnowledgeArchiveFileURL(in directory: URL, title: String, now: Date) -> URL {
+        let timestamp = ideaPillFileFormatter.string(from: now)
+        let slug = sanitizedFileName(title)
+        let titlePart = slug.isEmpty ? "知识点" : slug
+        let baseName = "归档-\(timestamp)-\(titlePart)"
+        var candidate = directory.appendingPathComponent("\(baseName).md")
+        var index = 2
+        while FileManager.default.fileExists(atPath: candidate.path) {
+            candidate = directory.appendingPathComponent("\(baseName)-\(index).md")
+            index += 1
+        }
+        return candidate
+    }
+
+    private static func uniqueIdeaPillFileURL(in directory: URL, title: String, now: Date) -> URL {
+        let timestamp = ideaPillFileFormatter.string(from: now)
+        let slug = sanitizedFileName(title)
+        let titlePart = slug.isEmpty ? ideaPillDirectoryName : slug
+        let baseName = "\(timestamp)-\(titlePart)-idea-pill"
         var candidate = directory.appendingPathComponent("\(baseName).md")
         var index = 2
         while FileManager.default.fileExists(atPath: candidate.path) {
@@ -151,6 +273,18 @@ enum BacklogWriter {
     private static let fileFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd-HHmmss"
+        return formatter
+    }()
+
+    private static let ideaPillFileFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyMMdd-HHmm"
+        return formatter
+    }()
+
+    private static let knowledgeArchiveDayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
         return formatter
     }()
 }

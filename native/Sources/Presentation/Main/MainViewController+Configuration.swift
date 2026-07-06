@@ -3,6 +3,7 @@ import AppKit
 extension MainViewController {
     func configureOptionAccessibility() {
         smartRewriteMode.setAccessibilityLabel("智能整理")
+        smartAIModelMode.setAccessibilityLabel("智能整理模型")
         asrBackendMode.setAccessibilityLabel("识别模型")
         asrBackendMode.toolTip = "选择 final 识别使用的本地 ASR 后端"
         deepSeekKeyButton.setAccessibilityLabel("DeepSeek API Key")
@@ -11,9 +12,12 @@ extension MainViewController {
         developerTermsButton.setAccessibilityLabel("开发术语词库")
         autoTranslate.setAccessibilityLabel("自动翻译")
         autoTranslate.toolTip = "可在快捷键设置中配置快速打开或关闭"
+        ideaPillHotkeyCaptureButton.setAccessibilityLabel("闪念胶囊快捷键")
         translationDirectionMode.setAccessibilityLabel("翻译方向")
         translationPromptButton.setAccessibilityLabel("翻译提示词")
+        socialScopeButton.setAccessibilityLabel("社交应用清单")
         screenshotSaveLocationButton.setAccessibilityLabel("截图保存位置")
+        screenshotArchiveMode.setAccessibilityLabel("截图归档整理模式")
         backlogDirectoryButton.setAccessibilityLabel("需求池目录")
         realtime.setAccessibilityLabel("胶囊实时预览")
         autoFinish.setAccessibilityLabel("停顿自动完成")
@@ -30,7 +34,7 @@ extension MainViewController {
         audioInputDeviceMode.controlSize = .small
         audioInputDeviceMode.font = .systemFont(ofSize: 11, weight: .medium)
         audioInputDeviceMode.toolTip = "默认跟随系统输入；通话场景录不到音时可手动锁定正在使用的麦克风。"
-        refreshAudioInputDeviceMenu(selectedUID: selectedUID)
+        configureDeferredAudioInputDeviceMenu(selectedUID: selectedUID)
 
         let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)
         audioInputRefreshButton.image = NSImage(
@@ -46,7 +50,25 @@ extension MainViewController {
         audioInputRefreshButton.action = #selector(refreshAudioInputDevicesFromButton)
     }
 
+    private func configureDeferredAudioInputDeviceMenu(selectedUID: String) {
+        audioInputDeviceMode.removeAllItems()
+        if selectedUID.isEmpty {
+            audioInputDeviceMode.addItem(withTitle: "跟随系统")
+            audioInputDeviceMode.lastItem?.representedObject = AudioInputDevice.systemDefaultUID
+            audioInputDeviceMode.toolTip = "录音时跟随 macOS 当前系统输入；点刷新可查看设备列表。"
+        } else {
+            audioInputDeviceMode.addItem(withTitle: "已选择麦克风")
+            audioInputDeviceMode.lastItem?.representedObject = selectedUID
+            audioInputDeviceMode.addItem(withTitle: "跟随系统")
+            audioInputDeviceMode.lastItem?.representedObject = AudioInputDevice.systemDefaultUID
+            audioInputDeviceMode.toolTip = "录音时会校验已选择麦克风；点刷新可查看当前设备列表。"
+        }
+        audioInputDeviceMode.selectItem(at: 0)
+        audioInputDeviceMenuHasLoaded = false
+    }
+
     func refreshAudioInputDeviceMenu(selectedUID: String? = nil) {
+        audioInputDeviceMenuHasLoaded = true
         let targetUID = selectedUID ?? selectedAudioInputDeviceUID
         let defaultName = AudioInputDeviceProvider.defaultInputDeviceName() ?? "系统默认"
         let devices = AudioInputDeviceProvider.devices()
@@ -72,6 +94,7 @@ extension MainViewController {
         audioInputDeviceMode.toolTip = resolvedUID.isEmpty
             ? "跟随 macOS 当前系统输入：\(defaultName)"
             : "录音时锁定选中的麦克风；如果设备消失会自动回到跟随系统。"
+        startAudioInputRouteObserver()
     }
 
     func selectAudioInputDeviceMenuItem(uid: String) {
@@ -91,6 +114,7 @@ extension MainViewController {
     }
 
     func startAudioInputRouteObserver() {
+        guard audioInputDeviceMenuHasLoaded else { return }
         guard audioInputRouteObserver == nil else { return }
         let observer = AudioInputRouteObserver { [weak self] reason in
             self?.refreshAudioInputDevicesAfterRouteChange(reason)
@@ -115,6 +139,19 @@ extension MainViewController {
         smartRewriteMode.bezelStyle = .rounded
         smartRewriteMode.controlSize = .regular
         smartRewriteMode.font = .systemFont(ofSize: 12)
+    }
+
+    func configureSmartAIModelMenu(_ model: SmartAIModel) {
+        smartAIModelMode.removeAllItems()
+        for item in SmartAIModel.allCases {
+            smartAIModelMode.addItem(withTitle: item.displayName)
+            smartAIModelMode.lastItem?.tag = item.menuTag
+        }
+        smartAIModelMode.selectItem(withTag: model.menuTag)
+        smartAIModelMode.toolTip = "选择智能整理、自动翻译和截图翻译使用的模型"
+        smartAIModelMode.bezelStyle = .rounded
+        smartAIModelMode.controlSize = .regular
+        smartAIModelMode.font = .systemFont(ofSize: 12)
     }
 
     func configureASRBackendMenu(_ backend: ASRBackend) {
@@ -182,6 +219,15 @@ extension MainViewController {
         translationPromptButton.toolTip = "调整、修改并保存自动翻译提示词"
     }
 
+    func configureSocialScopeButton() {
+        socialScopeButton.target = self
+        socialScopeButton.action = #selector(configureSocialScope)
+        socialScopeButton.bezelStyle = .rounded
+        socialScopeButton.controlSize = .regular
+        socialScopeButton.font = .systemFont(ofSize: 12, weight: .medium)
+        socialScopeButton.toolTip = "维护社交窗口清单，命中时中译英使用社交提示词"
+    }
+
     func configureScreenshotSaveLocationButton() {
         screenshotSaveLocationButton.target = self
         screenshotSaveLocationButton.action = #selector(configureScreenshotSaveLocation)
@@ -189,6 +235,22 @@ extension MainViewController {
         screenshotSaveLocationButton.controlSize = .regular
         screenshotSaveLocationButton.font = .systemFont(ofSize: 12, weight: .medium)
         refreshScreenshotSaveLocationButton()
+    }
+
+    func configureScreenshotArchiveModeMenu(_ preference: SmartRewritePreference) {
+        screenshotArchiveMode.removeAllItems()
+        for item in ScreenshotArchiveModeStore.supportedModes {
+            screenshotArchiveMode.addItem(withTitle: item.displayName)
+            screenshotArchiveMode.lastItem?.tag = item.menuTag
+        }
+        let selected = ScreenshotArchiveModeStore.supportedModes.contains(preference)
+            ? preference
+            : ScreenshotArchiveModeStore.defaultMode
+        screenshotArchiveMode.selectItem(withTag: selected.menuTag)
+        screenshotArchiveMode.toolTip = "截图归档 OCR 后使用的智能整理模式"
+        screenshotArchiveMode.bezelStyle = .rounded
+        screenshotArchiveMode.controlSize = .regular
+        screenshotArchiveMode.font = .systemFont(ofSize: 12, weight: .medium)
     }
 
     func configureBacklogDirectoryButton() {
@@ -227,8 +289,10 @@ extension MainViewController {
     }
 
     func refreshSmartAIUsageVisibility() {
-        smartAIUsageRow?.isHidden = false
-        deepSeekBalanceButton.isHidden = false
+        let usesDeepSeek = smartAIModel.provider == .deepSeek
+        smartAIKeyRow?.isHidden = !usesDeepSeek
+        smartAIUsageRow?.isHidden = !usesDeepSeek
+        deepSeekBalanceButton.isHidden = !usesDeepSeek
     }
 
     func toggleAutoTranslateFromShortcut() {
@@ -276,10 +340,10 @@ extension MainViewController {
     }
 
     func loadAppIcon() -> NSImage? {
-        if let image = NSImage(named: "TypeWhale") {
+        if let image = NSImage(named: AppBrand.iconResourceName) {
             return image
         }
-        if let url = Bundle.main.url(forResource: "TypeWhale", withExtension: "icns") {
+        if let url = Bundle.main.url(forResource: AppBrand.iconResourceName, withExtension: "icns") {
             return NSImage(contentsOf: url)
         }
         return NSImage(named: NSImage.applicationIconName)

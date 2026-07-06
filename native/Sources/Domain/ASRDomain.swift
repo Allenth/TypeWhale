@@ -96,6 +96,7 @@ struct RecordingTask {
     let audioURL: URL
     let targetApp: NSRunningApplication?
     let configuration: ASRConfiguration
+    let purpose: SpeechInputPurpose
     let duration: TimeInterval
     let finishRequestedAt: Date
 }

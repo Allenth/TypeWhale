@@ -9,6 +9,7 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
     private var window: NSWindow?
     private var thirdPartyNoticesWindow: NSWindow?
     private var allowsTermination = false
+    private var reopenPolicy = AppReopenPolicy()
     private var workspaceObservers: [NSObjectProtocol] = []
     var onSystemWillSleep: (() -> Void)?
     var onSystemDidWake: (() -> Void)?
@@ -93,11 +94,13 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
         noticesItem.target = self
         appMenu.addItem(noticesItem)
         appMenu.addItem(.separator())
-        let quitItem = NSMenuItem(title: "隐藏 TypeWhale", action: #selector(hideMainWindow), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: "隐藏 \(AppBrand.displayName)", action: #selector(hideMainWindow), keyEquivalent: "q")
         quitItem.target = self
         appMenu.addItem(quitItem)
         appItem.submenu = appMenu
         mainMenu.addItem(appItem)
+
+        mainMenu.addItem(StandardEditMenuFactory.makeMenuItem())
 
         let windowItem = NSMenuItem()
         let windowMenu = NSMenu(title: "窗口")
@@ -117,7 +120,7 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
             button.title = ""
             button.image = makeStatusBarLogo()
             button.imagePosition = .imageOnly
-            button.toolTip = "TypeWhale"
+            button.toolTip = AppBrand.displayName
         }
 
         let menu = NSMenu()
@@ -229,7 +232,7 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
             backing: .buffered,
             defer: false
         )
-        mainWindow.title = "TypeWhale"
+        mainWindow.title = AppBrand.displayName
         mainWindow.appearance = NSAppearance(named: .darkAqua)
         mainWindow.isOpaque = false
         mainWindow.backgroundColor = .clear
@@ -268,7 +271,7 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
 
     @objc private func showPreferences() {
         showMainWindow()
-        controller.scrollToConfigPanels()
+        controller.selectInspectorTab(.common)
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -309,8 +312,18 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
         onMainInterfaceOpened?()
     }
 
+    func suppressNextReopen(reason: String, duration: TimeInterval) {
+        reopenPolicy.suppress(until: Date().addingTimeInterval(duration))
+        LaunchDiagnostics.mark("application_reopen_suppress reason=\(reason) duration_ms=\(Int(duration * 1000))")
+    }
+
     func shouldHandleReopen() -> Bool {
-        LaunchDiagnostics.mark("application_reopen_ignored")
+        if reopenPolicy.consumeSuppression(now: Date()) {
+            LaunchDiagnostics.mark("application_reopen_suppressed")
+            return false
+        }
+        LaunchDiagnostics.mark("application_reopen_show_main_window visible=\(window?.isVisible ?? false)")
+        showMainWindow()
         return false
     }
 

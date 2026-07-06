@@ -16,9 +16,10 @@ enum ToastStyle {
         }
     }
 
+    @MainActor
     var tint: NSColor {
         switch self {
-        case .success: return UITheme.brandTeal
+        case .success: return UITheme.brandGreen
         case .info: return NSColor(calibratedWhite: 1, alpha: 0.85)
         case .warning: return .systemOrange
         case .error: return .systemRed
@@ -100,7 +101,7 @@ final class ToastPresenter {
         panel.contentView = content
     }
 
-    func show(_ message: String, style: ToastStyle = .success, duration: TimeInterval = 1.6) {
+    func show(_ message: String, style: ToastStyle = .success, duration: TimeInterval? = 1.6) {
         let config = NSImage.SymbolConfiguration(pointSize: 13, weight: .semibold)
         iconView.image = NSImage(systemSymbolName: style.symbolName, accessibilityDescription: nil)?
             .withSymbolConfiguration(config)
@@ -122,6 +123,10 @@ final class ToastPresenter {
         }
 
         dismissWorkItem?.cancel()
+        guard let duration else {
+            dismissWorkItem = nil
+            return
+        }
         let work = DispatchWorkItem { [weak self] in
             guard let self, current == self.generation else { return }
             self.dismiss(generation: current)
@@ -136,8 +141,10 @@ final class ToastPresenter {
             context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             panel.animator().alphaValue = 0
         } completionHandler: { [weak self] in
-            guard let self, generation == self.generation else { return }
-            self.panel.orderOut(nil)
+            Task { @MainActor [weak self] in
+                guard let self, generation == self.generation else { return }
+                self.panel.orderOut(nil)
+            }
         }
     }
 

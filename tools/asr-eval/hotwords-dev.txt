@@ -1,0 +1,11 @@
+Codex
+Obsidian
+Qwen3-ASR
+SpeechInputCoordinator
+sherpa-onnx
+FunASR
+Paraformer Contextual
+ModelScope
+hotword config
+CT-Punc
+FSMN-VAD

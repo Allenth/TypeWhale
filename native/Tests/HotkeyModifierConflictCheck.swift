@@ -27,11 +27,13 @@ struct HotkeyModifierConflictCheck {
         var speechDownCount = 0
         var speechUpCount = 0
         var screenshotCount = 0
-        monitor.onDown = { _, binding in
+        monitor.onDown = { _, purpose, binding in
+            precondition(purpose == .dictation)
             precondition(binding == rightOption)
             speechDownCount += 1
         }
-        monitor.onUp = { _, binding in
+        monitor.onUp = { _, purpose, binding in
+            precondition(purpose == .dictation)
             precondition(binding == rightOption)
             speechUpCount += 1
         }

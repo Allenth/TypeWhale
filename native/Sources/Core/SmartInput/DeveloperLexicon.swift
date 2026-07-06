@@ -30,19 +30,41 @@ struct DeveloperTerm: Codable, Equatable, Identifiable {
     var aliases: [String]
     var category: DeveloperTermCategory
     var caseSensitive: Bool
+    var allowsFuzzy: Bool
 
     init(
         id: UUID = UUID(),
         canonical: String,
         aliases: [String],
         category: DeveloperTermCategory,
-        caseSensitive: Bool = false
+        caseSensitive: Bool = false,
+        allowsFuzzy: Bool = false
     ) {
         self.id = id
         self.canonical = canonical
         self.aliases = aliases
         self.category = category
         self.caseSensitive = caseSensitive
+        self.allowsFuzzy = allowsFuzzy
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case canonical
+        case aliases
+        case category
+        case caseSensitive
+        case allowsFuzzy
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        canonical = try container.decode(String.self, forKey: .canonical)
+        aliases = try container.decode([String].self, forKey: .aliases)
+        category = try container.decode(DeveloperTermCategory.self, forKey: .category)
+        caseSensitive = try container.decodeIfPresent(Bool.self, forKey: .caseSensitive) ?? false
+        allowsFuzzy = try container.decodeIfPresent(Bool.self, forKey: .allowsFuzzy) ?? false
     }
 }
 

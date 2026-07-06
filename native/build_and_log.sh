@@ -1,5 +1,5 @@
 #!/bin/zsh
-# TypeWhale 固定构建动作：构建 → 覆盖安装本地 → 打开 → 写构建日志。
+# TypeWhale Pro 固定构建动作：构建 → 覆盖安装本地 → 打开 → 写构建日志。
 #
 # 用法：
 #   ./native/build_and_log.sh                # 源码有变更才构建；默认只递增 build
@@ -75,7 +75,7 @@ if ! mkdir "$LOCK_DIR" 2>/dev/null; then
 fi
 trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
 
-echo "==> TypeWhale build_and_log: 构建并覆盖安装本地…"
+echo "==> TypeWhale Pro build_and_log: 构建并覆盖安装本地…"
 next_build_count=$((build_count + 1))
 release_mode="--build-only"
 if [[ "$force_full_version" == "1" ]]; then
@@ -124,7 +124,7 @@ fi
 # 写构建日志（追加表格行）
 if [[ ! -f "$BUILD_LOG" ]]; then
   {
-    echo "# TypeWhale 构建日志"
+    echo "# TypeWhale Pro 构建日志"
     echo ""
     echo "本文件由 \`native/build_and_log.sh\` 自动追加，记录每次本地构建/覆盖安装/打大包动作。"
     echo "叙事性的需求与实现说明仍写入 \`docs/开发日志.md\`。"

@@ -8,7 +8,7 @@ This checklist is the Version B real-overlay verification gate. Run it against t
 - Window hover and click selection.
 - Toolbar command availability after selection.
 - Translation and window-recapture pending states.
-- Copy, save, OCR, annotation, undo, done, Esc, right-click cancel.
+- Copy, save, OCR, archive, annotation, undo, done, Esc, right-click cancel.
 
 ## Preconditions
 
@@ -37,6 +37,7 @@ After a normal selected region:
 - Save is enabled.
 - OCR is enabled.
 - Translate is enabled.
+- Archive is enabled.
 - Rectangle, arrow, pen, and text are enabled.
 - Undo is enabled, even when it may no-op because no markup exists.
 - Cancel is enabled.
@@ -76,6 +77,21 @@ If any ordinary selected-region button is visually disabled or unclickable, trea
    - Main status shows OCR processing, then success or a useful failure.
    - Clipboard receives recognized text on success.
    - If OCR fails or returns empty, stale callbacks do not reopen or mutate a later screenshot overlay.
+
+## Archive
+
+0. In Settings / Common / Screenshot, confirm Archive Mode / 归档整理 defaults to `极致归纳`.
+1. Select a region with readable knowledge or product text.
+2. Click Archive / 归档.
+3. Expected:
+   - Overlay closes.
+   - Main status shows screenshot archive processing, then success or a useful failure.
+   - A top toast shows `归档整理中` while OCR and summary are running, then is replaced by the completion toast.
+   - Clipboard is not modified.
+   - A Markdown file appears in `/Users/waykingah/Movies/github/Obsidian/0.1 backlog需求池/归档（未处理）/yyyy-MM-dd/`.
+   - The file name starts with `归档-yyMMdd-HHmm-` and ends with the summarized topic.
+   - The Markdown front matter includes `type: knowledge_archive`, `target_app: "知识点"`, and `mode` matching the selected archive mode; default is `mode: "极致归纳"`.
+   - The body contains both `## 知识点` and `## OCR 原文`.
 
 ## Screenshot Translation
 

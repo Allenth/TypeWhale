@@ -1,0 +1,139 @@
+{
+  "version": 1,
+  "updatedAt": "2026-07-06",
+  "defaultHotwords": [
+    "Codex",
+    "Obsidian",
+    "Qwen3-ASR",
+    "SpeechInputCoordinator",
+    "sherpa-onnx",
+    "FunASR",
+    "Paraformer Contextual",
+    "ModelScope",
+    "hotword config",
+    "CT-Punc",
+    "FSMN-VAD"
+  ],
+  "cases": [
+    {
+      "id": "p0-codex-obsidian-001",
+      "priority": "P0",
+      "languageProfile": "mixed",
+      "expectedText": "把 Codex 和 Obsidian 加到开发术语词库里。",
+      "requiredHotwords": ["Codex", "Obsidian"],
+      "protectedTerms": ["Codex", "Obsidian"],
+      "audioPath": "docs/asr-eval/audio/p0-codex-obsidian-001.wav",
+      "recordingStatus": "needs_recording"
+    },
+    {
+      "id": "p0-qwen3-hotword-config-002",
+      "priority": "P0",
+      "languageProfile": "mixed",
+      "expectedText": "把 Qwen3-ASR 的 hotword config 接到 SpeechInputCoordinator。",
+      "requiredHotwords": ["Qwen3-ASR", "hotword config", "SpeechInputCoordinator"],
+      "protectedTerms": ["Qwen3-ASR", "hotword config", "SpeechInputCoordinator"],
+      "audioPath": "docs/asr-eval/audio/p0-qwen3-hotword-config-002.wav",
+      "recordingStatus": "needs_recording"
+    },
+    {
+      "id": "p0-sherpa-onnx-fallback-003",
+      "priority": "P0",
+      "languageProfile": "mixed",
+      "expectedText": "当前 sherpa-onnx fallback 仍然要保持可用。",
+      "requiredHotwords": ["sherpa-onnx"],
+      "protectedTerms": ["sherpa-onnx", "fallback"],
+      "audioPath": "docs/asr-eval/audio/p0-sherpa-onnx-fallback-003.wav",
+      "recordingStatus": "needs_recording"
+    },
+    {
+      "id": "p0-funasr-modelscope-004",
+      "priority": "P0",
+      "languageProfile": "mixed",
+      "expectedText": "用 ModelScope 下载 FunASR 模型，不要放进 App bundle。",
+      "requiredHotwords": ["ModelScope", "FunASR"],
+      "protectedTerms": ["ModelScope", "FunASR", "App bundle"],
+      "audioPath": "docs/asr-eval/audio/p0-funasr-modelscope-004.wav",
+      "recordingStatus": "needs_recording"
+    },
+    {
+      "id": "p0-paraformer-contextual-005",
+      "priority": "P0",
+      "languageProfile": "mixed",
+      "expectedText": "Paraformer Contextual 负责验证中文热词召回。",
+      "requiredHotwords": ["Paraformer Contextual"],
+      "protectedTerms": ["Paraformer Contextual"],
+      "audioPath": "docs/asr-eval/audio/p0-paraformer-contextual-005.wav",
+      "recordingStatus": "needs_recording"
+    },
+    {
+      "id": "p0-ct-punc-fsmn-vad-006",
+      "priority": "P0",
+      "languageProfile": "mixed",
+      "expectedText": "CT-Punc 只做标点恢复，FSMN-VAD 只做分段。",
+      "requiredHotwords": ["CT-Punc", "FSMN-VAD"],
+      "protectedTerms": ["CT-Punc", "FSMN-VAD"],
+      "audioPath": "docs/asr-eval/audio/p0-ct-punc-fsmn-vad-006.wav",
+      "recordingStatus": "needs_recording"
+    },
+    {
+      "id": "p0-codex-short-command-007",
+      "priority": "P0",
+      "languageProfile": "mixed",
+      "expectedText": "让 Codex 先跑 Pro ASR 的评测脚本。",
+      "requiredHotwords": ["Codex", "Pro ASR"],
+      "protectedTerms": ["Codex", "Pro ASR"],
+      "audioPath": "docs/asr-eval/audio/p0-codex-short-command-007.wav",
+      "recordingStatus": "needs_recording"
+    },
+    {
+      "id": "p0-obsidian-window-context-008",
+      "priority": "P0",
+      "languageProfile": "mixed",
+      "expectedText": "如果当前窗口是 Obsidian，就优先保护笔记里的英文标题。",
+      "requiredHotwords": ["Obsidian"],
+      "protectedTerms": ["Obsidian"],
+      "audioPath": "docs/asr-eval/audio/p0-obsidian-window-context-008.wav",
+      "recordingStatus": "needs_recording"
+    },
+    {
+      "id": "p1-speechinputcoordinator-file-009",
+      "priority": "P1",
+      "languageProfile": "mixed",
+      "expectedText": "检查 SpeechInputCoordinator 里面 final ASR 的 fallback 日志。",
+      "requiredHotwords": ["SpeechInputCoordinator", "final ASR", "fallback"],
+      "protectedTerms": ["SpeechInputCoordinator", "final ASR", "fallback"],
+      "audioPath": "docs/asr-eval/audio/p1-speechinputcoordinator-file-009.wav",
+      "recordingStatus": "needs_recording"
+    },
+    {
+      "id": "p1-qwen3-router-merger-010",
+      "priority": "P1",
+      "languageProfile": "mixed",
+      "expectedText": "Qwen3-ASR 的结果只能作为候选，最后要交给 router 和 merger。",
+      "requiredHotwords": ["Qwen3-ASR", "router", "merger"],
+      "protectedTerms": ["Qwen3-ASR", "router", "merger"],
+      "audioPath": "docs/asr-eval/audio/p1-qwen3-router-merger-010.wav",
+      "recordingStatus": "needs_recording"
+    },
+    {
+      "id": "p1-pure-chinese-baseline-011",
+      "priority": "P1",
+      "languageProfile": "zh",
+      "expectedText": "中文骨架不能因为热词模型切换而明显退化。",
+      "requiredHotwords": [],
+      "protectedTerms": [],
+      "audioPath": "docs/asr-eval/audio/p1-pure-chinese-baseline-011.wav",
+      "recordingStatus": "needs_recording"
+    },
+    {
+      "id": "p1-noise-the-guard-012",
+      "priority": "P1",
+      "languageProfile": "noise",
+      "expectedText": "静音和轻微噪声不能粘贴 The.",
+      "requiredHotwords": [],
+      "protectedTerms": ["The."],
+      "audioPath": "docs/asr-eval/audio/p1-noise-the-guard-012.wav",
+      "recordingStatus": "needs_recording"
+    }
+  ]
+}

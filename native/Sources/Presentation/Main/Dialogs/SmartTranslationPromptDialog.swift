@@ -2,38 +2,48 @@ import AppKit
 
 final class SmartTranslationPromptDialog: NSObject {
     enum Result {
-        case save(SmartTranslationDirection, String)
-        case reset(SmartTranslationDirection)
+        case save(SmartTranslationDirection, Bool, String)
+        case reset(SmartTranslationDirection, Bool)
         case cancel
     }
 
+    private static let socialSentinel = "chineseToEnglish.social"
+    private static let socialTitle = "中译英（社交）"
+
     private let directionPicker = NSPopUpButton()
     private let textView = NSTextView()
+    private let sheet = FormSheetController()
     private var selectedDirection: SmartTranslationDirection
+    private var selectedSocial = false
 
     init(initialDirection: SmartTranslationDirection) {
         selectedDirection = initialDirection
         super.init()
     }
 
-    func runModal() -> Result {
-        let alert = NSAlert()
-        alert.messageText = "翻译提示词"
-        alert.informativeText = "选择翻译方向，修改语气和表达规则后保存。中译英提示词会影响英文翻译的口语化风格。"
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "保存")
-        alert.addButton(withTitle: "恢复默认")
-        alert.addButton(withTitle: "取消")
-        alert.accessoryView = buildAccessoryView()
-        loadTemplate(for: selectedDirection)
-
-        switch alert.runModal() {
-        case .alertFirstButtonReturn:
-            return .save(selectedDirection, textView.string)
-        case .alertSecondButtonReturn:
-            return .reset(selectedDirection)
-        default:
-            return .cancel
+    func present(in parent: NSWindow, completion: @escaping (Result) -> Void) {
+        let content = buildAccessoryView()
+        loadCurrentTemplate()
+        sheet.present(
+            in: parent,
+            title: "翻译提示词",
+            message: "选择翻译方向，修改语气和表达规则后保存。“中译英（社交）”只在社交窗口生效，其余应用的中译英仍走常规提示词。",
+            contentView: content,
+            contentSize: NSSize(width: 460, height: 320),
+            buttons: [
+                .init(title: "保存", isDefault: true),
+                .init(title: "恢复默认"),
+                .init(title: "取消", isCancel: true),
+            ]
+        ) { [self] index in
+            switch index {
+            case 0:
+                completion(.save(selectedDirection, selectedSocial, textView.string))
+            case 1:
+                completion(.reset(selectedDirection, selectedSocial))
+            default:
+                completion(.cancel)
+            }
         }
     }
 
@@ -43,7 +53,9 @@ final class SmartTranslationPromptDialog: NSObject {
             directionPicker.addItem(withTitle: direction.displayName)
             directionPicker.lastItem?.representedObject = direction.rawValue
         }
-        directionPicker.selectItem(withTitle: selectedDirection.displayName)
+        directionPicker.addItem(withTitle: Self.socialTitle)
+        directionPicker.lastItem?.representedObject = Self.socialSentinel
+        selectCurrentItem()
         directionPicker.target = self
         directionPicker.action = #selector(directionDidChange)
         directionPicker.bezelStyle = .rounded
@@ -84,7 +96,7 @@ final class SmartTranslationPromptDialog: NSObject {
         scrollView.documentView = textView
         scrollView.translatesAutoresizingMaskIntoConstraints = false
 
-        let hint = NSTextField(labelWithString: "保存空内容会恢复默认。这里只写翻译语气和表达规则，原文会由 TypeWhale 自动附加。")
+        let hint = NSTextField(labelWithString: "保存空内容会恢复默认。这里只写翻译语气和表达规则，原文会由 TypeWhale 自动附加。社交窗口清单在“社交应用清单”里维护。")
         hint.font = .systemFont(ofSize: 11)
         hint.textColor = .secondaryLabelColor
         hint.maximumNumberOfLines = 2
@@ -111,26 +123,38 @@ final class SmartTranslationPromptDialog: NSObject {
         return container
     }
 
-    @objc private func directionDidChange() {
-        guard let rawValue = directionPicker.selectedItem?.representedObject as? String,
-              let direction = SmartTranslationDirection(rawValue: rawValue) else {
-            return
+    private func selectCurrentItem() {
+        if selectedSocial && selectedDirection == .chineseToEnglish {
+            directionPicker.selectItem(withTitle: Self.socialTitle)
+        } else {
+            directionPicker.selectItem(withTitle: selectedDirection.displayName)
         }
-        selectedDirection = direction
-        loadTemplate(for: direction)
     }
 
-    private func loadTemplate(for direction: SmartTranslationDirection) {
+    @objc private func directionDidChange() {
+        guard let rawValue = directionPicker.selectedItem?.representedObject as? String else { return }
+        if rawValue == Self.socialSentinel {
+            selectedDirection = .chineseToEnglish
+            selectedSocial = true
+        } else if let direction = SmartTranslationDirection(rawValue: rawValue) {
+            selectedDirection = direction
+            selectedSocial = false
+        } else {
+            return
+        }
+        loadCurrentTemplate()
+    }
+
+    private func loadCurrentTemplate() {
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedSystemFont(ofSize: 12, weight: .regular),
             .foregroundColor: NSColor(calibratedWhite: 0.96, alpha: 1),
         ]
         textView.textStorage?.setAttributedString(NSAttributedString(
-            string: SmartTranslationPromptStore.template(for: direction),
+            string: SmartTranslationPromptStore.template(for: selectedDirection, social: selectedSocial),
             attributes: attributes
         ))
         textView.setSelectedRange(NSRange(location: 0, length: 0))
         textView.scrollRangeToVisible(NSRange(location: 0, length: 0))
     }
 }
-

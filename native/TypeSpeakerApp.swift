@@ -20,7 +20,7 @@ enum AppPaths {
 
     private static func userDirectory(_ directory: FileManager.SearchPathDirectory) -> URL {
         fileManager.urls(for: directory, in: .userDomainMask)[0]
-            .appendingPathComponent("TypeWhale", isDirectory: true)
+            .appendingPathComponent(AppBrand.supportDirectoryName, isDirectory: true)
     }
 }
 
@@ -61,6 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             LaunchDiagnostics.mark("AppPaths.prepare begin")
             try AppPaths.prepare()
             LaunchDiagnostics.mark("AppPaths.prepare done")
+            _ = controller.managedASRModelDownloader
         } catch {
             LaunchDiagnostics.mark("AppPaths.prepare failed: \(error.localizedDescription)")
             controller.status.stringValue = "无法准备应用目录"
@@ -96,7 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 enum TypeWhaleApplication {
     /// 单实例保护：刚启动的实例（最新二进制）接管，强制结束其它更早启动的同包实例，
-    /// 避免出现多个 TypeWhale 同时抢全局快捷键、重复调用 DeepSeek 造成幽灵进程偷偷计费。
+    /// 避免出现多个同包实例同时抢全局快捷键、重复调用 DeepSeek 造成幽灵进程偷偷计费。
     @MainActor
     static func terminateStaleInstances() {
         let me = NSRunningApplication.current

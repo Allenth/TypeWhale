@@ -8,9 +8,11 @@ enum RecordingActivation {
 
 struct SpeechSession {
     let id: UUID
+    let channel: SpeechInputChannel
     var targetApp: NSRunningApplication?
     let configuration: ASRConfiguration
     let activation: RecordingActivation
+    let purpose: SpeechInputPurpose
     let realtimeEnabled: Bool
     /// 已提交（冻结）的实时预览前缀：滚出当前块的文本，不再重识别、永不跳变。
     var committedPreviewText: String = ""
@@ -18,6 +20,10 @@ struct SpeechSession {
     var latestPreviewText: String
     /// 当前正在识别的块序号；用于丢弃已提交块的滞后快照。
     var currentChunkIndex: Int = 0
+
+    func matchesTrigger(channel: SpeechInputChannel, purpose: SpeechInputPurpose) -> Bool {
+        self.channel == channel && self.purpose == purpose
+    }
 }
 
 struct RealtimeSnapshotRequest {

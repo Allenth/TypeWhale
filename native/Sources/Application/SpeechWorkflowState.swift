@@ -11,17 +11,20 @@ struct SpeechWorkflowState: Equatable {
 
     private(set) var phase: Phase = .idle
     private(set) var latestSubmittedTaskID: UUID?
+    private(set) var submittedTaskIDs: [UUID] = []
     private(set) var completedFinalTaskIDs: [UUID] = []
     var completedFinalTaskLimit = 20
 
     mutating func startRecording(taskID: UUID) {
         phase = .recording(taskID)
-        latestSubmittedTaskID = nil
     }
 
     mutating func submitFinalTask(_ taskID: UUID) {
         phase = .finalizing(taskID)
         latestSubmittedTaskID = taskID
+        if !submittedTaskIDs.contains(taskID) {
+            submittedTaskIDs.append(taskID)
+        }
     }
 
     mutating func startPasting(taskID: UUID) {
@@ -29,14 +32,19 @@ struct SpeechWorkflowState: Equatable {
     }
 
     mutating func finishTask(_ taskID: UUID) {
+        submittedTaskIDs.removeAll { $0 == taskID }
         if phase.taskID == taskID {
             phase = .idle
+        }
+        if latestSubmittedTaskID == taskID {
+            latestSubmittedTaskID = submittedTaskIDs.last
         }
     }
 
     mutating func cancelActiveTask() {
         phase = .idle
         latestSubmittedTaskID = nil
+        submittedTaskIDs.removeAll()
     }
 
     mutating func fail(_ message: String) {
@@ -47,8 +55,12 @@ struct SpeechWorkflowState: Equatable {
         latestSubmittedTaskID == taskID && !isRecording
     }
 
+    func canHidePopup(for taskID: UUID, isRecording: Bool) -> Bool {
+        !isRecording && (latestSubmittedTaskID == nil || latestSubmittedTaskID == taskID)
+    }
+
     func canSubmitProcessedResult(taskID: UUID) -> Bool {
-        latestSubmittedTaskID == taskID
+        submittedTaskIDs.contains(taskID)
     }
 
     func canAcceptRealtimeCallback(taskID: UUID, activeSessionID: UUID?) -> Bool {

@@ -4,6 +4,8 @@ extension MainViewController {
     @objc func saveSettings() {
         let previousAudioInputUID = AppSettingsStore.loadMainViewSettings().audioInputDeviceUID
         let nextAudioInputUID = selectedAudioInputDeviceUID
+        let previousSmartAIModel = SmartAIModelStore.load()
+        let nextSmartAIModel = smartAIModel
         if autoFinish.state == .on {
             realtime.state = .on
             realtime.needsDisplay = true
@@ -24,6 +26,8 @@ extension MainViewController {
             translationDirection: translationDirection,
             previewTheme: selectedPreviewTheme
         ))
+        ScreenshotArchiveModeStore.save(screenshotArchivePreference)
+        SmartAIModelStore.save(nextSmartAIModel)
         if previousAudioInputUID != nextAudioInputUID {
             let mode = nextAudioInputUID.isEmpty ? "system_default" : "manual"
             LaunchDiagnostics.mark("audio_input_selection_save mode=\(mode) uid=\(nextAudioInputUID)")
@@ -31,62 +35,107 @@ extension MainViewController {
                 ? "麦克风输入已改为跟随系统"
                 : "麦克风输入已锁定为：\(audioInputDeviceMode.titleOfSelectedItem ?? "手动选择")"
         }
+        if previousSmartAIModel != nextSmartAIModel {
+            LaunchDiagnostics.mark("smart_ai_model_save provider=\(nextSmartAIModel.provider.rawValue) model=\(nextSmartAIModel.rawValue)")
+            detail.stringValue = "智能整理模型已切换为：\(nextSmartAIModel.displayName)"
+            if nextSmartAIModel.provider == .ollama {
+                Task.detached(priority: .utility) {
+                    await OllamaRewriteEngine.warmUp(model: nextSmartAIModel, reason: "model_selection")
+                }
+            }
+        }
+        refreshSmartAIUsageVisibility()
         refreshDisplayedModelState()
         refreshPreviewThemeTiles()
     }
 
     @objc func configureSmartRewritePrompts() {
+        guard let window = view.window else { return }
         let dialog = SmartRewritePromptDialog(initialMode: smartRewritePreference.manualMode ?? .developerRequirement)
-        switch dialog.runModal() {
-        case .save(let mode, let template):
-            SmartRewritePromptStore.save(template, for: mode)
-            detail.stringValue = "\(mode.displayName)提示词已保存"
-        case .reset(let mode):
-            SmartRewritePromptStore.reset(mode)
-            detail.stringValue = "\(mode.displayName)提示词已恢复默认"
-        case .cancel:
-            break
+        dialog.present(in: window) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .save(let mode, let template):
+                SmartRewritePromptStore.save(template, for: mode)
+                self.detail.stringValue = "\(mode.displayName)提示词已保存"
+            case .reset(let mode):
+                SmartRewritePromptStore.reset(mode)
+                self.detail.stringValue = "\(mode.displayName)提示词已恢复默认"
+            case .cancel:
+                break
+            }
         }
     }
 
     @objc func configureSmartRewriteAutoRules() {
+        guard let window = view.window else { return }
         let dialog = SmartRewriteAutoRuleDialog(configuration: SmartRewriteAutoRuleStore.load())
-        switch dialog.runModal() {
-        case .save(let configuration):
-            SmartRewriteAutoRuleStore.save(configuration)
-            detail.stringValue = "智能整理自动范围已保存"
-        case .reset:
-            SmartRewriteAutoRuleStore.reset()
-            detail.stringValue = "智能整理自动范围已恢复默认"
-        case .cancel:
-            break
+        dialog.present(in: window) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .save(let configuration):
+                SmartRewriteAutoRuleStore.save(configuration)
+                self.detail.stringValue = "智能整理自动范围已保存"
+            case .reset:
+                SmartRewriteAutoRuleStore.reset()
+                self.detail.stringValue = "智能整理自动范围已恢复默认"
+            case .cancel:
+                break
+            }
         }
     }
 
     @objc func configureTranslationPrompts() {
+        guard let window = view.window else { return }
         let dialog = SmartTranslationPromptDialog(initialDirection: translationDirection)
-        switch dialog.runModal() {
-        case .save(let direction, let template):
-            SmartTranslationPromptStore.save(template, for: direction)
-            detail.stringValue = "\(direction.displayName)提示词已保存"
-        case .reset(let direction):
-            SmartTranslationPromptStore.reset(direction)
-            detail.stringValue = "\(direction.displayName)提示词已恢复默认"
-        case .cancel:
-            break
+        dialog.present(in: window) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .save(let direction, let social, let template):
+                SmartTranslationPromptStore.save(template, for: direction, social: social)
+                let label = social ? "中译英（社交）" : direction.displayName
+                self.detail.stringValue = "\(label)提示词已保存"
+            case .reset(let direction, let social):
+                SmartTranslationPromptStore.reset(direction, social: social)
+                let label = social ? "中译英（社交）" : direction.displayName
+                self.detail.stringValue = "\(label)提示词已恢复默认"
+            case .cancel:
+                break
+            }
+        }
+    }
+
+    @objc func configureSocialScope() {
+        guard let window = view.window else { return }
+        SocialScopeDialog().present(in: window) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .save(let raw):
+                SmartTranslationSocialScopeStore.save(raw)
+                self.detail.stringValue = "社交应用清单已保存"
+            case .reset:
+                SmartTranslationSocialScopeStore.reset()
+                self.detail.stringValue = "社交应用清单已恢复默认"
+            case .cancel:
+                break
+            }
         }
     }
 
     @objc func configureDeveloperTerms() {
-        switch DeveloperLexiconDialog().runModal() {
-        case .save(let terms):
-            DeveloperLexiconStore.save(terms)
-            detail.stringValue = "开发术语词库已保存"
-        case .reset:
-            DeveloperLexiconStore.restoreDefaults()
-            detail.stringValue = "开发术语词库已恢复默认"
-        case .cancel:
-            break
+        guard let window = view.window else { return }
+        DeveloperLexiconDialog().present(in: window) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .save(let terms):
+                DeveloperLexiconStore.save(terms)
+                self.detail.stringValue = "开发术语词库已保存"
+            case .reset:
+                DeveloperLexiconStore.restoreDefaults()
+                self.detail.stringValue = "开发术语词库已恢复默认"
+            case .cancel:
+                break
+            }
         }
     }
 
@@ -131,45 +180,49 @@ extension MainViewController {
     }
 
     @objc func configureDeepSeekAPIKey() {
-        let alert = NSAlert()
-        alert.messageText = "DeepSeek API Key"
-        alert.informativeText = "用于智能整理和自动翻译，保存到 macOS Keychain。TypeWhale 使用 deepseek-v4-flash，并关闭 thinking。"
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "保存")
-        alert.addButton(withTitle: "清除")
-        alert.addButton(withTitle: "取消")
-
+        guard let window = view.window else { return }
         let input = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 24))
         input.placeholderString = DeepSeekAPIKeyStore.hasAPIKey() ? "已保存 Key，输入新 Key 可覆盖" : "sk-..."
-        alert.accessoryView = input
 
-        switch alert.runModal() {
-        case .alertFirstButtonReturn:
-            do {
-                try DeepSeekAPIKeyStore.save(input.stringValue)
-                refreshDeepSeekKeyButton()
-                if DeepSeekAPIKeyStore.hasAPIKey() {
-                    detail.stringValue = "DeepSeek Key 已保存，智能整理已启用"
-                    ToastPresenter.shared.show("Key 已保存", style: .success)
-                } else {
-                    detail.stringValue = "未输入 Key，智能整理会回退原文"
+        FormSheetController().present(
+            in: window,
+            title: "DeepSeek API Key",
+            message: "用于智能整理和自动翻译，保存到 macOS Keychain。\(AppBrand.displayName) 使用 deepseek-v4-flash，并关闭 thinking。",
+            contentView: input,
+            contentSize: NSSize(width: 320, height: 24),
+            buttons: [
+                .init(title: "保存", isDefault: true),
+                .init(title: "清除"),
+                .init(title: "取消", isCancel: true),
+            ]
+        ) { [weak self] index in
+            guard let self else { return }
+            switch index {
+            case 0:
+                do {
+                    try DeepSeekAPIKeyStore.save(input.stringValue)
+                    self.refreshDeepSeekKeyButton()
+                    if DeepSeekAPIKeyStore.hasAPIKey() {
+                        self.detail.stringValue = "DeepSeek Key 已保存，智能整理已启用"
+                        ToastPresenter.shared.show("Key 已保存", style: .success)
+                    } else {
+                        self.detail.stringValue = "未输入 Key，智能整理会回退原文"
+                    }
+                } catch {
+                    self.showDeepSeekKeyError(error)
                 }
-            } catch {
-                showDeepSeekKeyError(error)
+            case 1:
+                DeepSeekAPIKeyStore.delete()
+                self.refreshDeepSeekKeyButton()
+                self.detail.stringValue = "DeepSeek Key 已清除，智能整理会回退原文"
+            default:
+                self.refreshDeepSeekKeyButton()
             }
-        case .alertSecondButtonReturn:
-            DeepSeekAPIKeyStore.delete()
-            refreshDeepSeekKeyButton()
-            detail.stringValue = "DeepSeek Key 已清除，智能整理会回退原文"
-        default:
-            refreshDeepSeekKeyButton()
         }
     }
 
     func showDeepSeekKeyError(_ error: Error) {
-        let alert = NSAlert(error: error)
-        alert.messageText = "DeepSeek Key 保存失败"
-        alert.runModal()
+        ToastPresenter.shared.show("DeepSeek Key 保存失败，请重试", style: .error, duration: 2.6)
     }
 
     @objc func showDeepSeekBalance(_ sender: NSButton) {
@@ -208,7 +261,7 @@ extension MainViewController {
             try LoginItemManager.setEnabled(launchAtLogin.state == .on)
             refreshLaunchAtLoginState()
             if LoginItemManager.isPendingApproval {
-                detail.stringValue = "请在系统设置的登录项中允许 TypeWhale"
+                detail.stringValue = "请在系统设置的登录项中允许 \(AppBrand.displayName)"
             }
         } catch {
             refreshLaunchAtLoginState()
@@ -221,8 +274,8 @@ extension MainViewController {
         launchAtLogin.state = (LoginItemManager.isEnabled || LoginItemManager.isPendingApproval) ? .on : .off
         launchAtLogin.needsDisplay = true
         launchAtLogin.toolTip = LoginItemManager.isPendingApproval
-            ? "已提交开机启动请求，请在系统设置的登录项中允许 TypeWhale"
-            : "登录 macOS 后自动启动 TypeWhale"
+            ? "已提交开机启动请求，请在系统设置的登录项中允许 \(AppBrand.displayName)"
+            : "登录 macOS 后自动启动 \(AppBrand.displayName)"
     }
 
     @objc func installModel() {
@@ -241,11 +294,11 @@ extension MainViewController {
         if selectedBackend == .qwen3ASR {
             if let qwenPath = Qwen3ASRModelManifest.preferredModelDirectory?.path {
                 modelEntryStatus.stringValue = "已就绪"
-                modelEntryStatus.textColor = .systemGreen
-                modelEntryDot.layer?.backgroundColor = NSColor.systemGreen.cgColor
+                modelEntryStatus.textColor = UITheme.brandGreen
+                modelEntryDot.layer?.backgroundColor = UITheme.brandGreen.cgColor
                 modelValue.toolTip = qwenPath
                 modelValue.stringValue = "Qwen3-ASR 原生模型已就绪，可离线识别"
-                modelValue.textColor = .systemGreen
+                modelValue.textColor = UITheme.brandGreen
                 modelPathLabel.stringValue = qwenPath
                 modelProgress.isHidden = true
                 modelInstallButton.isHidden = true
@@ -281,11 +334,11 @@ extension MainViewController {
             let sensePath = SenseVoiceModelManifest.preferredModelDirectory?.path ?? ""
             modelEntryName.stringValue = asrBackend == .automatic ? "SenseVoice int8 · 自动" : "SenseVoice int8"
             modelEntryStatus.stringValue = "已就绪"
-            modelEntryStatus.textColor = .systemGreen
-            modelEntryDot.layer?.backgroundColor = NSColor.systemGreen.cgColor
+            modelEntryStatus.textColor = UITheme.brandGreen
+            modelEntryDot.layer?.backgroundColor = UITheme.brandGreen.cgColor
             modelValue.toolTip = sensePath
             modelValue.stringValue = "本地模型已就绪，可离线识别"
-            modelValue.textColor = .systemGreen
+            modelValue.textColor = UITheme.brandGreen
             modelPathLabel.stringValue = sensePath.isEmpty ? "内置模型" : sensePath
             modelProgress.isHidden = true
             modelInstallButton.isHidden = true
@@ -349,9 +402,9 @@ extension MainViewController {
     func statusColor(for tone: PrimaryStatusTone) -> NSColor {
         switch tone {
         case .idle, .success:
-            return .systemGreen
+            return UITheme.brandGreen
         case .listening:
-            return UITheme.brandTeal
+            return UITheme.brandGreen
         case .processing:
             return UITheme.brandYellow
         case .warning:
@@ -412,6 +465,16 @@ extension MainViewController {
 
     var smartRewritePreference: SmartRewritePreference {
         SmartRewritePreference.fromMenuTag(smartRewriteMode.selectedItem?.tag ?? 0)
+    }
+
+    var smartAIModel: SmartAIModel {
+        SmartAIModel.fromMenuTag(smartAIModelMode.selectedItem?.tag ?? 0)
+    }
+
+    var screenshotArchivePreference: SmartRewritePreference {
+        SmartRewritePreference.fromMenuTag(
+            screenshotArchiveMode.selectedItem?.tag ?? ScreenshotArchiveModeStore.defaultMode.menuTag
+        )
     }
 
     /// 循环切换到下一个整理模式，持久化并返回新模式（供胶囊手动切换调用）。

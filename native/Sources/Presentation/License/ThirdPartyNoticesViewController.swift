@@ -15,7 +15,7 @@ final class ThirdPartyNoticesViewController: NSViewController {
             name: "sherpa-onnx",
             license: "Apache-2.0",
             status: "已随包",
-            statusColor: .systemGreen,
+            statusColor: UITheme.brandGreen,
             sourceURL: URL(string: "https://github.com/k2-fsa/sherpa-onnx"),
             note: "原生语音识别运行库，随包保留 Apache-2.0 notice。"
         ),
@@ -23,7 +23,7 @@ final class ThirdPartyNoticesViewController: NSViewController {
             name: "ONNX Runtime",
             license: "MIT",
             status: "已随包",
-            statusColor: .systemGreen,
+            statusColor: UITheme.brandGreen,
             sourceURL: URL(string: "https://github.com/microsoft/onnxruntime"),
             note: "ONNX 推理运行库，随包保留 MIT notice 和版权说明。"
         ),
@@ -31,7 +31,7 @@ final class ThirdPartyNoticesViewController: NSViewController {
             name: "Silero VAD",
             license: "MIT",
             status: "已随包",
-            statusColor: .systemGreen,
+            statusColor: UITheme.brandGreen,
             sourceURL: URL(string: "https://github.com/snakers4/silero-vad"),
             note: "人声检测模型，随包保留 MIT notice 和版权说明。"
         ),
@@ -55,7 +55,7 @@ final class ThirdPartyNoticesViewController: NSViewController {
         title.maximumNumberOfLines = 1
         title.lineBreakMode = .byTruncatingTail
 
-        let subtitle = label("TypeWhale 随包运行库、模型来源和商业发布检查。", size: 12)
+        let subtitle = label("\(AppBrand.displayName) 随包运行库、模型来源和商业发布检查。", size: 12)
         subtitle.textColor = .secondaryLabelColor
         subtitle.maximumNumberOfLines = 1
         subtitle.lineBreakMode = .byTruncatingTail
@@ -201,11 +201,10 @@ final class ThirdPartyNoticesViewController: NSViewController {
             NSWorkspace.shared.open(url)
             return
         }
-        let alert = NSAlert()
-        alert.messageText = "未找到第三方组件说明"
-        alert.informativeText = "当前 App 包内缺少 THIRD_PARTY_NOTICES.md，请重新构建或安装 TypeWhale。"
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "好")
-        alert.runModal()
+        ToastPresenter.shared.show(
+            "未找到第三方组件说明，请重新构建应用",
+            style: .warning,
+            duration: 2.6
+        )
     }
 }

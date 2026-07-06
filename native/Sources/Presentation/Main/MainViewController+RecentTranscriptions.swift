@@ -68,7 +68,7 @@ extension MainViewController {
         }
         for (index, record) in recentRecords.enumerated() {
             let metaLabel = label(record.timeText, size: 9, weight: .medium)
-            metaLabel.textColor = .secondaryLabelColor
+            metaLabel.textColor = UITheme.sectionTitle
             metaLabel.maximumNumberOfLines = 1
             metaLabel.lineBreakMode = .byTruncatingTail
             metaLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -93,7 +93,7 @@ extension MainViewController {
             copyButton.image = NSImage(systemSymbolName: "doc.on.doc", accessibilityDescription: "复制")
             copyButton.bezelStyle = .inline
             copyButton.isBordered = false
-            copyButton.contentTintColor = NSColor(calibratedWhite: 1, alpha: 0.42)
+            copyButton.contentTintColor = NSColor(calibratedWhite: 1, alpha: 0.50)
             copyButton.toolTip = "复制"
             copyButton.tag = index
             copyButton.target = self
