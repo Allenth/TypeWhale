@@ -195,8 +195,10 @@
     font-size: 12px; font-weight: 700; color: #0b1a33; background: var(--cyan);
     width: 22px; height: 22px; border-radius: 50%; display: inline-grid; place-items: center; flex-shrink: 0;
   }
-  .step p { margin-top: 8px; font-size: 15px; color: rgba(234,242,255,.65); max-height: 0; overflow: hidden; transition: max-height .4s ease; }
-  .step.active p { max-height: 90px; }
+  .step p { margin-top: 8px; font-size: 15px; color: rgba(234,242,255,.65); opacity: .35; transition: opacity .4s ease; }
+  .step.active p { opacity: 1; }
+  .step h3 { opacity: .55; transition: opacity .4s ease; }
+  .step.active h3 { opacity: 1; }
 
   /* fake editor demo */
   .demo-window {
@@ -242,7 +244,7 @@
   }
   .rw-in .tag { background: #ffe4de; color: #c2401f; }
   .rw-out .tag { background: var(--brand-soft); color: var(--brand); }
-  .rw-card .txt { font-size: 16.5px; line-height: 1.85; white-space: pre-wrap; }
+  .rw-card .txt { font-size: 16.5px; line-height: 1.85; white-space: pre-wrap; min-height: 11.2em; }
   .rw-in .txt { color: var(--ink-soft); }
   .rw-arrow { display: grid; place-items: center; font-size: 26px; color: var(--brand); }
   .rw-note { text-align: center; margin-top: 34px; font-size: 14.5px; color: var(--ink-soft); }
