@@ -1,828 +1,642 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>TypeWhale 付费 Beta - Mac 语音输入、整理和翻译</title>
-    <link rel="icon" href="../../assets/TypeWhaleMinimalLogo.png">
-    <meta
-      name="description"
-      content="TypeWhale 是一个本地优先的 macOS 语音输入工具。按下快捷键说话，本机识别，可选 AI 整理和翻译，并把最终文本粘贴回当前应用。"
-    >
-    <style>
-      :root {
-        --bg: #15140f;
-        --panel: #242116;
-        --panel-2: #33301f;
-        --text: #f7f3e8;
-        --muted: #c9c0ad;
-        --subtle: #9b927c;
-        --line: rgba(255, 255, 255, 0.14);
-        --brand: #ffd044;
-        --brand-ink: #16120a;
-        --mint: #80d1a1;
-        --coral: #ff8f70;
-        --sky: #8bbcff;
-        --shadow: rgba(0, 0, 0, 0.42);
-        color-scheme: dark;
-      }
-
-      * {
-        box-sizing: border-box;
-      }
-
-      html {
-        scroll-behavior: smooth;
-      }
-
-      body {
-        margin: 0;
-        background: var(--bg);
-        color: var(--text);
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        line-height: 1.6;
-      }
-
-      img {
-        display: block;
-        max-width: 100%;
-      }
-
-      a {
-        color: inherit;
-      }
-
-      .site-header {
-        position: fixed;
-        z-index: 10;
-        top: 0;
-        right: 0;
-        left: 0;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        background: rgba(21, 20, 15, 0.84);
-        backdrop-filter: blur(18px);
-      }
-
-      .nav {
-        width: min(1180px, calc(100% - 40px));
-        height: 64px;
-        margin: 0 auto;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 24px;
-      }
-
-      .brand {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        text-decoration: none;
-        font-weight: 750;
-      }
-
-      .brand img {
-        width: 30px;
-        height: 30px;
-        border-radius: 7px;
-      }
-
-      .nav-links {
-        display: flex;
-        align-items: center;
-        gap: 20px;
-        color: var(--muted);
-        font-size: 14px;
-      }
-
-      .nav-links a {
-        text-decoration: none;
-      }
-
-      .nav-links a:hover {
-        color: var(--text);
-      }
-
-      .button {
-        min-height: 44px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        border: 1px solid transparent;
-        border-radius: 8px;
-        padding: 0 18px;
-        font-weight: 750;
-        text-decoration: none;
-        white-space: nowrap;
-      }
-
-      .button.primary {
-        background: var(--brand);
-        color: var(--brand-ink);
-        box-shadow: 0 12px 30px rgba(255, 210, 74, 0.22);
-      }
-
-      .button.secondary {
-        border-color: var(--line);
-        background: rgba(255, 255, 255, 0.07);
-        color: var(--text);
-      }
-
-      .hero {
-        position: relative;
-        min-height: 88svh;
-        padding: 112px 0 54px;
-        overflow: hidden;
-        display: flex;
-        align-items: center;
-        background: #17150f;
-      }
-
-      .hero-media,
-      .hero-media::after {
-        position: absolute;
-        inset: 0;
-      }
-
-      .hero-media img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        object-position: 50% 50%;
-        opacity: 0.54;
-        filter: saturate(0.95) contrast(1.02);
-      }
-
-      .hero-media::after {
-        content: "";
-        background:
-          linear-gradient(90deg, rgba(16, 15, 10, 0.84) 0%, rgba(16, 15, 10, 0.68) 42%, rgba(16, 15, 10, 0.76) 100%),
-          rgba(5, 5, 3, 0.26);
-      }
-
-      .hero-inner {
-        position: relative;
-        width: min(1180px, calc(100% - 40px));
-        margin: 0 auto;
-        display: grid;
-        grid-template-columns: minmax(0, 720px) minmax(260px, 360px);
-        gap: 56px;
-        align-items: end;
-      }
-
-      .eyebrow {
-        width: fit-content;
-        margin: 0 0 18px;
-        border: 1px solid rgba(255, 210, 74, 0.4);
-        border-radius: 999px;
-        padding: 7px 12px;
-        color: var(--brand);
-        background: rgba(255, 210, 74, 0.1);
-        font-size: 13px;
-        font-weight: 750;
-      }
-
-      h1,
-      h2,
-      h3,
-      p {
-        margin-top: 0;
-      }
-
-      h1 {
-        max-width: 780px;
-        margin-bottom: 22px;
-        font-size: clamp(46px, 7vw, 92px);
-        line-height: 0.96;
-        letter-spacing: 0;
-      }
-
-      .lead {
-        max-width: 690px;
-        margin-bottom: 30px;
-        color: #e5ded2;
-        font-size: 20px;
-      }
-
-      .hero-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        margin-bottom: 28px;
-      }
-
-      .hero-note {
-        max-width: 680px;
-        color: var(--muted);
-        font-size: 14px;
-      }
-
-      .beta-panel {
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 22px;
-        background: rgba(38, 35, 24, 0.78);
-        box-shadow: 0 22px 80px var(--shadow);
-        backdrop-filter: blur(20px);
-      }
-
-      .price {
-        display: flex;
-        align-items: baseline;
-        gap: 10px;
-        margin-bottom: 12px;
-      }
-
-      .price strong {
-        font-size: 44px;
-        line-height: 1;
-      }
-
-      .price span {
-        color: var(--muted);
-      }
-
-      .slots {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 8px;
-        margin: 18px 0;
-      }
-
-      .slot-item {
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 10px;
-        background: rgba(255, 255, 255, 0.06);
-      }
-
-      .slot-item b {
-        display: block;
-        font-size: 18px;
-      }
-
-      .slot-item span {
-        color: var(--muted);
-        font-size: 12px;
-      }
-
-      .panel-list {
-        margin: 16px 0 0;
-        padding: 0;
-        list-style: none;
-      }
-
-      .panel-list li {
-        display: flex;
-        gap: 9px;
-        margin: 9px 0;
-        color: #e9e0d2;
-        font-size: 14px;
-      }
-
-      .panel-list li::before {
-        content: "";
-        width: 7px;
-        height: 7px;
-        flex: 0 0 auto;
-        margin-top: 8px;
-        border-radius: 999px;
-        background: var(--mint);
-      }
-
-      main {
-        background: var(--bg);
-      }
-
-      .section {
-        padding: 86px 0;
-      }
-
-      .section.alt {
-        background: #1d1b13;
-      }
-
-      .wrap {
-        width: min(1180px, calc(100% - 40px));
-        margin: 0 auto;
-      }
-
-      .section-head {
-        max-width: 760px;
-        margin-bottom: 34px;
-      }
-
-      .section-head h2 {
-        margin-bottom: 14px;
-        font-size: clamp(30px, 4vw, 52px);
-        line-height: 1.08;
-        letter-spacing: 0;
-      }
-
-      .section-head p {
-        color: var(--muted);
-        font-size: 18px;
-      }
-
-      .fit-grid,
-      .feature-grid,
-      .faq-grid {
-        display: grid;
-        gap: 16px;
-      }
-
-      .fit-grid {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-      }
-
-      .feature-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
-
-      .faq-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
-      .card {
-        min-height: 100%;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 22px;
-        background: var(--panel);
-      }
-
-      .card h3 {
-        margin-bottom: 10px;
-        font-size: 20px;
-        line-height: 1.25;
-      }
-
-      .card p {
-        margin-bottom: 0;
-        color: var(--muted);
-      }
-
-      .tag {
-        width: fit-content;
-        margin-bottom: 14px;
-        border-radius: 999px;
-        padding: 5px 9px;
-        background: rgba(255, 255, 255, 0.08);
-        color: var(--sky);
-        font-size: 12px;
-        font-weight: 750;
-      }
-
-      .tag.good {
-        color: var(--mint);
-      }
-
-      .tag.warn {
-        color: var(--coral);
-      }
-
-      .product-shot {
-        margin-top: 40px;
-        overflow: hidden;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: #1b1911;
-        box-shadow: 0 24px 80px var(--shadow);
-      }
-
-      .product-shot img {
-        width: 100%;
-        height: auto;
-      }
-
-      .workflow {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 0;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        overflow: hidden;
-      }
-
-      .step {
-        padding: 24px;
-        background: var(--panel);
-        border-right: 1px solid var(--line);
-      }
-
-      .step:last-child {
-        border-right: 0;
-      }
-
-      .step-num {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 30px;
-        height: 30px;
-        margin-bottom: 18px;
-        border-radius: 999px;
-        background: var(--brand);
-        color: var(--brand-ink);
-        font-weight: 800;
-      }
-
-      .step h3 {
-        margin-bottom: 8px;
-        font-size: 18px;
-      }
-
-      .step p {
-        margin: 0;
-        color: var(--muted);
-      }
-
-      .deal {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
-        gap: 36px;
-        align-items: center;
-      }
-
-      .deal-list {
-        margin: 20px 0 0;
-        padding: 0;
-        list-style: none;
-      }
-
-      .deal-list li {
-        display: flex;
-        gap: 10px;
-        padding: 12px 0;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        color: #eee6d9;
-      }
-
-      .deal-list li::before {
-        content: "";
-        width: 8px;
-        height: 8px;
-        flex: 0 0 auto;
-        margin-top: 9px;
-        border-radius: 999px;
-        background: var(--brand);
-      }
-
-      .apply-box {
-        border: 1px solid rgba(255, 210, 74, 0.32);
-        border-radius: 8px;
-        padding: 24px;
-        background: #272216;
-      }
-
-      .apply-box h3 {
-        margin-bottom: 10px;
-        font-size: 24px;
-      }
-
-      .apply-box p {
-        color: var(--muted);
-      }
-
-      .notice {
-        border-left: 4px solid var(--coral);
-        padding: 4px 0 4px 18px;
-        color: #ead7cf;
-      }
-
-      .footer {
-        padding: 34px 0;
-        border-top: 1px solid var(--line);
-        color: var(--subtle);
-        font-size: 14px;
-      }
-
-      .footer-inner {
-        width: min(1180px, calc(100% - 40px));
-        margin: 0 auto;
-        display: flex;
-        justify-content: space-between;
-        gap: 18px;
-      }
-
-      @media (max-width: 940px) {
-        .nav-links {
-          display: none;
-        }
-
-        .hero {
-          min-height: auto;
-          padding-top: 104px;
-        }
-
-        .hero-inner,
-        .deal {
-          grid-template-columns: 1fr;
-        }
-
-        .beta-panel {
-          max-width: 460px;
-        }
-
-        .fit-grid,
-        .feature-grid,
-        .faq-grid,
-        .workflow {
-          grid-template-columns: 1fr 1fr;
-        }
-
-        .step:nth-child(2) {
-          border-right: 0;
-        }
-
-        .step:nth-child(1),
-        .step:nth-child(2) {
-          border-bottom: 1px solid var(--line);
-        }
-      }
-
-      @media (max-width: 620px) {
-        .nav {
-          width: min(100% - 28px, 1180px);
-        }
-
-        .brand span {
-          display: none;
-        }
-
-        .hero-inner,
-        .wrap,
-        .footer-inner {
-          width: min(100% - 28px, 1180px);
-        }
-
-        .hero-media img {
-          object-position: 36% 50%;
-          opacity: 0.48;
-        }
-
-        .hero-media::after {
-          background:
-            linear-gradient(180deg, rgba(16, 15, 10, 0.78) 0%, rgba(16, 15, 10, 0.76) 44%, rgba(16, 15, 10, 0.88) 100%),
-            rgba(5, 5, 3, 0.22);
-        }
-
-        .hero {
-          padding-bottom: 42px;
-        }
-
-        .hero .beta-panel {
-          display: none;
-        }
-
-        h1 {
-          font-size: 44px;
-        }
-
-        .lead {
-          font-size: 18px;
-        }
-
-        .button {
-          width: 100%;
-        }
-
-        .slots,
-        .fit-grid,
-        .feature-grid,
-        .faq-grid,
-        .workflow {
-          grid-template-columns: 1fr;
-        }
-
-        .step,
-        .step:nth-child(2) {
-          border-right: 0;
-          border-bottom: 1px solid var(--line);
-        }
-
-        .step:last-child {
-          border-bottom: 0;
-        }
-
-        .section {
-          padding: 62px 0;
-        }
-
-        .footer-inner {
-          flex-direction: column;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <header class="site-header">
-      <nav class="nav" aria-label="主导航">
-        <a class="brand" href="#top" aria-label="TypeWhale 首页">
-          <img src="../../assets/TypeWhaleMinimalLogo.png" alt="">
-          <span>TypeWhale</span>
-        </a>
-        <div class="nav-links">
-          <a href="#fit">适合谁</a>
-          <a href="#workflow">怎么用</a>
-          <a href="#beta">早鸟</a>
-          <a href="#faq">FAQ</a>
-        </div>
-        <a class="button primary" href="#apply">申请早鸟</a>
-      </nav>
-    </header>
-
-    <main id="top">
-      <section class="hero" aria-labelledby="hero-title">
-        <div class="hero-media" aria-hidden="true">
-          <img src="assets/typewhale-current-ui.png" alt="">
-        </div>
-        <div class="hero-inner">
-          <div>
-            <p class="eyebrow">Mac 付费 Beta · 前 30 个早鸟席位</p>
-            <h1 id="hero-title">TypeWhale</h1>
-            <p class="lead">
-              在任何 Mac 应用里，按下快捷键说话。TypeWhale 在本机完成语音识别，
-              把最终文本粘贴回你正在使用的输入框；需要时再用 AI 帮你整理和翻译。
-            </p>
-            <div class="hero-actions">
-              <a class="button primary" href="#apply">99 元加入早鸟</a>
-              <a class="button secondary" href="#workflow">看看工作流</a>
-            </div>
-            <p class="hero-note">
-              当前是付费 Beta，不是正式商业稳定版。适合愿意参与早期反馈的高频输入用户。
-            </p>
-          </div>
-
-          <aside class="beta-panel" aria-label="早鸟信息">
-            <div class="price">
-              <strong>¥99</strong>
-              <span>/ 人</span>
-            </div>
-            <p>当前 Beta 使用权、正式个人版权益、1 年更新和优先反馈通道。</p>
-            <div class="slots" aria-label="早鸟权益摘要">
-              <div class="slot-item">
-                <b>30</b>
-                <span>首批名额</span>
-              </div>
-              <div class="slot-item">
-                <b>7 天</b>
-                <span>可退款</span>
-              </div>
-              <div class="slot-item">
-                <b>macOS 14+</b>
-                <span>推荐系统</span>
-              </div>
-            </div>
-            <ul class="panel-list">
-              <li>本地优先语音识别，默认不上传语音。</li>
-              <li>不抢焦点的录音胶囊，结果回到当前应用。</li>
-              <li>可选 AI 整理、翻译和截图翻译。</li>
-            </ul>
-          </aside>
-        </div>
-      </section>
-
-      <section class="section" id="fit">
-        <div class="wrap">
-          <div class="section-head">
-            <h2>不是会议转写，是桌面输入。</h2>
-            <p>
-              TypeWhale 面向每天在 Mac 上写大量文字的人。它解决的是“我正在这里输入，
-              但我更想直接说出来”的时刻。
-            </p>
-          </div>
-          <div class="fit-grid">
-            <article class="card">
-              <div class="tag good">高频</div>
-              <h3>AI 协作用户</h3>
-              <p>给 Codex、Claude、ChatGPT 口述需求、bug、复盘和提示词，减少长篇打字。</p>
-            </article>
-            <article class="card">
-              <div class="tag good">工作流</div>
-              <h3>产品和开发者</h3>
-              <p>把零散想法快速落到 issue、文档、聊天窗口里，保留语义和约束。</p>
-            </article>
-            <article class="card">
-              <div class="tag">沟通</div>
-              <h3>运营和销售</h3>
-              <p>快速写微信、飞书、邮件和客户回复，让口语变成更可发送的表达。</p>
-            </article>
-            <article class="card">
-              <div class="tag warn">不主打</div>
-              <h3>会议转写场景</h3>
-              <p>它不是长录音会议工具，也不是团队知识库。它先把桌面输入做稳。</p>
-            </article>
-          </div>
-
-          <figure class="product-shot">
-            <img
-              src="assets/typewhale-current-ui.png"
-              alt="TypeWhale macOS 主窗口界面截图"
-            >
-          </figure>
-        </div>
-      </section>
-
-      <section class="section alt" id="workflow">
-        <div class="wrap">
-          <div class="section-head">
-            <h2>一次输入，四步完成。</h2>
-            <p>从说话到粘贴都围绕当前工作流，不要求你切到另一个转写页面。</p>
-          </div>
-          <div class="workflow" aria-label="TypeWhale 使用流程">
-            <article class="step">
-              <span class="step-num">1</span>
-              <h3>在当前应用按快捷键</h3>
-              <p>把光标放在微信、飞书、邮件、文档或 AI 工具里。</p>
-            </article>
-            <article class="step">
-              <span class="step-num">2</span>
-              <h3>直接说出想法</h3>
-              <p>录音胶囊给你确定感：应用正在听，也在理解。</p>
-            </article>
-            <article class="step">
-              <span class="step-num">3</span>
-              <h3>本机完成识别</h3>
-              <p>最终文本来自完整录音识别；预览只做反馈，不提前写入。</p>
-            </article>
-            <article class="step">
-              <span class="step-num">4</span>
-              <h3>自动回到输入框</h3>
-              <p>可选智能整理或翻译后，把结果粘贴回原来的地方。</p>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section class="section" id="beta">
-        <div class="wrap">
-          <div class="deal">
-            <div>
-              <div class="section-head">
-                <h2>早鸟买到的不是承诺，是参与一个正在成型的真实工具。</h2>
-                <p>
-                  当前版本已经可用于真实输入，但商业发行基础设施还在补齐。
-                  所以第一批只开放给能接受 Beta、也愿意给反馈的人。
-                </p>
-              </div>
-              <ul class="deal-list">
-                <li>当前 TypeWhale macOS Beta 使用权。</li>
-                <li>正式个人版上线后可继续使用。</li>
-                <li>1 年内个人版更新。</li>
-                <li>优先反馈通道。</li>
-                <li>7 天内没有进入你的真实工作流，可以退款。</li>
-              </ul>
-            </div>
-            <aside class="apply-box" id="apply">
-              <h3>加入早鸟</h3>
-              <p>
-                早鸟价 ¥99，前 30 人。通过你看到此页面的渠道私信申请，
-                我会发送下载链接、安装说明和首次测试步骤。
-              </p>
-              <a class="button primary" href="#faq">先看常见问题</a>
-              <p class="notice">
-                收钱前请确认发布包不是旧的 1.3.0 公开测试包。建议使用当前最新本地版本重新打包后私发。
-              </p>
-            </aside>
-          </div>
-        </div>
-      </section>
-
-      <section class="section alt" id="faq">
-        <div class="wrap">
-          <div class="section-head">
-            <h2>先把边界说清楚。</h2>
-            <p>TypeWhale 是 local-first 工具。Beta 阶段我们宁愿诚实，也不把风险藏起来。</p>
-          </div>
-          <div class="faq-grid">
-            <article class="card">
-              <h3>它会上传我的语音吗？</h3>
-              <p>语音识别默认在本机完成。智能整理、翻译和截图翻译属于可选增强能力，只有你主动启用并配置 API Key 后才会调用第三方模型。</p>
-            </article>
-            <article class="card">
-              <h3>为什么 macOS 会提示无法验证开发者？</h3>
-              <p>当前是 Beta，还没有完成 Developer ID 公证。首次打开可能需要在系统设置的隐私与安全性里手动允许。</p>
-            </article>
-            <article class="card">
-              <h3>付款后我买到什么？</h3>
-              <p>你买到的是 TypeWhale macOS 个人版早鸟席位：当前 Beta 使用权、正式个人版权益、1 年更新和优先反馈通道。</p>
-            </article>
-            <article class="card">
-              <h3>不好用能退吗？</h3>
-              <p>可以。7 天内如果没有进入你的真实工作流，或者安装后无法正常使用，可以退款。</p>
-            </article>
-          </div>
-        </div>
-      </section>
-    </main>
-
-    <footer class="footer">
-      <div class="footer-inner">
-        <span>TypeWhale · macOS 语音输入付费 Beta</span>
-        <span>当前页面用于早鸟招募，正式隐私政策和 EULA 上线前不做大规模公开投放。</span>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TypeWhale Pro — 说话,就是打字 | Mac 本地语音输入</title>
+<link rel="icon" href="../../assets/TypeWhaleMinimalLogo.png">
+<meta name="description" content="TypeWhale Pro 是本地优先的 macOS 语音输入法。按住 Fn 说话,松开,文字已经在你的输入框里。本地识别,声音不出你的电脑。">
+<style>
+  :root {
+    --ink: #0e1726;
+    --ink-soft: #46536b;
+    --paper: #f7f9fc;
+    --white: #ffffff;
+    --deep: #0b1a33;
+    --brand: #1e6ae1;
+    --brand-soft: #dcebff;
+    --cyan: #4fd1ff;
+    --coral: #ff6b52;
+    --pill-green: #b7f36b;
+    --pill-yellow: #ffd668;
+    --pill-blue: #8fd9ff;
+    --radius-xl: 48px;
+    --maxw: 1120px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: "PingFang SC", "Hiragino Sans GB", -apple-system, "SF Pro SC", "Microsoft YaHei", sans-serif;
+    color: var(--ink);
+    background: var(--paper);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 32px; }
+
+  /* ---------- HERO ---------- */
+  .hero {
+    position: relative;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background:
+      radial-gradient(1200px 700px at 80% -10%, rgba(79, 209, 255, .18), transparent 60%),
+      radial-gradient(900px 600px at 10% 110%, rgba(30, 106, 225, .25), transparent 60%),
+      linear-gradient(180deg, #081226 0%, #0b1a33 55%, #0e2246 100%);
+    color: #eaf2ff;
+    overflow: hidden;
+  }
+  .hero::after { /* faint waves */
+    content: "";
+    position: absolute; inset: 0;
+    background-image: radial-gradient(rgba(255,255,255,.05) 1px, transparent 1px);
+    background-size: 26px 26px;
+    pointer-events: none;
+  }
+  .nav {
+    position: relative; z-index: 2;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 28px 40px;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; letter-spacing: .2px; }
+  .logo .mark {
+    width: 34px; height: 34px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--brand), var(--cyan));
+    display: grid; place-items: center; font-size: 18px;
+  }
+  .logo .by { font-weight: 400; opacity: .55; font-size: 14px; margin-left: 2px; }
+  .nav a.gh {
+    color: #eaf2ff; text-decoration: none; font-size: 14px;
+    border: 1px solid rgba(255,255,255,.25); padding: 8px 18px; border-radius: 99px;
+    transition: background .2s;
+  }
+  .nav a.gh:hover { background: rgba(255,255,255,.1); }
+
+  .hero-body {
+    position: relative; z-index: 2;
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 20px 24px 80px;
+  }
+  h1 {
+    font-size: clamp(44px, 7vw, 84px);
+    font-weight: 800; line-height: 1.12; letter-spacing: 1px;
+  }
+  h1 .accent { color: var(--cyan); }
+  .hero-sub {
+    margin-top: 22px; font-size: clamp(16px, 2vw, 20px);
+    color: rgba(234, 242, 255, .75); max-width: 560px;
+  }
+  .hero-ctas { margin-top: 36px; display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 14px 30px; border-radius: 99px; font-size: 16px; font-weight: 600;
+    text-decoration: none; transition: transform .15s, box-shadow .15s;
+  }
+  .btn:hover { transform: translateY(-2px); }
+  .btn-primary { background: var(--white); color: #0b1a33; box-shadow: 0 8px 30px rgba(0,0,0,.35); }
+  .btn-ghost { background: rgba(255,255,255,.12); color: #eaf2ff; border: 1px solid rgba(255,255,255,.2); }
+
+  /* capsule demo */
+  .capsule-stage { margin-top: 64px; display: flex; flex-direction: column; align-items: center; gap: 18px; }
+  .capsule {
+    display: flex; align-items: center; gap: 16px;
+    background: rgba(10, 18, 34, .8);
+    border: 1px solid rgba(79, 209, 255, .35);
+    box-shadow: 0 20px 60px rgba(0, 20, 60, .5), 0 0 0 6px rgba(79, 209, 255, .06);
+    backdrop-filter: blur(10px);
+    border-radius: 99px;
+    padding: 18px 30px;
+    min-width: 320px; max-width: 640px;
+  }
+  .rec-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--coral); flex-shrink: 0;
+    animation: blink 1.2s ease-in-out infinite; }
+  @keyframes blink { 50% { opacity: .3; } }
+  .wave { display: flex; align-items: center; gap: 3px; height: 28px; flex-shrink: 0; }
+  .wave span {
+    width: 4px; border-radius: 2px;
+    background: linear-gradient(180deg, var(--cyan), var(--brand));
+    animation: wavey 1s ease-in-out infinite;
+  }
+  .wave span:nth-child(1) { height: 30%; animation-delay: 0s; }
+  .wave span:nth-child(2) { height: 70%; animation-delay: .1s; }
+  .wave span:nth-child(3) { height: 100%; animation-delay: .2s; }
+  .wave span:nth-child(4) { height: 55%; animation-delay: .3s; }
+  .wave span:nth-child(5) { height: 85%; animation-delay: .4s; }
+  .wave span:nth-child(6) { height: 40%; animation-delay: .5s; }
+  .wave span:nth-child(7) { height: 65%; animation-delay: .6s; }
+  @keyframes wavey { 0%, 100% { transform: scaleY(.5); } 50% { transform: scaleY(1); } }
+  .capsule-text {
+    font-size: 17px; color: #d9e9ff; text-align: left; min-height: 27px; white-space: nowrap; overflow: hidden;
+  }
+  .caret { display: inline-block; width: 2px; height: 1.1em; background: var(--cyan); vertical-align: -0.15em;
+    animation: blink 1s step-end infinite; }
+  .hint { font-size: 14px; color: rgba(234, 242, 255, .5); display: flex; align-items: center; gap: 8px; }
+  .key {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.25);
+    border-bottom-width: 2px; border-radius: 7px; padding: 2px 10px; font-size: 13px; color: #fff;
+  }
+  .scroll-cue { position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%); z-index: 2;
+    color: rgba(255,255,255,.4); font-size: 22px; animation: bob 1.8s ease-in-out infinite; }
+  @keyframes bob { 50% { transform: translate(-50%, 8px); } }
+
+  /* ---------- SECTION base ---------- */
+  section { padding: 110px 0; }
+  .kicker {
+    display: inline-block; font-size: 13px; font-weight: 700; letter-spacing: 2.5px;
+    color: var(--brand); text-transform: uppercase; margin-bottom: 18px;
+  }
+  h2 { font-size: clamp(32px, 4.6vw, 54px); font-weight: 800; line-height: 1.2; letter-spacing: .5px; }
+  .sub { margin-top: 18px; font-size: 18px; color: var(--ink-soft); max-width: 620px; }
+
+  .reveal { opacity: 0; transform: translateY(28px); transition: opacity .7s ease, transform .7s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+
+  /* ---------- PRIVACY ---------- */
+  .privacy { background: var(--white); text-align: center; }
+  .privacy .sub { margin-left: auto; margin-right: auto; }
+  .priv-grid { margin-top: 64px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; text-align: left; }
+  .priv-card {
+    background: var(--paper); border-radius: 24px; padding: 34px 30px;
+    border: 1px solid #e6ecf5;
+  }
+  .priv-card .ico { font-size: 30px; }
+  .priv-card h3 { margin-top: 16px; font-size: 20px; font-weight: 700; }
+  .priv-card p { margin-top: 10px; font-size: 15px; color: var(--ink-soft); }
+
+  /* ---------- FLOW (deep block) ---------- */
+  .flow-outer { padding: 40px 20px 110px; background: var(--white); }
+  .flow {
+    max-width: 1280px; margin: 0 auto;
+    background:
+      radial-gradient(900px 500px at 85% 0%, rgba(79, 209, 255, .2), transparent 55%),
+      linear-gradient(160deg, #0c2350 0%, #123a7c 60%, #1e6ae1 130%);
+    border-radius: var(--radius-xl);
+    color: #eaf2ff;
+    padding: 90px 72px;
+    position: relative; overflow: hidden;
+  }
+  .flow::after {
+    content: ""; position: absolute; inset: 0;
+    background-image: radial-gradient(rgba(255,255,255,.06) 1px, transparent 1px);
+    background-size: 30px 30px; pointer-events: none;
+  }
+  .flow .kicker { color: var(--cyan); }
+  .flow-grid { position: relative; z-index: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 72px; align-items: center; }
+  .steps { margin-top: 46px; display: flex; flex-direction: column; gap: 8px; }
+  .step {
+    border-left: 3px solid rgba(255,255,255,.18);
+    padding: 16px 0 16px 24px; cursor: default; transition: border-color .3s;
+  }
+  .step.active { border-color: var(--cyan); }
+  .step h3 { font-size: 21px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .step .n {
+    font-size: 12px; font-weight: 700; color: #0b1a33; background: var(--cyan);
+    width: 22px; height: 22px; border-radius: 50%; display: inline-grid; place-items: center; flex-shrink: 0;
+  }
+  .step p { margin-top: 8px; font-size: 15px; color: rgba(234,242,255,.65); max-height: 0; overflow: hidden; transition: max-height .4s ease; }
+  .step.active p { max-height: 90px; }
+
+  /* fake editor demo */
+  .demo-window {
+    background: #f4f7fb; border-radius: 18px; overflow: hidden;
+    box-shadow: 0 30px 80px rgba(0, 10, 40, .5);
+    color: var(--ink);
+  }
+  .demo-bar { display: flex; align-items: center; gap: 7px; background: #e7edf5; padding: 12px 16px; }
+  .demo-bar i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+  .demo-bar i:nth-child(1) { background: #ff5f57; } .demo-bar i:nth-child(2) { background: #febc2e; } .demo-bar i:nth-child(3) { background: #28c840; }
+  .demo-bar b { margin-left: 10px; font-size: 13px; font-weight: 600; color: #6b7890; }
+  .demo-body { padding: 26px 26px 34px; min-height: 220px; font-size: 15.5px; }
+  .msg { max-width: 85%; padding: 12px 16px; border-radius: 16px; margin-bottom: 12px; }
+  .msg.them { background: #e9eef6; border-bottom-left-radius: 4px; }
+  .msg.me { background: var(--brand); color: #fff; margin-left: auto; border-bottom-right-radius: 4px; min-height: 45px; }
+  .demo-capsule {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: #0b1a33; color: #cfe6ff; font-size: 13.5px;
+    padding: 9px 18px; border-radius: 99px; margin-top: 8px;
+    border: 1px solid rgba(79,209,255,.4);
+  }
+  .demo-capsule .wave span { width: 3px; }
+  .demo-capsule .wave { height: 16px; }
+
+  /* ---------- REWRITE ---------- */
+  .rewrite { background: var(--paper); }
+  .rewrite .head { text-align: center; }
+  .rewrite h2 .pill-word {
+    display: inline-block; min-width: 4.2em; text-align: center;
+    border: 2.5px solid var(--brand); border-radius: 99px; padding: 0 .45em; line-height: 1.35;
+    color: var(--brand); background: var(--brand-soft);
+    transition: opacity .25s;
+  }
+  .rw-stage {
+    margin-top: 60px; display: grid; grid-template-columns: 1fr 64px 1fr; gap: 0; align-items: stretch;
+  }
+  .rw-card {
+    background: var(--white); border: 1px solid #e6ecf5; border-radius: 24px; padding: 30px 32px;
+    box-shadow: 0 12px 40px rgba(20, 40, 90, .06);
+  }
+  .rw-card .tag {
+    display: inline-block; font-size: 12.5px; font-weight: 700; padding: 4px 14px; border-radius: 99px; margin-bottom: 16px;
+  }
+  .rw-in .tag { background: #ffe4de; color: #c2401f; }
+  .rw-out .tag { background: var(--brand-soft); color: var(--brand); }
+  .rw-card .txt { font-size: 16.5px; line-height: 1.85; white-space: pre-wrap; }
+  .rw-in .txt { color: var(--ink-soft); }
+  .rw-arrow { display: grid; place-items: center; font-size: 26px; color: var(--brand); }
+  .rw-note { text-align: center; margin-top: 34px; font-size: 14.5px; color: var(--ink-soft); }
+  .rw-note .key { background: #eef3fa; border-color: #d5deeb; color: var(--ink-soft); }
+
+  /* ---------- MORE FEATURES ---------- */
+  .more { background: var(--white); }
+  .more .head { text-align: center; margin-bottom: 64px; }
+  .more-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+  .feat {
+    border-radius: 28px; padding: 38px 32px; min-height: 340px;
+    display: flex; flex-direction: column;
+  }
+  .feat.a { background: linear-gradient(160deg, #e8f4ff, #d3e9ff); }
+  .feat.b { background: linear-gradient(160deg, #eafbe7, #d5f5d0); }
+  .feat.c { background: linear-gradient(160deg, #fff3e2, #ffe7c7); }
+  .feat .ico { font-size: 34px; }
+  .feat h3 { margin-top: 18px; font-size: 22px; font-weight: 800; }
+  .feat p { margin-top: 12px; font-size: 15px; color: #3d4a61; flex: 1; }
+  .feat .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+  .chip {
+    font-size: 12.5px; font-weight: 600; background: rgba(255,255,255,.75);
+    padding: 5px 13px; border-radius: 99px; color: #2c3a52;
+  }
+
+  /* ---------- BETA / PRICING ---------- */
+  .beta { background: var(--paper); }
+  .beta .head { text-align: center; margin-bottom: 60px; }
+  .beta .head .sub { margin-left: auto; margin-right: auto; }
+  .plans { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; max-width: 920px; margin: 0 auto; }
+  .plan {
+    background: var(--white); border: 1px solid #e6ecf5; border-radius: 28px;
+    padding: 42px 38px; display: flex; flex-direction: column;
+    box-shadow: 0 12px 40px rgba(20, 40, 90, .06);
+  }
+  .plan.hot {
+    background: linear-gradient(165deg, #0c2350, #123a7c);
+    color: #eaf2ff; border: none; position: relative; overflow: hidden;
+  }
+  .plan.hot .badge {
+    position: absolute; top: 24px; right: 24px;
+    background: var(--coral); color: #fff; font-size: 12.5px; font-weight: 700;
+    padding: 5px 14px; border-radius: 99px;
+  }
+  .plan .name { font-size: 15px; font-weight: 700; letter-spacing: 1px; opacity: .7; }
+  .plan .price { font-size: 46px; font-weight: 800; margin-top: 8px; line-height: 1; }
+  .plan .price small { font-size: 15px; font-weight: 500; opacity: .6; margin-left: 6px; }
+  .plan ul { list-style: none; margin: 26px 0 30px; flex: 1; display: flex; flex-direction: column; gap: 11px; font-size: 15px; }
+  .plan ul li { padding-left: 26px; position: relative; }
+  .plan ul li::before { content: "✓"; position: absolute; left: 0; font-weight: 800; color: var(--brand); }
+  .plan.hot ul li::before { color: var(--cyan); }
+  .plan .btn { justify-content: center; }
+  .plan:not(.hot) .btn { background: var(--brand-soft); color: var(--brand); }
+  .plan.hot .btn { background: #fff; color: #0b1a33; }
+  .plan .note { margin-top: 14px; font-size: 13px; opacity: .6; text-align: center; }
+  .faq { max-width: 780px; margin: 80px auto 0; }
+  .faq h3 { text-align: center; font-size: 24px; font-weight: 800; margin-bottom: 26px; }
+  .faq details {
+    background: var(--white); border: 1px solid #e6ecf5; border-radius: 16px;
+    padding: 18px 26px; margin-bottom: 12px;
+  }
+  .faq summary { font-weight: 700; cursor: pointer; font-size: 16px; }
+  .faq details p { margin-top: 10px; color: var(--ink-soft); font-size: 15px; }
+
+  /* ---------- DOWNLOAD ---------- */
+  .dl {
+    background:
+      radial-gradient(1000px 600px at 20% 0%, rgba(30,106,225,.35), transparent 60%),
+      linear-gradient(180deg, #0b1a33, #081226);
+    color: #eaf2ff; text-align: center; padding: 140px 0 120px;
+  }
+  .dl h2 { font-size: clamp(38px, 5.5vw, 64px); }
+  .dl .sub { color: rgba(234,242,255,.65); margin: 20px auto 0; }
+  .dl .btn-primary { margin-top: 40px; font-size: 18px; padding: 18px 44px; }
+  .dl .fine { margin-top: 26px; font-size: 13.5px; color: rgba(234,242,255,.45); }
+  .dl .fine a { color: rgba(234,242,255,.7); }
+
+  footer { background: #081226; color: rgba(234,242,255,.55); padding: 44px 0 60px; font-size: 14px; }
+  .foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 18px; }
+  .foot a { color: rgba(234,242,255,.75); text-decoration: none; margin-left: 26px; }
+  .foot a:hover { color: #fff; }
+
+  @media (max-width: 900px) {
+    .priv-grid, .more-grid { grid-template-columns: 1fr; }
+    .flow { padding: 60px 30px; }
+    .flow-grid { grid-template-columns: 1fr; gap: 48px; }
+    .rw-stage { grid-template-columns: 1fr; }
+    .plans { grid-template-columns: 1fr; }
+    .rw-arrow { transform: rotate(90deg); padding: 10px 0; }
+    section { padding: 80px 0; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ HERO ============ -->
+<header class="hero">
+  <nav class="nav">
+    <div class="logo"><span class="mark">🐳</span> TypeWhale Pro <span class="by">for macOS</span></div>
+    <div style="display:flex;gap:10px;">
+      <a class="gh" href="#beta">早鸟 ¥99</a>
+      <a class="gh" href="https://github.com/Allenth/TypeWhale" target="_blank">GitHub</a>
+    </div>
+  </nav>
+  <div class="hero-body">
+    <h1>说话,<span class="accent">就是打字</span>。</h1>
+    <p class="hero-sub">TypeWhale Pro 是本地优先的 macOS 语音输入法。按住 Fn 说话,松开——文字已经在你的输入框里。</p>
+    <div class="hero-ctas">
+      <a class="btn btn-primary" href="https://github.com/Allenth/TypeWhale/releases/download/v1.9.7-build552/TypeWhale-Pro-1.9.7-552.dmg">⬇︎ 免费下载 DMG</a>
+      <a class="btn btn-ghost" href="#flow">看看它怎么工作</a>
+    </div>
+    <div class="capsule-stage">
+      <div class="capsule">
+        <span class="rec-dot"></span>
+        <div class="wave"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        <div class="capsule-text"><span id="tw"></span><span class="caret"></span></div>
       </div>
-    </footer>
-  </body>
+      <div class="hint">按住 <span class="key">Fn</span> 说话 · 松开即粘贴 · 全程本地识别</div>
+    </div>
+  </div>
+  <div class="scroll-cue">⌄</div>
+</header>
+
+<!-- ============ PRIVACY ============ -->
+<section class="privacy">
+  <div class="wrap reveal">
+    <span class="kicker">Local First</span>
+    <h2>你的声音,不出你的电脑。</h2>
+    <p class="sub">录音在本机,识别在本机,历史记录也只存在本机。TypeWhale 不需要把你的任何一个字送上云端。</p>
+    <div class="priv-grid">
+      <div class="priv-card reveal">
+        <div class="ico">🎙️</div>
+        <h3>本地录音</h3>
+        <p>音频只写入本机缓存目录。没有上传,没有遥测,断网也照样能用。</p>
+      </div>
+      <div class="priv-card reveal">
+        <div class="ico">🧠</div>
+        <h3>本地识别</h3>
+        <p>SenseVoice 模型跑在 sherpa-onnx 原生推理管线上,中英文识别毫秒级出字,不依赖任何在线服务。</p>
+      </div>
+      <div class="priv-card reveal">
+        <div class="ico">📋</div>
+        <h3>体面地粘贴</h3>
+        <p>识别结果自动粘贴回你原本正在输入的应用,粘贴后立刻恢复你的剪贴板原有内容。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FLOW ============ -->
+<div class="flow-outer" id="flow">
+  <div class="flow reveal">
+    <div class="flow-grid">
+      <div>
+        <span class="kicker">One Hotkey</span>
+        <h2>一个快捷键,<br>完成整个输入。</h2>
+        <div class="steps" id="steps">
+          <div class="step active">
+            <h3><span class="n">1</span> 按下 Fn,开口就说</h3>
+            <p>单击开始、再按结束,或按住说完松开。任何应用里都能触发,不打断你手头的窗口。</p>
+          </div>
+          <div class="step">
+            <h3><span class="n">2</span> 胶囊实时预览</h3>
+            <p>悬浮胶囊显示麦克风波形和实时识别预览——它在听、在理解,但不会提前打扰你的输入框。</p>
+          </div>
+          <div class="step">
+            <h3><span class="n">3</span> 松开,文字已就位</h3>
+            <p>松开快捷键,完整录音在本地完成最终识别,自动粘贴回你开始说话时所在的位置。</p>
+          </div>
+        </div>
+      </div>
+      <div class="demo-window">
+        <div class="demo-bar"><i></i><i></i><i></i><b>微信 — 项目群</b></div>
+        <div class="demo-body">
+          <div class="msg them">明天的评审会,方案谁来讲?</div>
+          <div class="msg me" id="demo-msg"></div>
+          <div class="demo-capsule">
+            <span class="rec-dot"></span>
+            <div class="wave"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+            <span id="demo-preview">正在听…</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ REWRITE ============ -->
+<section class="rewrite">
+  <div class="wrap">
+    <div class="head reveal">
+      <span class="kicker">Smart Rewrite · 本地 LLM</span>
+      <h2>同一段话,替你写成<br><span class="pill-word" id="pill">润色</span>的样子。</h2>
+      <p class="sub" style="margin-left:auto;margin-right:auto;">智能整理在粘贴前用本机 Ollama 整理你的口述。自动模式会看你在跟谁说话:代码编辑器里写成开发需求,微信里写成聊天口吻,说到"总结要点"就自动归纳。</p>
+    </div>
+    <div class="rw-stage reveal">
+      <div class="rw-card rw-in">
+        <span class="tag">🎙️ 你说的</span>
+        <div class="txt">嗯就是那个,明天下午三点跟客户开会,记得把新方案带上,然后会后要发个纪要给大家,对了让小王也参加一下。</div>
+      </div>
+      <div class="rw-arrow">→</div>
+      <div class="rw-card rw-out">
+        <span class="tag" id="out-tag">✨ 润色后</span>
+        <div class="txt" id="out-txt"></div>
+      </div>
+    </div>
+    <p class="rw-note reveal">默认使用本机 Ollama 模型,可选切换 DeepSeek · Ollama 不可用时自动回退为识别原文,绝不丢字</p>
+  </div>
+</section>
+
+<!-- ============ MORE ============ -->
+<section class="more">
+  <div class="wrap">
+    <div class="head reveal">
+      <span class="kicker">And More</span>
+      <h2>顺手,把这些也做好了。</h2>
+    </div>
+    <div class="more-grid">
+      <div class="feat a reveal">
+        <div class="ico">📸</div>
+        <h3>截图与标注</h3>
+        <p>独立截图快捷键:拖拽框选或悬停选窗,自动对齐窗口边框。矩形、箭头、画笔、文字、高斯模糊马赛克,撤销重做全都有。</p>
+        <div class="chips"><span class="chip">框选</span><span class="chip">窗口识别</span><span class="chip">标注</span><span class="chip">马赛克</span></div>
+      </div>
+      <div class="feat b reveal">
+        <div class="ico">🌐</div>
+        <h3>OCR 与截图翻译</h3>
+        <p>选区内文字一键识别复制。英文截图可以直接英译中——按行覆盖原文、贴上译文,保存和复制都带译文层。</p>
+        <div class="chips"><span class="chip">OCR</span><span class="chip">英译中</span><span class="chip">原文覆盖</span></div>
+      </div>
+      <div class="feat c reveal">
+        <div class="ico">🕘</div>
+        <h3>最近转录</h3>
+        <p>最近 20 条识别结果留在主面板里,双击即可复制。刚才说过的话,永远找得回来——而且只存在你的电脑上。</p>
+        <div class="chips"><span class="chip">20 条历史</span><span class="chip">双击复制</span><span class="chip">仅本机</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ BETA / PRICING ============ -->
+<section class="beta" id="beta">
+  <div class="wrap">
+    <div class="head reveal">
+      <span class="kicker">Early Bird · 早鸟计划</span>
+      <h2>先免费试,合适再上车。</h2>
+      <p class="sub">公开测试版随便下、随便用。如果它进入了你的真实工作流,早鸟计划让你以最低的价格拿到正式版权益,也让这个工具做得更快。</p>
+    </div>
+    <div class="plans reveal">
+      <div class="plan">
+        <div class="name">公开测试版</div>
+        <div class="price">¥0</div>
+        <ul>
+          <li>完整本地语音输入,内置基础识别模型</li>
+          <li>智能整理、截图、OCR、翻译全部可用</li>
+          <li>无账号、无注册、开箱即用</li>
+          <li>未公证,首次打开需在系统设置中允许</li>
+        </ul>
+        <a class="btn" href="https://github.com/Allenth/TypeWhale/releases/download/v1.9.7-build552/TypeWhale-Pro-1.9.7-552.dmg">⬇︎ 下载测试版 DMG</a>
+        <div class="note">macOS 14+ · MIT 开源</div>
+      </div>
+      <div class="plan hot">
+        <span class="badge">前 30 人</span>
+        <div class="name">早鸟 Beta</div>
+        <div class="price">¥99<small>一次性</small></div>
+        <ul>
+          <li>当前 TypeWhale macOS Beta 使用权</li>
+          <li>正式个人版上线后可继续使用</li>
+          <li>1 年内个人版更新</li>
+          <li>优先反馈通道,你的需求排在前面</li>
+          <li>7 天内没进入你的真实工作流,可退款</li>
+        </ul>
+        <a class="btn" href="#faq-apply">私信申请加入 →</a>
+        <div class="note">通过你看到此页面的渠道私信申请,我会发送下载链接、安装说明和首次测试步骤</div>
+      </div>
+    </div>
+    <div class="faq reveal" id="faq-apply">
+      <h3>先把边界说清楚。</h3>
+      <details>
+        <summary>它会上传我的语音吗?</summary>
+        <p>不会。录音和识别都在本机完成,历史记录也只存在本机。默认的智能整理和翻译走本机 Ollama;只有你主动把整理模型切换为 DeepSeek 并配置 API Key,对应文本才会发送给 DeepSeek。</p>
+      </details>
+      <details>
+        <summary>为什么 macOS 会提示"无法验证开发者"?</summary>
+        <p>测试包尚未完成 Developer ID 公证。如果你信任这个包,可以在 系统设置 → 隐私与安全性 里允许打开。正式发行版会完成签名与公证。</p>
+      </details>
+      <details>
+        <summary>付款后我买到什么?</summary>
+        <p>当前 macOS Beta 的使用权、正式个人版上线后的继续使用权、1 年内个人版更新,以及优先反馈通道。早鸟买到的不是承诺,是参与一个正在成型的真实工具。</p>
+      </details>
+      <details>
+        <summary>不好用能退吗?</summary>
+        <p>可以。7 天内它没有进入你的真实工作流,直接退款。</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DOWNLOAD ============ -->
+<section class="dl">
+  <div class="wrap reveal">
+    <h2>免费下载 TypeWhale Pro</h2>
+    <p class="sub">macOS 14+ · 内置基础识别模型,开箱即用 · MIT 开源</p>
+    <a class="btn btn-primary" href="https://github.com/Allenth/TypeWhale/releases/download/v1.9.7-build552/TypeWhale-Pro-1.9.7-552.dmg">⬇︎ 下载 TypeWhale-Pro.dmg</a>
+    <p class="fine">测试版尚未完成 Developer ID 公证,首次打开请在 系统设置 → 隐私与安全性 中允许。<br>需要麦克风与辅助功能权限,分别用于录音和自动粘贴。<a href="https://github.com/Allenth/TypeWhale" target="_blank">查看源码与全部说明 →</a></p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot">
+    <div>🐳 TypeWhale Pro · 说话,就是打字。</div>
+    <div>
+      <a href="https://github.com/Allenth/TypeWhale" target="_blank">GitHub</a>
+      <a href="https://github.com/Allenth/TypeWhale/blob/main/LICENSE" target="_blank">MIT License</a>
+      <a href="https://github.com/Allenth/TypeWhale/blob/main/THIRD_PARTY_NOTICES.md" target="_blank">第三方声明</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+/* hero typewriter */
+const phrases = [
+  "帮我把这段总结成三个要点发给团队",
+  "明天下午三点提醒我跟客户过一遍新方案",
+  "这个函数加一个超时重试,最多三次",
+  "今天的会议纪要:先说结论,再列行动项"
+];
+const tw = document.getElementById("tw");
+let pi = 0, ci = 0, deleting = false;
+function tick() {
+  const p = phrases[pi];
+  if (!deleting) {
+    ci++;
+    tw.textContent = p.slice(0, ci);
+    if (ci === p.length) { deleting = true; setTimeout(tick, 1800); return; }
+    setTimeout(tick, 90 + Math.random() * 60);
+  } else {
+    ci -= 3;
+    if (ci <= 0) { ci = 0; deleting = false; pi = (pi + 1) % phrases.length; }
+    tw.textContent = p.slice(0, ci);
+    setTimeout(tick, deleting ? 22 : 400);
+  }
+}
+tick();
+
+/* flow steps + demo window loop */
+const steps = document.querySelectorAll("#steps .step");
+const demoMsg = document.getElementById("demo-msg");
+const demoPreview = document.getElementById("demo-preview");
+const demoFull = "我来讲,方案今晚发群里,大家先过一眼。";
+let stepIdx = 0;
+function flowLoop() {
+  steps.forEach((s, i) => s.classList.toggle("active", i === stepIdx));
+  if (stepIdx === 0) { demoMsg.textContent = ""; demoPreview.textContent = "正在听…"; }
+  if (stepIdx === 1) {
+    let n = 0;
+    const iv = setInterval(() => {
+      n += 2;
+      demoPreview.textContent = demoFull.slice(0, n);
+      if (n >= demoFull.length) clearInterval(iv);
+    }, 120);
+  }
+  if (stepIdx === 2) { demoMsg.textContent = demoFull; demoPreview.textContent = "已粘贴 ✓"; }
+  stepIdx = (stepIdx + 1) % 3;
+}
+flowLoop();
+setInterval(flowLoop, 3200);
+
+/* rewrite pill rotation */
+const modes = [
+  { name: "润色", tag: "✨ 润色后", txt: "明天下午 3 点与客户召开会议,请携带新方案;会后向大家发送会议纪要,并请小王一同参加。" },
+  { name: "聊天", tag: "💬 聊天口吻", txt: "明天下午3点跟客户开会哈,记得带上新方案~会后我发纪要给大家,也叫上小王一起。" },
+  { name: "开发需求", tag: "🛠 开发需求", txt: "【会议安排】\n- 时间:明天 15:00\n- 对象:客户\n- 准备:新方案文档\n- 会后产出:会议纪要(全员)\n- 参会人:+小王" },
+  { name: "极致归纳", tag: "🎯 极致归纳", txt: "· 明天 15:00 客户会\n· 带新方案\n· 会后发纪要\n· 叫上小王" }
+];
+const pill = document.getElementById("pill");
+const outTag = document.getElementById("out-tag");
+const outTxt = document.getElementById("out-txt");
+let mi = 0;
+function setMode(i) {
+  const m = modes[i];
+  pill.style.opacity = 0;
+  setTimeout(() => { pill.textContent = m.name; pill.style.opacity = 1; }, 250);
+  outTag.textContent = m.tag;
+  outTxt.textContent = m.txt;
+}
+setMode(0);
+setInterval(() => { mi = (mi + 1) % modes.length; setMode(mi); }, 3600);
+
+/* reveal on scroll */
+const io = new IntersectionObserver(es => es.forEach(e => {
+  if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+}), { threshold: 0.15 });
+document.querySelectorAll(".reveal").forEach(el => io.observe(el));
+</script>
+</body>
 </html>
