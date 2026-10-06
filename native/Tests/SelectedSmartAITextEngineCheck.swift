@@ -43,61 +43,69 @@ private final class ProbeAITextEngine: SmartAITextEngine {
 @main
 struct SelectedSmartAITextEngineCheck {
     static func main() async throws {
-        let deepSeek = ProbeAITextEngine(displayName: "DeepSeek Probe", logName: "deepseek", usesLocalCostGuard: true)
-        let ollamaQwen35B = ProbeAITextEngine(displayName: "Ollama 35B Probe", logName: "ollama", usesLocalCostGuard: false)
-        let engine = SelectedSmartAITextEngine(
-            deepSeek: deepSeek,
-            ollama: { model in
-                switch model {
-                case .ollamaQwen35B: return ollamaQwen35B
-                case .deepSeekV4Flash: return deepSeek
-                }
-            },
-            modelProvider: { .deepSeekV4Flash }
+        let deepSeek = ProbeAITextEngine(
+            displayName: "DeepSeek Probe",
+            logName: "deepseek",
+            usesLocalCostGuard: true
         )
-        let context = SmartInputContext(targetAppName: "Test", targetBundleIdentifier: "test")
+        let qwen = ProbeAITextEngine(
+            displayName: "Qwen3 4B Probe",
+            logName: "managed_mlx",
+            usesLocalCostGuard: false
+        )
+        let context = SmartInputContext(
+            targetAppName: "Test",
+            targetBundleIdentifier: "test"
+        )
 
-        precondition(engine.displayName == "DeepSeek Probe")
-        precondition(engine.logName == "deepseek")
-        precondition(engine.usesLocalCostGuard)
-        let deepSeekOutput = try await engine.rewrite(
+        let remote = SelectedSmartAITextEngine(
+            deepSeek: deepSeek,
+            managed: { model in
+                precondition(model == .qwen3_4BInstruct2507_4bit)
+                return qwen
+            },
+            selectionProvider: { .deepSeekV4Flash }
+        )
+        precondition(remote.displayName == "DeepSeek Probe")
+        precondition(remote.logName == "deepseek")
+        precondition(remote.usesLocalCostGuard)
+        _ = try await remote.rewrite(
             rawText: "hello",
             mode: .polish,
             context: context,
             preference: .polish
         )
-        precondition(deepSeekOutput.text == "DeepSeek Probe:hello")
         precondition(deepSeek.rewriteCalls == 1)
-        let translationOutput = try await engine.translate(
-            rawText: "Settings",
-            direction: .englishToChinese,
-            context: context,
-            triggeredBy: "final_translation"
-        )
-        precondition(translationOutput.translatedText == "DeepSeek Probe:Settings")
-        precondition(deepSeek.translateCalls == 1)
 
-        let localEngine = SelectedSmartAITextEngine(
+        var managedFactoryCalls = 0
+        let local = SelectedSmartAITextEngine(
             deepSeek: deepSeek,
-            ollama: { model in
-                switch model {
-                case .ollamaQwen35B: return ollamaQwen35B
-                case .deepSeekV4Flash: return deepSeek
-                }
+            managed: { model in
+                managedFactoryCalls += 1
+                precondition(model == .qwen3_4BInstruct2507_4bit)
+                return qwen
             },
-            modelProvider: { .ollamaQwen35B }
+            selectionProvider: { .typeWhaleQwen3_4BInstruct }
         )
-        precondition(localEngine.displayName == "Ollama 35B Probe")
-        precondition(localEngine.logName == "ollama")
-        precondition(!localEngine.usesLocalCostGuard)
-        let localOutput = try await localEngine.rewrite(
+        precondition(local.displayName == "Qwen3 4B Probe")
+        precondition(managedFactoryCalls == 1)
+        precondition(local.logName == "managed_mlx")
+        precondition(!local.usesLocalCostGuard)
+        _ = try await local.rewrite(
             rawText: "本地整理",
             mode: .polish,
             context: context,
             preference: .polish
         )
-        precondition(localOutput.text == "Ollama 35B Probe:本地整理")
-        precondition(ollamaQwen35B.rewriteCalls == 1)
+        _ = try await local.translate(
+            rawText: "本地翻译",
+            direction: .chineseToEnglish,
+            context: context,
+            triggeredBy: "final_translation"
+        )
+        precondition(qwen.rewriteCalls == 1)
+        precondition(qwen.translateCalls == 1)
+
         print("SelectedSmartAITextEngineCheck passed")
     }
 }

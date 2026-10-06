@@ -195,7 +195,7 @@ final class ScreenshotCoordinator {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(text, forType: .string)
                 closeAll()
-                showTransientStatus("内容已复制", "OCR 识别结果已复制到剪贴板", .success)
+                showTransientStatus("已复制", "OCR 识别结果已复制到剪贴板", .success)
             } catch {
                 guard operationTokens.isCurrent(token) else { return }
                 showTransientStatus("OCR 识别失败", error.localizedDescription, .error)
@@ -206,6 +206,10 @@ final class ScreenshotCoordinator {
     private func archiveKnowledge(in image: NSImage) {
         closeAll()
         let archiveID = UUID()
+        guard let screenshotPNGData = Self.pngData(from: image) else {
+            finishArchiveProcessingStatus("归档失败", "未能生成截图附件", .error)
+            return
+        }
         beginArchiveProcessingStatus("正在识别选区文字")
         Task { [weak self] in
             guard let self else { return }
@@ -239,7 +243,7 @@ final class ScreenshotCoordinator {
                     modeName: archiveModeName,
                     targetAppName: "知识点",
                     recordingSessionID: archiveID
-                ))
+                ), screenshotPNGData: screenshotPNGData)
 
                 if result.didFallback {
                     finishArchiveProcessingStatus("归档已保存", "\(archiveModeName)整理未完成，已保存 OCR 原文：\(url.lastPathComponent)", .warning)
@@ -250,6 +254,14 @@ final class ScreenshotCoordinator {
                 finishArchiveProcessingStatus("归档失败", error.localizedDescription, .error)
             }
         }
+    }
+
+    private static func pngData(from image: NSImage) -> Data? {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return nil
+        }
+        let bitmap = NSBitmapImageRep(cgImage: cgImage)
+        return bitmap.representation(using: .png, properties: [:])
     }
 
     private func beginArchiveProcessingStatus(_ detail: String) {
@@ -679,7 +691,9 @@ private extension ScreenshotToolbarCommand {
         case .arrow: return "箭头"
         case .pen: return "画笔"
         case .text: return "文字"
+        case .mosaic: return "马赛克"
         case .undo: return "撤销"
+        case .redo: return "前进"
         case .done: return "完成"
         case .cancel: return "取消"
         }
@@ -697,7 +711,9 @@ private extension ScreenshotToolbarCommand {
         case .arrow: return "arrow.up.right"
         case .pen: return "pencil.tip"
         case .text: return "textformat"
+        case .mosaic: return "square.grid.3x3.fill"
         case .undo: return "arrow.uturn.backward"
+        case .redo: return "arrow.uturn.forward"
         case .done: return "checkmark"
         case .cancel: return "xmark"
         }
@@ -712,6 +728,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         case arrow
         case pen
         case text
+        case mosaic
     }
 
     private struct TranslationPatch {
@@ -735,6 +752,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         case arrow(NSPoint, NSPoint)
         case pen([NSPoint])
         case text(String, NSPoint)
+        case mosaic(NSRect)
         case translation(TranslationGroup)
     }
 
@@ -754,7 +772,6 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         case move(startSelection: NSRect)
         case resize(handle: SelectionHandle, startSelection: NSRect)
         case annotate
-        case moveMarkup(index: Int, startPoint: NSPoint, original: Markup)
         case pendingWindowSelect(ScreenshotWindowCandidate)
     }
 
@@ -787,8 +804,8 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     private var lastHandleRects: [SelectionHandle: NSRect] = [:]
     private var isAnnotating = false
     private var annotationTool: AnnotationTool = .rectangle
-    private var markups: [Markup] = []
-    private var selectedMarkupIndex: Int?
+    private var markupHistory = ScreenshotEditHistory<Markup>()
+    private var markups: [Markup] { markupHistory.items }
     private var activeMarkupStart: NSPoint?
     private var activeMarkupPoint: NSPoint?
     private var activePenPoints: [NSPoint] = []
@@ -931,14 +948,6 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             commitActiveTextField()
         }
         if isAnnotating, hasUsableSelection, selection.contains(point) {
-            let localPoint = localPoint(from: point)
-            if let index = markupIndex(at: localPoint) {
-                selectedMarkupIndex = index
-                dragStart = point
-                dragMode = .moveMarkup(index: index, startPoint: localPoint, original: markups[index])
-                needsDisplay = true
-                return
-            }
             beginMarkup(at: point)
             return
         }
@@ -994,7 +1003,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         case .create, nil:
             guard !isSelectionLocked else { return }
             selection = normalizedRect(from: dragStart, to: current)
-            markups.removeAll()
+            clearMarkups()
             hasAutoTranslatedSelection = false
         case .move(let startSelection):
             guard !isSelectionLocked else { return }
@@ -1003,22 +1012,17 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         case .resize(let handle, let startSelection):
             guard !isSelectionLocked else { return }
             selection = resized(startSelection, handle: handle, to: current)
-            markups.removeAll()
+            clearMarkups()
             hasAutoTranslatedSelection = false
         case .annotate:
             updateMarkup(to: current)
-        case .moveMarkup(let index, let startPoint, let original):
-            let localPoint = localPoint(from: clamped(current, to: selection))
-            if markups.indices.contains(index) {
-                markups[index] = moved(original, dx: localPoint.x - startPoint.x, dy: localPoint.y - startPoint.y)
-            }
         case .pendingWindowSelect:
             if distance(from: dragStart, to: current) >= clickDragThreshold {
                 guard !isSelectionLocked else { return }
                 dragMode = .create
                 setSessionPhase(.selecting)
                 selection = normalizedRect(from: dragStart, to: current)
-                markups.removeAll()
+                clearMarkups()
                 hasAutoTranslatedSelection = false
             }
         }
@@ -1096,7 +1100,13 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         if isAnnotating,
            event.modifierFlags.contains(.command),
            event.charactersIgnoringModifiers?.lowercased() == "z" {
-            perform(.undo)
+            perform(event.modifierFlags.contains(.shift) ? .redo : .undo)
+            return
+        }
+        if isAnnotating,
+           event.modifierFlags.contains(.command),
+           event.charactersIgnoringModifiers?.lowercased() == "y" {
+            perform(.redo)
             return
         }
         switch event.keyCode {
@@ -1105,7 +1115,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         case 1 where event.modifierFlags.contains(.command):
             perform(.save)
         case 51 where isAnnotating, 117 where isAnnotating:
-            deleteSelectedOrUndoMarkup()
+            perform(.undo)
         case 53:
             perform(.cancel)
         default:
@@ -1361,23 +1371,30 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     }
 
     private func drawToolbar() {
-        let annotationActions: [ToolAction] = [.rectangle, .arrow, .pen, .text, .ocr, .translate, .archive]
-        let functionActions: [ToolAction] = [.copy, .undo, .save, .cancel]
+        let annotationActions: [ToolAction] = [.rectangle, .arrow, .pen, .text, .mosaic, .ocr, .translate, .archive]
+        let functionActions: [ToolAction] = [.copy, .undo, .redo, .save, .cancel]
         let buttonHeight: CGFloat = 50
         let spacing: CGFloat = 7
         let separatorWidth: CGFloat = 1
         let groupSpacing: CGFloat = 15
         let actions = annotationActions + functionActions
-        let fixedWidth =
-            CGFloat(actions.count - 2) * spacing
-            + groupSpacing * 2
-            + separatorWidth
-            + 14
-        let availableButtonWidth = floor((bounds.width - 16 - fixedWidth) / CGFloat(actions.count))
-        let buttonWidth = min(CGFloat(68), max(CGFloat(58), availableButtonWidth))
-        let totalWidth =
-            CGFloat(actions.count) * buttonWidth
-            + fixedWidth
+        let fixedWidth = ScreenshotToolbarLayout.fixedWidth(
+            actionCount: actions.count,
+            spacing: spacing,
+            separatorWidth: separatorWidth,
+            groupSpacing: groupSpacing,
+            outerPadding: 14
+        )
+        let buttonWidth = ScreenshotToolbarLayout.buttonWidth(
+            boundsWidth: bounds.width,
+            actionCount: actions.count,
+            fixedWidth: fixedWidth
+        )
+        let totalWidth = ScreenshotToolbarLayout.totalWidth(
+            actionCount: actions.count,
+            buttonWidth: buttonWidth,
+            fixedWidth: fixedWidth
+        )
         let x = min(max(selection.maxX - totalWidth, 8), bounds.width - totalWidth - 8)
         let y = min(selection.maxY + 10, bounds.height - buttonHeight - 14)
         let toolbarRect = NSRect(x: x, y: y, width: totalWidth, height: buttonHeight + 12)
@@ -1428,7 +1445,8 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
                 (action == .rectangle && annotationTool == .rectangle) ||
                 (action == .arrow && annotationTool == .arrow) ||
                 (action == .pen && annotationTool == .pen) ||
-                (action == .text && annotationTool == .text)
+                (action == .text && annotationTool == .text) ||
+                (action == .mosaic && annotationTool == .mosaic)
             )
         let fillColor: NSColor = if !isEffectivelyEnabled {
             NSColor.white.withAlphaComponent(0.06)
@@ -1493,7 +1511,9 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             hasUsableSelection: hasUsableSelection,
             operationGeneration: operationTokens.currentGeneration,
             isAnnotating: isAnnotating,
-            activeAnnotationTool: commandTool(from: annotationTool)
+            activeAnnotationTool: commandTool(from: annotationTool),
+            canUndo: hasActiveMarkupDraft || markupHistory.canUndo,
+            canRedo: !hasActiveMarkupDraft && markupHistory.canRedo
         )
     }
 
@@ -1541,12 +1561,14 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         case .startAnnotation(let tool):
             isAnnotating = true
             annotationTool = annotationTool(from: tool)
-            onStatus("截图标注", "可直接在截图框内添加矩形、箭头、画笔和文字", .processing)
+            onStatus("截图标注", "可直接在截图框内添加矩形、箭头、画笔、文字和马赛克", .processing)
             needsDisplay = true
         case .selectAnnotationTool(let tool):
             selectAnnotationTool(annotationTool(from: tool))
         case .undo:
             undoMarkup()
+        case .redo:
+            redoMarkup()
         case .done:
             copySelection()
         case .cancel:
@@ -1593,8 +1615,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
                     self.needsDisplay = true
                     return
                 }
-                self.markups.append(.translation(group))
-                self.selectedMarkupIndex = self.markups.indices.last
+                self.appendMarkup(.translation(group))
                 self.isAnnotating = true
                 self.refreshSessionStateForSelection()
                 self.onStatus("翻译已覆盖", "已按原文位置贴入中文译文", .success)
@@ -1639,6 +1660,8 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             return .pen
         case .text:
             return .text
+        case .mosaic:
+            return .mosaic
         }
     }
 
@@ -1652,14 +1675,15 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             return .pen
         case .text:
             return .text
+        case .mosaic:
+            return .mosaic
         }
     }
 
     private func selectAnnotationTool(_ tool: AnnotationTool) {
         isAnnotating = true
         annotationTool = tool
-        selectedMarkupIndex = nil
-        onStatus("截图标注", "在截图框内直接添加和调整标注", .processing)
+        onStatus("截图标注", "在截图框内直接添加标注，可用撤销和前进修正", .processing)
         needsDisplay = true
     }
 
@@ -1811,8 +1835,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         isSelectionLocked = hasUsableSelection
         isAnnotating = false
         annotationTool = .rectangle
-        markups.removeAll()
-        selectedMarkupIndex = nil
+        clearMarkups()
         activeMarkupStart = nil
         activeMarkupPoint = nil
         activePenPoints = []
@@ -1849,7 +1872,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             promptForText(at: localPoint)
         case .pen:
             activePenPoints = [localPoint]
-        case .rectangle, .arrow:
+        case .rectangle, .arrow, .mosaic:
             activeMarkupStart = localPoint
             activeMarkupPoint = localPoint
         }
@@ -1868,7 +1891,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         switch annotationTool {
         case .pen:
             activePenPoints.append(localPoint)
-        case .rectangle, .arrow:
+        case .rectangle, .arrow, .mosaic:
             activeMarkupPoint = localPoint
         case .text:
             break
@@ -1880,19 +1903,21 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         case .rectangle:
             if let start = activeMarkupStart, let point = activeMarkupPoint {
                 let rect = normalizedRect(from: start, to: point)
-                if rect.width >= 4, rect.height >= 4 { markups.append(.rectangle(rect)) }
+                if rect.width >= 4, rect.height >= 4 { appendMarkup(.rectangle(rect)) }
             }
         case .arrow:
             if let start = activeMarkupStart, let point = activeMarkupPoint, distance(from: start, to: point) >= 6 {
-                markups.append(.arrow(start, point))
+                appendMarkup(.arrow(start, point))
             }
         case .pen:
-            if activePenPoints.count > 1 { markups.append(.pen(activePenPoints)) }
+            if activePenPoints.count > 1 { appendMarkup(.pen(activePenPoints)) }
         case .text:
             break
-        }
-        if !markups.isEmpty {
-            selectedMarkupIndex = markups.indices.last
+        case .mosaic:
+            if let start = activeMarkupStart, let point = activeMarkupPoint {
+                let rect = normalizedRect(from: start, to: point)
+                if rect.width >= 6, rect.height >= 6 { appendMarkup(.mosaic(rect)) }
+            }
         }
         activeMarkupStart = nil
         activeMarkupPoint = nil
@@ -1900,36 +1925,39 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
     }
 
     private func undoMarkup() {
-        if !activePenPoints.isEmpty || activeMarkupStart != nil {
+        if hasActiveMarkupDraft {
             activeMarkupStart = nil
             activeMarkupPoint = nil
             activePenPoints = []
-        } else if !markups.isEmpty {
-            markups.removeLast()
+        } else {
+            markupHistory.undo()
         }
-        selectedMarkupIndex = nil
         needsDisplay = true
     }
 
-    private func deleteSelectedOrUndoMarkup() {
-        if let selectedMarkupIndex, markups.indices.contains(selectedMarkupIndex) {
-            markups.remove(at: selectedMarkupIndex)
-            self.selectedMarkupIndex = nil
-        } else {
-            undoMarkup()
-            return
-        }
+    private func redoMarkup() {
+        guard !hasActiveMarkupDraft else { return }
+        markupHistory.redo()
         needsDisplay = true
+    }
+
+    private var hasActiveMarkupDraft: Bool {
+        !activePenPoints.isEmpty || activeMarkupStart != nil
+    }
+
+    private func appendMarkup(_ markup: Markup) {
+        markupHistory.append(markup)
+    }
+
+    private func clearMarkups() {
+        markupHistory.removeAll()
     }
 
     private func drawMarkups() {
         NSGraphicsContext.saveGraphicsState()
         NSBezierPath(rect: selection).addClip()
-        for (index, markup) in markups.enumerated() {
+        for markup in markups {
             draw(markup, offset: selection.origin)
-            if selectedMarkupIndex == index {
-                drawSelectionOutline(for: markup, offset: selection.origin)
-            }
         }
         NSGraphicsContext.restoreGraphicsState()
     }
@@ -1952,6 +1980,10 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             }
         case .text:
             break
+        case .mosaic:
+            if let start = activeMarkupStart, let point = activeMarkupPoint {
+                draw(.mosaic(normalizedRect(from: start, to: point)), offset: selection.origin)
+            }
         }
         NSGraphicsContext.restoreGraphicsState()
     }
@@ -1983,6 +2015,8 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             path.stroke()
         case .text(let text, let point):
             drawText(text, at: transformPoint(point))
+        case .mosaic(let rect):
+            drawBlurredRegion(localRect: rect, destinationRect: transformRect(rect))
         case .translation(let group):
             drawTranslationBackdrop(group.backdrop, transformRect: transformRect)
             for block in group.blocks {
@@ -1993,13 +2027,31 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         }
     }
 
-    private func drawSelectionOutline(for markup: Markup, offset: NSPoint) {
-        let rect = markupBounds(markup).insetBy(dx: -6, dy: -6).offsetBy(dx: offset.x, dy: offset.y)
-        NSColor.systemBlue.setStroke()
-        let path = NSBezierPath(roundedRect: rect, xRadius: 5, yRadius: 5)
-        path.lineWidth = 1.5
-        path.setLineDash([5, 4], count: 2, phase: 0)
-        path.stroke()
+    private func drawBlurredRegion(localRect: NSRect, destinationRect: NSRect) {
+        guard let selected = cropSelection() else { return }
+        let scaleX = CGFloat(selected.width) / max(selection.width, 1)
+        let scaleY = CGFloat(selected.height) / max(selection.height, 1)
+        let pixelRect = CGRect(
+            x: localRect.minX * scaleX,
+            y: localRect.minY * scaleY,
+            width: localRect.width * scaleX,
+            height: localRect.height * scaleY
+        )
+        guard let patch = ScreenshotGaussianBlurRenderer.blurredPatch(
+            from: selected,
+            rect: pixelRect,
+            radius: ScreenshotGaussianBlurRenderer.defaultRadius
+        ) else {
+            return
+        }
+        NSImage(cgImage: patch, size: destinationRect.size).draw(
+            in: destinationRect,
+            from: .zero,
+            operation: .sourceOver,
+            fraction: 1,
+            respectFlipped: true,
+            hints: [.interpolation: NSImageInterpolation.high]
+        )
     }
 
     private func drawArrow(from start: NSPoint, to end: NSPoint, lineWidth: CGFloat) {
@@ -2264,8 +2316,7 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
         activeTextField = nil
         activeTextOrigin = nil
         if !text.isEmpty {
-            markups.append(.text(text, origin))
-            selectedMarkupIndex = markups.indices.last
+            appendMarkup(.text(text, origin))
         }
         needsDisplay = true
     }
@@ -2290,81 +2341,6 @@ private final class ScreenshotOverlayView: NSView, NSTextFieldDelegate {
             x: min(max(point.x, rect.minX), rect.maxX),
             y: min(max(point.y, rect.minY), rect.maxY)
         )
-    }
-
-    private func markupIndex(at point: NSPoint) -> Int? {
-        markups.indices.reversed().first { index in
-            markupBounds(markups[index]).insetBy(dx: -8, dy: -8).contains(point)
-        }
-    }
-
-    private func markupBounds(_ markup: Markup) -> NSRect {
-        switch markup {
-        case .rectangle(let rect):
-            return rect
-        case .arrow(let start, let end):
-            return normalizedRect(from: start, to: end)
-        case .pen(let points):
-            guard let first = points.first else { return .zero }
-            var minX = first.x
-            var minY = first.y
-            var maxX = first.x
-            var maxY = first.y
-            for point in points.dropFirst() {
-                minX = min(minX, point.x)
-                minY = min(minY, point.y)
-                maxX = max(maxX, point.x)
-                maxY = max(maxY, point.y)
-            }
-            return NSRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
-        case .text(let text, let point):
-            let attributes: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 18, weight: .semibold),
-            ]
-            let size = text.size(withAttributes: attributes)
-            return NSRect(x: point.x, y: point.y, width: size.width + 16, height: size.height + 12)
-        case .translation(let group):
-            let rects = [group.backdrop.rect] + group.blocks.flatMap { [$0.rect] + $0.patches.map(\.rect) }
-            return rects.dropFirst().reduce(rects.first ?? .zero) { $0.union($1) }
-        }
-    }
-
-    private func moved(_ markup: Markup, dx: CGFloat, dy: CGFloat) -> Markup {
-        func movedPoint(_ point: NSPoint) -> NSPoint {
-            NSPoint(
-                x: min(max(point.x + dx, 0), selection.width),
-                y: min(max(point.y + dy, 0), selection.height)
-            )
-        }
-        func movedRect(_ rect: NSRect) -> NSRect {
-            var moved = rect.offsetBy(dx: dx, dy: dy)
-            if moved.minX < 0 { moved.origin.x = 0 }
-            if moved.minY < 0 { moved.origin.y = 0 }
-            if moved.maxX > selection.width { moved.origin.x = max(0, selection.width - moved.width) }
-            if moved.maxY > selection.height { moved.origin.y = max(0, selection.height - moved.height) }
-            return moved
-        }
-        switch markup {
-        case .rectangle(let rect):
-            return .rectangle(rect.offsetBy(dx: dx, dy: dy).intersection(NSRect(origin: .zero, size: selection.size)))
-        case .arrow(let start, let end):
-            return .arrow(movedPoint(start), movedPoint(end))
-        case .pen(let points):
-            return .pen(points.map(movedPoint))
-        case .text(let text, let point):
-            return .text(text, movedPoint(point))
-        case .translation(let group):
-            return .translation(TranslationGroup(
-                backdrop: TranslationPatch(rect: movedRect(group.backdrop.rect), color: group.backdrop.color),
-                blocks: group.blocks.map { block in
-                    TranslationBlock(
-                        text: block.text,
-                        rect: movedRect(block.rect),
-                        patches: block.patches.map { TranslationPatch(rect: movedRect($0.rect), color: $0.color) }
-                    )
-                }
-            ))
-        }
     }
 
     private func distance(from start: NSPoint, to end: NSPoint) -> CGFloat {

@@ -12,6 +12,7 @@ import QuartzCore
 /// 黑色背景、图标、脉冲和文字由同一个 mask 一起裁切展开，避免内容和黑框一前一后。
 final class NotchPreviewPresenter: PreviewPresenting {
     var onCycleMode: (() -> Void)?
+    var presentationFrame: CGRect? { panel.frame }
 
     // 无刘海灵动岛
     private let barIconSize: CGFloat = 16
@@ -94,9 +95,11 @@ final class NotchPreviewPresenter: PreviewPresenting {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            guard let self, self.isVisible else { return }
-            self.reposition()
-            self.applyIslandGeometry()
+            MainActor.assumeIsolated {
+                guard let self, self.isVisible else { return }
+                self.reposition()
+                self.applyIslandGeometry()
+            }
         }
     }
 
@@ -118,15 +121,15 @@ final class NotchPreviewPresenter: PreviewPresenting {
     func updateModeName(_ modeName: String) {}
     func updateAutoTranslateEnabled(_ enabled: Bool) {}
     func updateRecordingStatus(remainingSeconds: Int?, memoryHigh: Bool) {}
-    func updateOllamaHealth(isHealthy: Bool) {}
-
     func show(state: String, draft: String?) {
         currentState = state
         setDraftTarget(draft ?? "")
         reposition()
         pulseView.startAnimating()
         setVisible(true)
-        LaunchDiagnostics.mark("notch_preview_show state=\(state)")
+        LaunchDiagnostics.mark(
+            "capsule_show_result theme=notch visible=\(panel.isVisible) logical_visible=\(isVisible) alpha=\(String(format: "%.2f", panel.alphaValue)) frame=\(Int(panel.frame.minX)),\(Int(panel.frame.minY)),\(Int(panel.frame.width))x\(Int(panel.frame.height))"
+        )
     }
 
     func updateDraft(_ draft: String) {
@@ -175,14 +178,16 @@ final class NotchPreviewPresenter: PreviewPresenting {
     private func startDraftTimer() {
         guard textBuffer.displayedDraft != textBuffer.targetDraft, draftTimer == nil else { return }
         let timer = Timer(timeInterval: draftStepInterval, repeats: true) { [weak self] timer in
-            guard let self else { timer.invalidate(); return }
-            switch self.textBuffer.advance() {
-            case .finished, .refreshedAndFinished:
-                timer.invalidate()
-                self.draftTimer = nil
-                self.refreshText()
-            case .advanced:
-                self.refreshText()
+            MainActor.assumeIsolated {
+                guard let self else { timer.invalidate(); return }
+                switch self.textBuffer.advance() {
+                case .finished, .refreshedAndFinished:
+                    timer.invalidate()
+                    self.draftTimer = nil
+                    self.refreshText()
+                case .advanced:
+                    self.refreshText()
+                }
             }
         }
         RunLoop.main.add(timer, forMode: .common)
@@ -191,6 +196,22 @@ final class NotchPreviewPresenter: PreviewPresenting {
 
     private func refreshText() {
         textLabel.stringValue = textBuffer.isEmpty ? currentState : textBuffer.displayedDraft
+    }
+
+    /// 主题选择页使用的静态快照，直接缓存生产刘海视图的最终展开状态。
+    func makeThemePreviewSnapshot(text: String) -> NSImage? {
+        iconView.image = NSImage(
+            systemSymbolName: "message.fill",
+            accessibilityDescription: "目标应用"
+        )
+        currentState = "录音中"
+        textLabel.stringValue = text
+        reposition()
+        applyIslandGeometry()
+        pulseView.setLevel(0.72)
+        container.layoutSubtreeIfNeeded()
+        container.displayIfNeeded()
+        return container.typeWhaleSnapshotImage()
     }
 
     // MARK: - Geometry & visibility

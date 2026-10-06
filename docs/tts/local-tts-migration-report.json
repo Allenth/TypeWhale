@@ -1,0 +1,63 @@
+{
+  "generatedAt": "2026-07-27T22:08:00+08:00",
+  "modelsRoot": "~/Library/Application Support/TypeWhale Pro/Models/tts",
+  "protectedRoot": "~/Library/Application Support/Reader Demo",
+  "localCopies": [
+    {
+      "id": "kokoro-int8-multi-lang-v1_1",
+      "source": "~/Library/Application Support/LocalTTSLab/models/kokoro-int8-multi-lang-v1_1",
+      "destination": "~/Library/Application Support/TypeWhale Pro/Models/tts/kokoro-int8-multi-lang-v1_1",
+      "bytes": 215377257,
+      "manifestSHA256": "2bf634d3700db663b920ff4d399c95b3d2e2f7ecbf17957ee8d06a61b9243cad",
+      "sourcePreserved": true,
+      "state": "promoted-failed-qualification"
+    },
+    {
+      "id": "zipvoice-distill-int8-zh-en-emilia",
+      "source": "~/Library/Application Support/LocalTTSLab/models/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia",
+      "extraSource": "~/Library/Application Support/LocalTTSLab/models/vocos_24khz.onnx",
+      "destination": "~/Library/Application Support/TypeWhale Pro/Models/tts/zipvoice-distill-int8-zh-en-emilia",
+      "bytes": 205215500,
+      "manifestSHA256": "554664c0ead64f6faa6a3c41b7e9898d8a80d7f85c698e62887d4861ec3dcc94",
+      "licenseSource": "https://raw.githubusercontent.com/k2-fsa/ZipVoice/master/LICENSE",
+      "sourcePreserved": false,
+      "state": "promoted-passed-cleaned-to-trash"
+    }
+  ],
+  "remoteAcquisition": [
+    {
+      "id": "qwen3-tts-06b-coreml",
+      "source": "argmaxinc/ttskit-coreml",
+      "bytes": 1171771070,
+      "state": "promoted-unverified"
+    },
+    {
+      "id": "qwen3-tts-17b-coreml",
+      "source": "argmaxinc/ttskit-coreml",
+      "bytes": 2331222800,
+      "state": "promoted-unverified"
+    },
+    {
+      "id": "fun-cosyvoice3-0.5b-2512",
+      "source": "FunAudioLLM/Fun-CosyVoice3-0.5B-2512",
+      "bytes": 9747537445,
+      "state": "promoted-unverified"
+    },
+    {
+      "id": "moss-tts-local-transformer-v1.5",
+      "source": "OpenMOSS-Team/MOSS-TTS-Local-Transformer-v1.5",
+      "bytes": 9116917899,
+      "state": "promoted-unverified"
+    },
+    {
+      "id": "voxcpm2",
+      "source": "openbmb/VoxCPM2",
+      "bytes": 4960747370,
+      "state": "promoted-unverified"
+    }
+  ],
+  "managedBytes": 34965486010,
+  "budgetBytes": 53687091200,
+  "cleanupExecuted": true,
+  "cleanupReclaimedBytes": 205150124
+}

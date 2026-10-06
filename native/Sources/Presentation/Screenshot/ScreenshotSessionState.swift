@@ -11,7 +11,9 @@ enum ScreenshotToolbarCommand: CaseIterable {
     case arrow
     case pen
     case text
+    case mosaic
     case undo
+    case redo
     case done
     case cancel
 }
@@ -21,6 +23,7 @@ enum ScreenshotAnnotationTool: Equatable {
     case arrow
     case pen
     case text
+    case mosaic
 }
 
 struct ScreenshotCommandContext: Equatable {
@@ -29,6 +32,8 @@ struct ScreenshotCommandContext: Equatable {
     var operationGeneration: Int = 0
     var isAnnotating: Bool = false
     var activeAnnotationTool: ScreenshotAnnotationTool = .rectangle
+    var canUndo: Bool = false
+    var canRedo: Bool = false
 }
 
 enum ScreenshotCommandEffect: Equatable {
@@ -40,6 +45,7 @@ enum ScreenshotCommandEffect: Equatable {
     case startAnnotation(ScreenshotAnnotationTool)
     case selectAnnotationTool(ScreenshotAnnotationTool)
     case undo
+    case redo
     case done
     case cancel
     case ignore
@@ -53,7 +59,15 @@ enum ScreenshotCommandDispatcher {
     }
 
     static func canPerform(_ command: ScreenshotToolbarCommand, in context: ScreenshotCommandContext) -> Bool {
-        effectiveState(for: context).canPerform(command)
+        guard effectiveState(for: context).canPerform(command) else { return false }
+        switch command {
+        case .undo:
+            return context.canUndo
+        case .redo:
+            return context.canRedo
+        case .copy, .save, .ocr, .translate, .archive, .annotate, .rectangle, .arrow, .pen, .text, .mosaic, .done, .cancel:
+            return true
+        }
     }
 
     static func effect(for command: ScreenshotToolbarCommand, in context: ScreenshotCommandContext) -> ScreenshotCommandEffect {
@@ -79,13 +93,77 @@ enum ScreenshotCommandDispatcher {
             return .selectAnnotationTool(.pen)
         case .text:
             return .selectAnnotationTool(.text)
+        case .mosaic:
+            return .selectAnnotationTool(.mosaic)
         case .undo:
             return .undo
+        case .redo:
+            return .redo
         case .done:
             return .done
         case .cancel:
             return .cancel
         }
+    }
+}
+
+struct ScreenshotEditHistory<Item> {
+    private(set) var items: [Item] = []
+    private var redoItems: [Item] = []
+
+    var canUndo: Bool { !items.isEmpty }
+    var canRedo: Bool { !redoItems.isEmpty }
+
+    mutating func append(_ item: Item) {
+        items.append(item)
+        redoItems.removeAll()
+    }
+
+    mutating func removeAll() {
+        items.removeAll()
+        redoItems.removeAll()
+    }
+
+    @discardableResult
+    mutating func undo() -> Item? {
+        guard let item = items.popLast() else { return nil }
+        redoItems.append(item)
+        return item
+    }
+
+    @discardableResult
+    mutating func redo() -> Item? {
+        guard let item = redoItems.popLast() else { return nil }
+        items.append(item)
+        return item
+    }
+}
+
+enum ScreenshotToolbarLayout {
+    static let minimumButtonWidth: CGFloat = 50
+    static let maximumButtonWidth: CGFloat = 68
+
+    static func fixedWidth(
+        actionCount: Int,
+        spacing: CGFloat,
+        separatorWidth: CGFloat,
+        groupSpacing: CGFloat,
+        outerPadding: CGFloat
+    ) -> CGFloat {
+        CGFloat(max(0, actionCount - 2)) * spacing
+            + groupSpacing * 2
+            + separatorWidth
+            + outerPadding
+    }
+
+    static func buttonWidth(boundsWidth: CGFloat, actionCount: Int, fixedWidth: CGFloat) -> CGFloat {
+        guard actionCount > 0 else { return minimumButtonWidth }
+        let availableButtonWidth = floor((boundsWidth - 16 - fixedWidth) / CGFloat(actionCount))
+        return min(maximumButtonWidth, max(minimumButtonWidth, availableButtonWidth))
+    }
+
+    static func totalWidth(actionCount: Int, buttonWidth: CGFloat, fixedWidth: CGFloat) -> CGFloat {
+        CGFloat(actionCount) * buttonWidth + fixedWidth
     }
 }
 

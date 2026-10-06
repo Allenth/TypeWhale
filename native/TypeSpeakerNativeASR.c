@@ -7,6 +7,7 @@
 
 typedef struct TypeSpeakerNativeRecognizerState {
   const SherpaOnnxOfflineRecognizer *recognizer;
+  const SherpaOnnxOnlineRecognizer *online_recognizer;
   char *hotwords;
 } TypeSpeakerNativeRecognizerState;
 
@@ -255,28 +256,21 @@ TypeSpeakerNativeRecognizer TypeSpeakerNativeRecognizerCreate(
   return (TypeSpeakerNativeRecognizer)state;
 }
 
-TypeSpeakerNativeRecognizer TypeSpeakerNativeQwen3RecognizerCreate(
-    const char *model_dir,
+TypeSpeakerNativeRecognizer TypeSpeakerNativeParakeetRecognizerCreate(
+    const char *encoder_path,
+    const char *decoder_path,
+    const char *joiner_path,
+    const char *tokens_path,
     const char *hotwords,
     char **error_message) {
   if (error_message != NULL) {
     *error_message = NULL;
   }
-  if (model_dir == NULL || model_dir[0] == '\0') {
-    set_error(error_message, "缺少 Qwen3-ASR 模型目录");
-    return NULL;
-  }
-
-  char *conv_frontend = join_path(model_dir, "conv_frontend.onnx");
-  char *encoder = join_path(model_dir, "encoder.int8.onnx");
-  char *decoder = join_path(model_dir, "decoder.int8.onnx");
-  char *tokenizer = join_path(model_dir, "tokenizer");
-  if (conv_frontend == NULL || encoder == NULL || decoder == NULL || tokenizer == NULL) {
-    free(conv_frontend);
-    free(encoder);
-    free(decoder);
-    free(tokenizer);
-    set_error(error_message, "无法分配 Qwen3-ASR 模型路径");
+  if (encoder_path == NULL || encoder_path[0] == '\0' ||
+      decoder_path == NULL || decoder_path[0] == '\0' ||
+      joiner_path == NULL || joiner_path[0] == '\0' ||
+      tokens_path == NULL || tokens_path[0] == '\0') {
+    set_error(error_message, "缺少 Parakeet TDT 模型文件");
     return NULL;
   }
 
@@ -284,40 +278,137 @@ TypeSpeakerNativeRecognizer TypeSpeakerNativeQwen3RecognizerCreate(
   memset(&config, 0, sizeof(config));
   config.feat_config.sample_rate = 16000;
   config.feat_config.feature_dim = 80;
-  config.model_config.qwen3_asr.conv_frontend = conv_frontend;
-  config.model_config.qwen3_asr.encoder = encoder;
-  config.model_config.qwen3_asr.decoder = decoder;
-  config.model_config.qwen3_asr.tokenizer = tokenizer;
-  config.model_config.qwen3_asr.max_total_len = 512;
-  config.model_config.qwen3_asr.max_new_tokens = 256;
-  config.model_config.qwen3_asr.hotwords =
-      hotwords != NULL && hotwords[0] != '\0' ? hotwords : NULL;
+  config.model_config.transducer.encoder = encoder_path;
+  config.model_config.transducer.decoder = decoder_path;
+  config.model_config.transducer.joiner = joiner_path;
+  config.model_config.tokens = tokens_path;
+  config.model_config.model_type = "nemo_transducer";
   config.model_config.num_threads = 3;
   config.model_config.provider = "cpu";
-  config.model_config.debug = 0;
   config.decoding_method = "greedy_search";
 
   const SherpaOnnxOfflineRecognizer *recognizer =
       SherpaOnnxCreateOfflineRecognizer(&config);
-  free(conv_frontend);
-  free(encoder);
-  free(decoder);
-  free(tokenizer);
   if (recognizer == NULL) {
-    set_error(error_message, "无法创建原生 Qwen3-ASR 识别器");
+    set_error(error_message, "无法创建原生 Parakeet TDT 识别器");
     return NULL;
   }
-
   TypeSpeakerNativeRecognizerState *state =
       (TypeSpeakerNativeRecognizerState *)calloc(1, sizeof(TypeSpeakerNativeRecognizerState));
   if (state == NULL) {
     SherpaOnnxDestroyOfflineRecognizer(recognizer);
-    set_error(error_message, "无法分配原生 Qwen3-ASR 状态");
+    set_error(error_message, "无法分配原生 Parakeet TDT 状态");
     return NULL;
   }
   state->recognizer = recognizer;
   state->hotwords = hotwords != NULL && hotwords[0] != '\0' ? strdup(hotwords) : NULL;
   return (TypeSpeakerNativeRecognizer)state;
+}
+
+static char *transcribe_online(
+    TypeSpeakerNativeRecognizerState *state,
+    const float *samples,
+    int32_t num_samples,
+    int32_t sample_rate,
+    char **error_message) {
+  if (state->online_recognizer == NULL) {
+    set_error(error_message, "原生在线识别器状态无效");
+    return NULL;
+  }
+
+  const SherpaOnnxOnlineStream *stream =
+      state->hotwords != NULL && state->hotwords[0] != '\0'
+          ? SherpaOnnxCreateOnlineStreamWithHotwords(state->online_recognizer, state->hotwords)
+          : SherpaOnnxCreateOnlineStream(state->online_recognizer);
+  if (stream == NULL) {
+    set_error(error_message, "无法创建原生在线识别任务");
+    return NULL;
+  }
+
+  SherpaOnnxOnlineStreamAcceptWaveform(
+      stream, sample_rate, samples, num_samples);
+  int32_t tail_samples = sample_rate > 0 ? sample_rate / 2 : 8000;
+  float *tail = (float *)calloc((size_t)tail_samples, sizeof(float));
+  if (tail != NULL) {
+    SherpaOnnxOnlineStreamAcceptWaveform(stream, sample_rate, tail, tail_samples);
+    free(tail);
+  }
+
+  int32_t guard = 0;
+  while (SherpaOnnxIsOnlineStreamReady(state->online_recognizer, stream) && guard < 10000) {
+    SherpaOnnxDecodeOnlineStream(state->online_recognizer, stream);
+    guard += 1;
+  }
+  const SherpaOnnxOnlineRecognizerResult *result =
+      SherpaOnnxGetOnlineStreamResult(state->online_recognizer, stream);
+  char *text = result != NULL && result->text != NULL ? strdup(result->text) : strdup("");
+
+  if (result != NULL) {
+    SherpaOnnxDestroyOnlineRecognizerResult(result);
+  }
+  SherpaOnnxDestroyOnlineStream(stream);
+  return text;
+}
+
+static char *transcribe_offline(
+    TypeSpeakerNativeRecognizerState *state,
+    const float *samples,
+    int32_t num_samples,
+    int32_t sample_rate,
+    const char *language,
+    char **error_message) {
+  if (state->recognizer == NULL) {
+    return transcribe_online(state, samples, num_samples, sample_rate, error_message);
+  }
+
+  const SherpaOnnxOfflineStream *stream =
+      state->hotwords != NULL && state->hotwords[0] != '\0'
+          ? SherpaOnnxCreateOfflineStreamWithHotwords(state->recognizer, state->hotwords)
+          : SherpaOnnxCreateOfflineStream(state->recognizer);
+  if (stream == NULL) {
+    set_error(error_message, "无法创建原生识别任务");
+    return NULL;
+  }
+  const char *stream_language = language != NULL && language[0] != '\0'
+                                    ? language
+                                    : sense_voice_language();
+  SherpaOnnxOfflineStreamSetOption(stream, "language", stream_language);
+
+  SherpaOnnxAcceptWaveformOffline(stream, sample_rate, samples, num_samples);
+  SherpaOnnxDecodeOfflineStream(state->recognizer, stream);
+  const SherpaOnnxOfflineRecognizerResult *result =
+      SherpaOnnxGetOfflineStreamResult(stream);
+  char *text = result != NULL && result->text != NULL ? strdup(result->text) : strdup("");
+
+  if (result != NULL) {
+    SherpaOnnxDestroyOfflineRecognizerResult(result);
+  }
+  SherpaOnnxDestroyOfflineStream(stream);
+  return text;
+}
+
+char *TypeSpeakerNativeRecognizerTranscribeSamples(
+    TypeSpeakerNativeRecognizer recognizer,
+    const float *samples,
+    int num_samples,
+    int sample_rate,
+    const char *language,
+    char **error_message) {
+  if (error_message != NULL) {
+    *error_message = NULL;
+  }
+  if (recognizer == NULL) {
+    set_error(error_message, "原生 SenseVoice 识别器尚未初始化");
+    return NULL;
+  }
+  if (samples == NULL || num_samples <= 0 || sample_rate <= 0) {
+    set_error(error_message, "原生语音识别 samples 无效");
+    return NULL;
+  }
+  TypeSpeakerNativeRecognizerState *state =
+      (TypeSpeakerNativeRecognizerState *)recognizer;
+  return transcribe_offline(
+      state, samples, (int32_t)num_samples, (int32_t)sample_rate, language, error_message);
 }
 
 char *TypeSpeakerNativeRecognizerTranscribe(
@@ -334,17 +425,41 @@ char *TypeSpeakerNativeRecognizerTranscribe(
   }
   TypeSpeakerNativeRecognizerState *state =
       (TypeSpeakerNativeRecognizerState *)recognizer;
-  if (state->recognizer == NULL) {
-    set_error(error_message, "原生识别器状态无效");
-    return NULL;
-  }
-
   const SherpaOnnxWave *wave = SherpaOnnxReadWave(audio_path);
   if (wave == NULL) {
     set_error(error_message, "无法读取录音 WAV 文件");
     return NULL;
   }
+  char *text = transcribe_offline(
+      state,
+      wave->samples,
+      wave->num_samples,
+      wave->sample_rate,
+      language,
+      error_message);
+  SherpaOnnxFreeWave(wave);
+  return text;
+}
 
+TypeSpeakerNativeRecognitionResult *TypeSpeakerNativeRecognizerTranscribeDetailed(
+    TypeSpeakerNativeRecognizer recognizer,
+    const char *audio_path,
+    const char *language,
+    char **error_message) {
+  if (error_message != NULL) {
+    *error_message = NULL;
+  }
+  if (recognizer == NULL || audio_path == NULL) {
+    set_error(error_message, "原生 SenseVoice 识别器或音频路径无效");
+    return NULL;
+  }
+  TypeSpeakerNativeRecognizerState *state =
+      (TypeSpeakerNativeRecognizerState *)recognizer;
+  const SherpaOnnxWave *wave = SherpaOnnxReadWave(audio_path);
+  if (wave == NULL) {
+    set_error(error_message, "无法读取录音 WAV 文件");
+    return NULL;
+  }
   const SherpaOnnxOfflineStream *stream =
       state->hotwords != NULL && state->hotwords[0] != '\0'
           ? SherpaOnnxCreateOfflineStreamWithHotwords(state->recognizer, state->hotwords)
@@ -358,20 +473,76 @@ char *TypeSpeakerNativeRecognizerTranscribe(
                                     ? language
                                     : sense_voice_language();
   SherpaOnnxOfflineStreamSetOption(stream, "language", stream_language);
-
   SherpaOnnxAcceptWaveformOffline(
       stream, wave->sample_rate, wave->samples, wave->num_samples);
   SherpaOnnxDecodeOfflineStream(state->recognizer, stream);
   const SherpaOnnxOfflineRecognizerResult *result =
       SherpaOnnxGetOfflineStreamResult(stream);
-  char *text = result != NULL && result->text != NULL ? strdup(result->text) : strdup("");
+
+  TypeSpeakerNativeRecognitionResult *native_result =
+      (TypeSpeakerNativeRecognitionResult *)calloc(1, sizeof(TypeSpeakerNativeRecognitionResult));
+  if (native_result == NULL) {
+    set_error(error_message, "无法分配结构化识别结果");
+  } else {
+    native_result->text = strdup(result != NULL && result->text != NULL ? result->text : "");
+    if (native_result->text == NULL) {
+      TypeSpeakerNativeRecognitionResultFree(native_result);
+      native_result = NULL;
+      set_error(error_message, "无法分配识别文本结果");
+    } else if (result != NULL && result->count > 0 && result->tokens_arr != NULL) {
+      native_result->count = result->count;
+      native_result->tokens = (char **)calloc((size_t)result->count, sizeof(char *));
+      if (native_result->tokens == NULL) {
+        TypeSpeakerNativeRecognitionResultFree(native_result);
+        native_result = NULL;
+        set_error(error_message, "无法分配识别词元结果");
+      } else {
+        int allocation_failed = 0;
+        for (int32_t i = 0; i < result->count; ++i) {
+          native_result->tokens[i] = strdup(result->tokens_arr[i] != NULL ? result->tokens_arr[i] : "");
+          if (native_result->tokens[i] == NULL) {
+            allocation_failed = 1;
+            break;
+          }
+        }
+        if (!allocation_failed && result->timestamps != NULL) {
+          native_result->timestamps = (float *)calloc((size_t)result->count, sizeof(float));
+          if (native_result->timestamps != NULL) {
+            memcpy(native_result->timestamps, result->timestamps, (size_t)result->count * sizeof(float));
+          } else {
+            allocation_failed = 1;
+          }
+        }
+        if (allocation_failed) {
+          TypeSpeakerNativeRecognitionResultFree(native_result);
+          native_result = NULL;
+          set_error(error_message, "无法分配结构化识别词元或时间戳");
+        }
+      }
+    }
+  }
 
   if (result != NULL) {
     SherpaOnnxDestroyOfflineRecognizerResult(result);
   }
   SherpaOnnxDestroyOfflineStream(stream);
   SherpaOnnxFreeWave(wave);
-  return text;
+  return native_result;
+}
+
+void TypeSpeakerNativeRecognitionResultFree(TypeSpeakerNativeRecognitionResult *result) {
+  if (result == NULL) {
+    return;
+  }
+  free(result->text);
+  if (result->tokens != NULL) {
+    for (int32_t i = 0; i < result->count; ++i) {
+      free(result->tokens[i]);
+    }
+  }
+  free(result->tokens);
+  free(result->timestamps);
+  free(result);
 }
 
 void TypeSpeakerNativeRecognizerDestroy(TypeSpeakerNativeRecognizer recognizer) {
@@ -380,6 +551,9 @@ void TypeSpeakerNativeRecognizerDestroy(TypeSpeakerNativeRecognizer recognizer) 
         (TypeSpeakerNativeRecognizerState *)recognizer;
     if (state->recognizer != NULL) {
       SherpaOnnxDestroyOfflineRecognizer(state->recognizer);
+    }
+    if (state->online_recognizer != NULL) {
+      SherpaOnnxDestroyOnlineRecognizer(state->online_recognizer);
     }
     free(state->hotwords);
     free(state);

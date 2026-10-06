@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>方案 C · 智能整理页 — 高保真设计稿</title>
+<style>
+  :root{
+    --bg:#EDF1F4; --bg2:#E3E9EE; --panel:#FFFFFF; --ink:#22323D; --muted:#5E7180;
+    --line:#D7DEE4; --accent:#4E77A0; --accent-soft:rgba(78,119,160,.12);
+    --serif:"Songti SC","STSong","Noto Serif SC",Georgia,"Times New Roman",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue","Segoe UI",system-ui,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --shadow:0 20px 52px -28px rgba(30,55,80,.5); --maxw:1120px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0C1319;--bg2:#0F171E;--panel:#141E27;--ink:#E6EDF2;--muted:#94A5B1;
+      --line:#212E39;--accent:#7AA6CE;--accent-soft:rgba(122,166,206,.15);--shadow:0 24px 64px -32px rgba(0,0,0,.78);}
+  }
+  :root[data-theme="light"]{--bg:#EDF1F4;--bg2:#E3E9EE;--panel:#FFFFFF;--ink:#22323D;--muted:#5E7180;
+    --line:#D7DEE4;--accent:#4E77A0;--accent-soft:rgba(78,119,160,.12);--shadow:0 20px 52px -28px rgba(30,55,80,.5);}
+  :root[data-theme="dark"]{--bg:#0C1319;--bg2:#0F171E;--panel:#141E27;--ink:#E6EDF2;--muted:#94A5B1;
+    --line:#212E39;--accent:#7AA6CE;--accent-soft:rgba(122,166,206,.15);--shadow:0 24px 64px -32px rgba(0,0,0,.78);}
+
+  .mist{
+    --m-bg:#EBEFF3; --m-bg2:#E2E9EE; --m-surface:#FFFFFF; --m-surface2:#F5F8FA; --m-lead:#EEF3F6;
+    --m-line:rgba(64,94,116,.15); --m-line2:rgba(64,94,116,.085);
+    --m-ink:#2C3E4B; --m-sub:#6E8290; --m-faint:#94A6B2;
+    --m-accent:#5B84A6; --m-accent2:#47708F; --m-wave:#7AA1C2;
+    --m-good:#5AA588; --m-warn:#C0975B; --m-rec:#D08A72; --m-pearl:#FBFCFD;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;color:var(--ink);font-family:var(--sans);line-height:1.62;-webkit-font-smoothing:antialiased;
+    background:radial-gradient(130% 90% at 84% -12%,var(--accent-soft),transparent 58%),
+      radial-gradient(90% 70% at -10% 8%,var(--accent-soft),transparent 55%),linear-gradient(var(--bg2),var(--bg));}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 30px}
+
+  header.hero{padding:70px 0 8px}
+  .eyebrow{font-size:12px;letter-spacing:.28em;text-transform:uppercase;color:var(--accent);font-weight:600;margin-bottom:16px}
+  .hero h1{font-family:var(--serif);font-weight:600;font-size:clamp(28px,4.4vw,46px);line-height:1.12;margin:0 0 14px;text-wrap:balance}
+  .hero p{font-size:16px;color:var(--muted);max-width:64ch;margin:0}
+  .crumbs{display:flex;gap:8px;align-items:center;font-size:12.5px;color:var(--muted);margin-top:22px;flex-wrap:wrap}
+  .crumbs b{color:var(--ink);font-weight:600}.crumbs .sep{opacity:.5}
+
+  .divider{height:1px;background:var(--line);margin:44px 0 26px}
+  .sect-label{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:8px}
+  .sect-note{font-size:14px;color:var(--muted);max-width:72ch;margin:0 0 22px}
+
+  /* window chrome (shared with page 1) */
+  .win{position:relative;border-radius:18px;overflow:hidden;border:1px solid var(--m-line);color:var(--m-ink);
+    background:linear-gradient(168deg,var(--m-bg2),var(--m-bg));box-shadow:var(--shadow);font-family:var(--sans)}
+  .win::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
+    background:radial-gradient(52% 40% at 96% 106%,rgba(91,132,166,.10),transparent 62%),
+      radial-gradient(40% 34% at 2% -6%,rgba(91,132,166,.07),transparent 60%);}
+  .topbar{position:relative;z-index:2;display:flex;align-items:center;gap:11px;padding:12px 16px;border-bottom:1px solid var(--m-line2)}
+  .tl{display:flex;gap:7px;width:52px}.tl i{width:11px;height:11px;border-radius:50%}
+  .tl i:nth-child(1){background:#e88b84}.tl i:nth-child(2){background:#e6c07a}.tl i:nth-child(3){background:#8ec79a}
+  .appico{width:26px;height:26px;border-radius:8px;background:linear-gradient(160deg,#8fb0c9,#5b84a6);
+    display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1px rgba(255,255,255,.3)}
+  .appico svg{width:16px;height:16px;fill:#fff;opacity:.95}
+  .apptitle{font-weight:600;font-size:13px;line-height:1.1}
+  .apptitle span{display:block;font-weight:400;color:var(--m-faint);font-size:10px}
+  .flex{flex:1}
+  .membadge{font-size:11px;color:var(--m-sub);border:1px solid var(--m-line);border-radius:999px;padding:3px 10px;font-variant-numeric:tabular-nums}
+  .tbtn{width:26px;height:26px;border-radius:8px;border:1px solid var(--m-line);display:flex;align-items:center;justify-content:center}
+  .tbtn svg{width:14px;height:14px;stroke:var(--m-sub);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+  .shell{position:relative;z-index:1;display:grid;grid-template-columns:172px 1fr;min-height:544px}
+  .nav{background:var(--m-surface2);border-right:1px solid var(--m-line2);padding:14px 11px;display:flex;flex-direction:column;gap:3px}
+  .nav .grouplabel{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--m-faint);padding:10px 11px 4px}
+  .navitem{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:10px;font-size:12.5px;color:var(--m-sub);cursor:default}
+  .navitem svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto}
+  .navitem:hover{background:var(--m-line2)}
+  .navitem.on{background:var(--m-accent);color:#fff;font-weight:600;box-shadow:0 6px 16px -7px color-mix(in srgb,var(--m-accent) 65%,transparent)}
+  .navitem.on:hover{background:var(--m-accent)}
+  .navspacer{flex:1}
+  .navfoot{display:flex;align-items:center;gap:8px;padding:9px 11px;border-radius:10px;font-size:11.5px;color:var(--m-faint)}
+  .navfoot .led-s{width:7px;height:7px;border-radius:50%;background:var(--m-good)}
+
+  .content{padding:22px 26px 24px;display:flex;flex-direction:column;gap:18px;min-width:0}
+  .pagehead{display:flex;align-items:flex-end;justify-content:space-between;gap:14px}
+  .pagehead h2{font-family:var(--serif);font-size:22px;font-weight:600;margin:0;line-height:1.1}
+  .pagehead p{margin:3px 0 0;font-size:12px;color:var(--m-faint)}
+  .statechip{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--m-good);
+    background:color-mix(in srgb,var(--m-good) 12%,transparent);border:1px solid color-mix(in srgb,var(--m-good) 32%,transparent);
+    border-radius:999px;padding:5px 12px}
+  .statechip .dot{width:8px;height:8px;border-radius:50%;background:var(--m-good)}
+
+  /* rewrite preview hero */
+  .rewrite{background:var(--m-surface);border:1px solid var(--m-line);border-radius:16px;padding:18px 20px 20px;box-shadow:0 10px 30px -22px rgba(44,62,75,.5)}
+  .rw-label{display:flex;align-items:center;gap:8px;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--m-faint);margin-bottom:14px}
+  .rw-label .modetag{font-size:10px;letter-spacing:.02em;text-transform:none;color:var(--m-accent);background:var(--accent-soft);border-radius:6px;padding:2px 8px;font-weight:600}
+  .rw-grid{display:grid;grid-template-columns:1fr 34px 1fr;align-items:stretch;gap:6px}
+  .rw-col{background:var(--m-surface2);border:1px solid var(--m-line2);border-radius:12px;padding:13px 14px}
+  .rw-col.after{background:color-mix(in srgb,var(--m-accent) 7%,var(--m-surface));border-color:color-mix(in srgb,var(--m-accent) 22%,transparent)}
+  .rw-col .cap{font-size:10px;color:var(--m-faint);margin-bottom:7px;letter-spacing:.04em}
+  .rw-col.after .cap{color:var(--m-accent2)}
+  .rw-col p{margin:0;font-size:13px;line-height:1.68;color:var(--m-ink)}
+  .rw-col.before p{color:var(--m-sub)}
+  .rw-arrow{display:flex;align-items:center;justify-content:center}
+  .rw-arrow svg{width:18px;height:18px;stroke:var(--m-accent);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+  /* settings groups */
+  .setgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .setcard{background:var(--m-surface);border:1px solid var(--m-line);border-radius:16px;padding:6px 18px 10px}
+  .setcard.full{grid-column:1 / -1}
+  .setcard h3{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:600;color:var(--m-sub);letter-spacing:.05em;margin:16px 0 4px}
+  .setcard h3 svg{width:14px;height:14px;stroke:var(--m-accent);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .kvrow{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 0;border-top:1px solid var(--m-line2)}
+  .kvrow:first-of-type{border-top:0}
+  .kvrow .k{font-size:13px;color:var(--m-ink)}
+  .kvrow .k small{display:block;font-size:10.5px;color:var(--m-faint);margin-top:2px;font-weight:400}
+  .selectpill{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:var(--m-ink);
+    background:var(--m-surface2);border:1px solid var(--m-line);border-radius:9px;padding:6px 10px}
+  .selectpill svg{width:12px;height:12px;stroke:var(--m-sub);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .selectpill.accent{background:var(--m-accent);color:#fff;border-color:transparent}
+  .selectpill.accent svg{stroke:rgba(255,255,255,.85)}
+  .linkbtn{font-size:12px;color:var(--m-accent);font-weight:600;border:1px solid color-mix(in srgb,var(--m-accent) 30%,transparent);
+    background:var(--accent-soft);border-radius:9px;padding:6px 12px}
+  .valtext{font-size:12px;color:var(--m-sub)}
+  .keymask{font-family:var(--mono);font-size:12px;color:var(--m-ink)}
+  .okchip{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--m-good);
+    background:color-mix(in srgb,var(--m-good) 12%,transparent);border-radius:999px;padding:3px 9px}
+  .okchip .d{width:6px;height:6px;border-radius:50%;background:var(--m-good)}
+  .balance{display:flex;gap:22px}
+  .balance .b{display:flex;flex-direction:column}
+  .balance .b .n{font-size:15px;font-weight:600;color:var(--m-ink);font-variant-numeric:tabular-nums}
+  .balance .b .l{font-size:10px;color:var(--m-faint);margin-top:1px}
+
+  /* mode gallery */
+  .modes{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .modecard{background:var(--m-surface);border:1px solid var(--m-line);border-radius:14px;padding:15px 16px;box-shadow:var(--shadow)}
+  .modecard .mn{font-family:var(--serif);font-size:15px;font-weight:600;margin-bottom:2px}
+  .modecard.on{border-color:color-mix(in srgb,var(--m-accent) 45%,transparent);box-shadow:0 12px 28px -18px color-mix(in srgb,var(--m-accent) 60%,transparent)}
+  .modecard.on .mn{color:var(--m-accent2)}
+  .modecard .badge{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--m-accent);font-weight:700;margin-bottom:8px;display:inline-block}
+  .modecard .mp{font-size:11.5px;color:var(--m-sub);margin:0 0 10px;line-height:1.5}
+  .modecard .ex{font-size:11px;color:var(--m-faint);border-top:1px dashed var(--m-line);padding-top:9px;line-height:1.5}
+  .modecard .ex b{color:var(--m-accent2);font-weight:600}
+
+  /* spec */
+  .specgrid{display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:start}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px 22px;box-shadow:var(--shadow)}
+  .panel h3{font-family:var(--serif);font-size:17px;margin:0 0 14px;font-weight:600}
+  .moved{margin:0;padding:0;list-style:none;font-size:13px}
+  .moved li{padding:11px 0;border-top:1px solid var(--line);display:flex;gap:12px;align-items:baseline}
+  .moved li:first-child{border-top:0}
+  .moved .from{color:var(--ink);font-weight:600;flex:0 0 88px}
+  .moved .to{color:var(--muted)}
+  .moved .to b{color:var(--accent);font-weight:600}
+  code{font-family:var(--mono);font-size:11.5px;background:var(--accent-soft);color:var(--accent);padding:1px 6px;border-radius:5px}
+  .devmap{margin:0;padding:0;list-style:none;font-size:12.5px}
+  .devmap li{padding:10px 0;border-top:1px solid var(--line)}
+  .devmap li:first-child{border-top:0}
+  .devmap .what{color:var(--ink);font-weight:600;margin-bottom:2px}
+  .devmap .where{color:var(--muted);font-family:var(--mono);font-size:11px}
+  .note{font-size:12.5px;color:var(--muted);margin:14px 0 0;padding:12px 14px;background:var(--accent-soft);border-radius:10px;line-height:1.55}
+
+  footer{padding:40px 0 90px;color:var(--muted);font-size:13.5px}
+
+  @media (max-width:900px){
+    .shell{grid-template-columns:132px 1fr}
+    .setgrid,.specgrid{grid-template-columns:1fr}
+    .modes{grid-template-columns:1fr 1fr}
+    .rw-grid{grid-template-columns:1fr;gap:10px}
+    .rw-arrow{transform:rotate(90deg)}
+  }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9z"/><path d="M18 14l.7 2L21 16.7l-2 .7L18 20l-.7-2L15 17.3l2-.6z"/></symbol>
+  <symbol id="i-trans" viewBox="0 0 24 24"><path d="M4 6h9M8 4v2c0 4-2 7-5 9M6 10c0 3 3 5 6 6M13 21l4-9 4 9M14.7 17h4.6"/></symbol>
+  <symbol id="i-cam" viewBox="0 0 24 24"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.1"/></symbol>
+  <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M9.5 18h5M10.5 21h3M12 3a6 6 0 0 0-4 10.4c.7.7 1 1.5 1 2.6h6c0-1.1.3-1.9 1-2.6A6 6 0 0 0 12 3z"/></symbol>
+  <symbol id="i-term" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 10l3 2-3 2M13 14h4"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="10" rx="2"/><path d="M7 11h.01M11 11h.01M15 11h.01M7 14h10"/></symbol>
+  <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M12 13l4-3M21 13a9 9 0 1 0-18 0"/><circle cx="12" cy="13" r="1.3"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.4M12 17h.01"/></symbol>
+  <symbol id="i-whale" viewBox="0 0 24 24"><path d="M3 14c3-1 6 1 9-1 1 .8 2.4 1 3.6.4M14 8c1-1.4 2.4-2.2 3.6-2.5-.3 1.2-.6 2.2-1 3 1.4.5 2.6 1.3 3.4 2.4-1.3.1-2.4 0-3.4-.3-2 1.6-5.6 1.9-8 .7"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/><path d="M9 3v2M15 3v2M9 19v2M15 19v2M3 9h2M3 15h2M19 9h2M19 15h2"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L18 10l-4-4L4 16z"/><path d="M13 7l4 4"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M5 4h11a2 2 0 0 1 2 2v14H7a2 2 0 0 1-2-2z"/><path d="M5 16h13"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-5 6-5s6 1.7 6 5"/><path d="M16 5.6a3 3 0 0 1 0 4.8M21 20c0-2.4-1.3-3.9-3.4-4.5"/></symbol>
+  <symbol id="i-scope" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6z"/></symbol>
+  <symbol id="i-wallet" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M16 14h2.5"/></symbol>
+</defs></svg>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">TypeWhale Pro · 方案 C 落地 · 页 2</div>
+    <h1>智能整理页 · 高保真设计稿</h1>
+    <p>把口语稿变成可用文字的引擎所在。这页设置项最多——正好验证侧导航的容量:整理引擎、规则知识库、DeepSeek 服务三组卡片分区收纳,不再挤成一长条。</p>
+    <div class="crumbs">侧边导航工作台 <span class="sep">›</span> <b style="color:var(--accent)">智能整理</b> <span class="sep">·</span> 整理引擎 · 规则知识库 · 服务与用量</div>
+  </header>
+
+  <div class="divider"></div>
+  <div class="sect-label">01 · 完整界面</div>
+  <p class="sect-note">顶部「整理预览」直观呈现引擎在做什么(识别原文 → 整理后),下方三组设置卡各司其职。翻译、闪念整理、归档整理等已迁往各自的功能页(见 §03)。</p>
+
+  <div class="mist">
+    <div class="win">
+      <div class="topbar">
+        <div class="tl"><i></i><i></i><i></i></div>
+        <div class="appico"><svg><use href="#i-whale"/></svg></div>
+        <div class="apptitle">TypeWhale Pro<span>Version 1.9.27 (610)</span></div>
+        <div class="flex"></div>
+        <div class="membadge">内存 512 MB · 峰值 548 MB</div>
+        <div class="tbtn"><svg><use href="#i-help"/></svg></div>
+        <div class="tbtn"><svg><use href="#i-clock"/></svg></div>
+        <div class="tbtn"><svg><use href="#i-gauge"/></svg></div>
+      </div>
+
+      <div class="shell">
+        <nav class="nav">
+          <div class="navitem"><svg><use href="#i-mic"/></svg>当前会话</div>
+          <div class="navitem on"><svg><use href="#i-spark"/></svg>智能整理</div>
+          <div class="navitem"><svg><use href="#i-trans"/></svg>翻译</div>
+          <div class="navitem"><svg><use href="#i-cam"/></svg>截图</div>
+          <div class="navitem"><svg><use href="#i-bulb"/></svg>闪念</div>
+          <div class="navitem"><svg><use href="#i-term"/></svg>OpenClaw</div>
+          <div class="grouplabel">系统</div>
+          <div class="navitem"><svg><use href="#i-key"/></svg>快捷键</div>
+          <div class="navitem"><svg><use href="#i-gauge"/></svg>状态 · 模型</div>
+          <div class="navspacer"></div>
+          <div class="navfoot"><span class="led-s"></span>DeepSeek 已连接</div>
+        </nav>
+
+        <div class="content">
+          <div class="pagehead">
+            <div>
+              <h2>智能整理</h2>
+              <p>识别完成后、粘贴前,用 AI 把口语整理成可用文字</p>
+            </div>
+            <div class="statechip"><span class="dot"></span>DeepSeek 已连接</div>
+          </div>
+
+          <div class="rewrite">
+            <div class="rw-label">整理预览 <span class="modetag">当前:自动 · 开发需求</span></div>
+            <div class="rw-grid">
+              <div class="rw-col before">
+                <div class="cap">识别原文</div>
+                <p>嗯 那个 我觉得吧 这个整理功能应该是可以做的 就是说用户按一下就能整理 然后那个界面也不用改太多</p>
+              </div>
+              <div class="rw-arrow"><svg><use href="#i-arrow"/></svg></div>
+              <div class="rw-col after">
+                <div class="cap">整理后</div>
+                <p>我觉得这个整理功能可行:用户按一下即可整理,界面也无需大改。</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="setgrid">
+            <div class="setcard">
+              <h3><svg><use href="#i-cpu"/></svg>整理引擎</h3>
+              <div class="kvrow"><span class="k">整理模式<small>识别后使用的整理策略</small></span><span class="selectpill accent">自动 <svg><use href="#i-chev"/></svg></span></div>
+              <div class="kvrow"><span class="k">整理模型</span><span class="selectpill">DeepSeek-V3 <svg><use href="#i-chev"/></svg></span></div>
+              <div class="kvrow"><span class="k">自动范围<small>哪些应用自动整理</small></span><span class="selectpill">12 个应用 <svg><use href="#i-chev"/></svg></span></div>
+            </div>
+            <div class="setcard">
+              <h3><svg><use href="#i-book"/></svg>规则知识库</h3>
+              <div class="kvrow"><span class="k">整理提示词</span><span class="linkbtn">自定义 · 编辑</span></div>
+              <div class="kvrow"><span class="k">开发术语<small>纠正专有名词</small></span><span class="linkbtn">48 条 · 管理</span></div>
+            </div>
+            <div class="setcard full">
+              <h3><svg><use href="#i-wallet"/></svg>服务与用量</h3>
+              <div class="kvrow"><span class="k">DeepSeek Key</span><span style="display:flex;align-items:center;gap:10px"><span class="keymask">sk-••••••••7f2a</span><span class="okchip"><span class="d"></span>已配置</span><span class="linkbtn">更换</span></span></div>
+              <div class="kvrow"><span class="k">费用 / 余额</span><span style="display:flex;align-items:center;gap:22px"><span class="balance"><span class="b"><span class="n">¥ 18.60</span><span class="l">账户余额</span></span><span class="b"><span class="n">¥ 2.34</span><span class="l">本机本月估算</span></span></span><span class="linkbtn">查看明细</span></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+  <div class="sect-label">02 · 整理模式画廊</div>
+  <p class="sect-note">整理模式共 7 档,由「自动」按内容智能选择,也可手动锁定。下面是四种代表档位的输出风格差异——同一句口语,不同模式给出不同结果。</p>
+  <div class="mist modes">
+    <div class="modecard on">
+      <span class="badge">默认</span>
+      <div class="mn">自动</div>
+      <p class="mp">按内容特征智能挑选下面的合适档位,无需手动切换。</p>
+      <div class="ex">识别到需求语境 → <b>套用「开发需求」</b></div>
+    </div>
+    <div class="modecard">
+      <span class="badge">轻</span>
+      <div class="mn">润色</div>
+      <p class="mp">只修顺语句、补标点,保留原意与口吻,最小干预。</p>
+      <div class="ex">"就是说界面不用改太多" → <b>"界面无需大改"</b></div>
+    </div>
+    <div class="modecard">
+      <span class="badge">结构化</span>
+      <div class="mn">开发需求</div>
+      <p class="mp">转成条理清晰的需求描述,适合写给协作者或 AI。</p>
+      <div class="ex">口语想法 → <b>目标 / 行为 / 边界 分点</b></div>
+    </div>
+    <div class="modecard">
+      <span class="badge">压缩</span>
+      <div class="mn">极致归纳</div>
+      <p class="mp">长段口述压成要点提纲,只留最关键信息。</p>
+      <div class="ex">三段闲聊 → <b>3 条要点</b></div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+  <div class="sect-label">03 · 功能重组与开发对接</div>
+  <div class="specgrid">
+    <div class="panel">
+      <h3>相比现状:哪些搬走了</h3>
+      <p style="font-size:12.5px;color:var(--muted);margin:0 0 14px">现在「智能」标签把整理 + 翻译 + 闪念 + 归档挤成 13 行。方案 C 按归属拆分,本页只留整理本身:</p>
+      <ul class="moved">
+        <li><span class="from">自动翻译</span><span class="to">→ 迁往 <b>翻译</b> 页</span></li>
+        <li><span class="from">翻译方向</span><span class="to">→ 迁往 <b>翻译</b> 页</span></li>
+        <li><span class="from">翻译提示词</span><span class="to">→ 迁往 <b>翻译</b> 页</span></li>
+        <li><span class="from">社交清单</span><span class="to">→ 迁往 <b>翻译</b> 页(驱动中译英语气)</span></li>
+        <li><span class="from">闪念整理</span><span class="to">→ 迁往 <b>闪念</b> 页</span></li>
+        <li><span class="from">归档整理</span><span class="to">→ 迁往 <b>截图</b> 页</span></li>
+      </ul>
+      <p class="note">拆分后本页从 13 行降到 7 项,分 3 组卡片。这正是选方案 C 的理由:功能各归其位,单页不再臃肿。</p>
+    </div>
+    <div class="panel">
+      <h3>规格与代码对接</h3>
+      <p style="font-size:12.5px;color:var(--muted);margin:0 0 8px">配色 token 沿用页 1 的晨雾映射,不再赘述。组件对接点:</p>
+      <ul class="devmap">
+        <li><div class="what">整理设置行(模式/模型/范围/提示词/术语/清单/Key/余额)</div><div class="where">MainViewController+PanelLayout.swift · buildSmartRewritePanelContent</div></li>
+        <li><div class="what">整理模式枚举与显示名</div><div class="where">Core/SmartInput/RewriteProfile.swift</div></li>
+        <li><div class="what">整理提示词 / 预览逻辑</div><div class="where">Core/SmartInput/SmartRewritePromptBuilder.swift</div></li>
+        <li><div class="what">整理引擎调用</div><div class="where">Infrastructure/SmartRewrite/OllamaRewriteEngine.swift</div></li>
+        <li><div class="what">余额 / 用量弹窗</div><div class="where">Main/DeepSeekBalancePopoverViewController.swift</div></li>
+      </ul>
+    </div>
+  </div>
+
+  <footer>
+    <div class="divider"></div>
+    <p>页 2 完成。下一步可继续做页 3「翻译」(承接本页搬走的翻译项),或页 4「截图」(交互最复杂:区域选择+标注工具栏)。也可以随时先把已定稿的页面落成代码。</p>
+  </footer>
+</div>
+</body>
+</html>

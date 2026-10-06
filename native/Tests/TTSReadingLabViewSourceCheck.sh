@@ -1,0 +1,38 @@
+#!/bin/zsh
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+VIEW="$ROOT/native/Sources/Presentation/Main/TTSReadingLabView.swift"
+CONTROLLER="$ROOT/native/Sources/Presentation/Main/MainViewController+TTSReadingLab.swift"
+PANEL="$ROOT/native/Sources/Presentation/Main/MainViewController+PanelLayout.swift"
+
+[[ "$(grep -c 'inspectorGroup(\"朗读测试\"' "$PANEL")" -eq 1 ]]
+grep -q 'let textView = NSTextView()' "$VIEW"
+grep -q 'let modelPopup = NSPopUpButton()' "$VIEW"
+grep -q 'title: "播放"' "$VIEW"
+grep -q 'title: "重播最近音频"' "$VIEW"
+grep -q 'metricsLabel' "$VIEW"
+grep -q 'setAccessibilityLabel(\"朗读测试文字\")' "$VIEW"
+grep -q 'textView.isEditable = true' "$VIEW"
+grep -q 'textView.isSelectable = true' "$VIEW"
+grep -q 'textView.isVerticallyResizable = true' "$VIEW"
+grep -q 'textView.isHorizontallyResizable = false' "$VIEW"
+grep -q 'textView.autoresizingMask = \[.width\]' "$VIEW"
+grep -q 'textView.textContainer?.widthTracksTextView = true' "$VIEW"
+grep -q 'textView.textContainer?.heightTracksTextView = false' "$VIEW"
+grep -q 'TTSLabModelCatalog.installedModels' "$CONTROLLER"
+grep -q 'TTSLabRuntimeAvailability' "$CONTROLLER"
+grep -q 'runtimeReadiness == .ready' "$CONTROLLER"
+grep -q '资格通过' "$CONTROLLER"
+grep -q '权重已下载' "$CONTROLLER"
+grep -q '运行时准备中' "$CONTROLLER"
+grep -q '可测试' "$CONTROLLER"
+grep -q '测试失败' "$CONTROLLER"
+grep -q '已淘汰' "$CONTROLLER"
+grep -q 'ttsReadingLabService.start' "$CONTROLLER"
+grep -q 'statusLabel.stringValue = "播放完成"' "$CONTROLLER"
+! grep -q 'outputURL.lastPathComponent' "$CONTROLLER"
+! grep -q 'OpenClawVoiceSettingsStore' "$VIEW" "$CONTROLLER"
+grep -q 'refreshOpenClawVoiceControls()' "$CONTROLLER"
+
+echo "TTSReadingLabViewSourceCheck passed"

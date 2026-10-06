@@ -3,6 +3,50 @@ import ApplicationServices
 import CoreGraphics
 
 extension MainViewController {
+    @objc func hotkeyMouseShortcutPickerChanged(_ sender: NSPopUpButton) {
+        guard let slot = HotkeySlot(rawValue: sender.tag),
+              let selectedItem = sender.selectedItem else {
+            return
+        }
+
+        if selectedItem.tag == 0 {
+            beginHotkeyCaptureForSlot(slot, activeButton: hotkeyCaptureButton(for: sender))
+            return
+        }
+
+        guard (3...6).contains(selectedItem.tag) else {
+            sender.selectItem(withTag: 0)
+            return
+        }
+
+        let binding = HotkeyBinding(kind: .mouse, keyCode: selectedItem.tag, modifierKeyCodes: [])
+        applyHotkey(binding, slot: slot, channel: .chinese)
+    }
+
+    private func hotkeyCaptureButton(for picker: NSPopUpButton) -> NSButton {
+        if picker === hotkeyMouseShortcutPicker {
+            return hotkeyCaptureButton
+        } else if picker === secondaryHotkeyMouseShortcutPicker {
+            return secondaryHotkeyCaptureButton
+        } else if picker === screenshotHotkeyMouseShortcutPicker {
+            return screenshotHotkeyCaptureButton
+        } else if picker === secondaryScreenshotHotkeyMouseShortcutPicker {
+            return secondaryScreenshotHotkeyCaptureButton
+        } else if picker === screenshotTranslationHotkeyMouseShortcutPicker {
+            return screenshotTranslationHotkeyCaptureButton
+        } else if picker === autoTranslateHotkeyMouseShortcutPicker {
+            return autoTranslateHotkeyCaptureButton
+        } else if picker === mainWindowHotkeyMouseShortcutPicker {
+            return mainWindowHotkeyCaptureButton
+        } else if picker === ideaPillHotkeyMouseShortcutPicker {
+            return ideaPillHotkeyCaptureButton
+        } else if picker === openClawHotkeyPanelMouseShortcutPicker {
+            return openClawHotkeyPanelCaptureButton
+        } else {
+            return openClawHotkeyCaptureButton
+        }
+    }
+
     @objc func beginHotkeyCapture() {
         beginHotkeyCaptureForSlot(.primary)
     }
@@ -35,11 +79,23 @@ extension MainViewController {
         beginHotkeyCaptureForSlot(.ideaPill)
     }
 
-    func beginHotkeyCaptureForSlot(_ slot: HotkeySlot) {
+    @objc func beginOpenClawHotkeyCapture(_ sender: NSButton) {
+        beginHotkeyCaptureForSlot(.openClaw, activeButton: sender)
+    }
+
+    func prepareForMainPanelPresentation() {
+        if isCapturingHotkey {
+            endHotkeyCapture()
+        }
+        refreshHotkeyLabels()
+    }
+
+    func beginHotkeyCaptureForSlot(_ slot: HotkeySlot, activeButton: NSButton? = nil) {
         guard !isCapturingHotkey else { return }
         isCapturingHotkey = true
         capturingChannel = .chinese
         capturingHotkeySlot = slot
+        activeHotkeyCaptureButton = activeButton
         captureModifierKeyCodes.removeAll()
         activeHotkeyButton?.title = "请按快捷键或耳机播放键…"
         hotkeyCaptureButton.isEnabled = false
@@ -50,6 +106,9 @@ extension MainViewController {
         autoTranslateHotkeyCaptureButton.isEnabled = false
         mainWindowHotkeyCaptureButton.isEnabled = false
         ideaPillHotkeyCaptureButton.isEnabled = false
+        openClawHotkeyCaptureButton.isEnabled = false
+        openClawHotkeyPanelCaptureButton.isEnabled = false
+        allHotkeyMouseShortcutPickers.forEach { $0.isEnabled = false }
         startHotkeyCaptureTap()
         hotkeyCaptureMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged, .systemDefined]) { [weak self] event in
             guard let self else { return event }
@@ -98,6 +157,13 @@ extension MainViewController {
         emitHotkeysChange()
     }
 
+    @objc func resetOpenClawHotkey() {
+        endHotkeyCapture()
+        HotkeyBinding.clear(storageKey: HotkeyBinding.openClawStorageKey)
+        refreshHotkeyLabels()
+        emitHotkeysChange()
+    }
+
     @objc func clearSecondaryHotkey() {
         endHotkeyCapture()
         HotkeyBinding.clear(storageKey: HotkeyBinding.secondaryChineseStorageKey)
@@ -112,7 +178,8 @@ extension MainViewController {
             ),
             autoTranslate: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.autoTranslateStorageKey),
             mainWindow: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey),
-            ideaPill: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.ideaPillStorageKey)
+            ideaPill: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.ideaPillStorageKey),
+            openClaw: HotkeyBinding.loadOpenClaw()
         )
         emitHotkeysChange()
     }
@@ -125,7 +192,8 @@ extension MainViewController {
         screenshotTranslation: HotkeyBinding,
         autoTranslate: HotkeyBinding?,
         mainWindow: HotkeyBinding?,
-        ideaPill: HotkeyBinding?
+        ideaPill: HotkeyBinding?,
+        openClaw: HotkeyBinding?
     ) {
         hotkeyValue.stringValue = primary.displayName
         hotkeyValue.textColor = NSColor(calibratedWhite: 1, alpha: 0.92)
@@ -159,6 +227,23 @@ extension MainViewController {
         ideaPillHotkeyValue.textColor = ideaPill == nil ? .tertiaryLabelColor : NSColor(calibratedWhite: 1, alpha: 0.92)
         ideaPillHotkeyCaptureButton.title = ideaPill?.actionDisplayName ?? "未设置"
         ideaPillHotkeyCaptureButton.toolTip = "点击录入闪念胶囊快捷键，可使用耳机播放键"
+        openClawHotkeyValue.stringValue = openClaw?.actionDisplayName ?? "未设置"
+        openClawHotkeyValue.textColor = openClaw == nil ? .tertiaryLabelColor : NSColor(calibratedWhite: 1, alpha: 0.92)
+        openClawHotkeyCaptureButton.title = openClaw?.actionDisplayName ?? "未设置"
+        openClawHotkeyCaptureButton.toolTip = "点击录入 OpenClaw 激活键；默认不设置"
+        openClawHotkeyPanelCaptureButton.title = openClaw?.actionDisplayName ?? "未设置"
+        openClawHotkeyPanelCaptureButton.toolTip = openClawHotkeyCaptureButton.toolTip
+        syncMouseShortcutPickers(
+            primary: primary,
+            secondary: secondary,
+            screenshot: screenshot,
+            secondaryScreenshot: secondaryScreenshot,
+            screenshotTranslation: screenshotTranslation,
+            autoTranslate: autoTranslate,
+            mainWindow: mainWindow,
+            ideaPill: ideaPill,
+            openClaw: openClaw
+        )
         detail.stringValue = "\(primary.displayName) 录音"
     }
 
@@ -174,8 +259,49 @@ extension MainViewController {
             ),
             autoTranslate: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.autoTranslateStorageKey),
             mainWindow: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey),
-            ideaPill: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.ideaPillStorageKey)
+            ideaPill: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.ideaPillStorageKey),
+            openClaw: HotkeyBinding.loadOpenClaw()
         )
+    }
+
+    private func mouseShortcutTag(for binding: HotkeyBinding?) -> Int {
+        guard let binding, binding.kind == .mouse,
+              let keyCode = binding.keyCode,
+              (3...6).contains(keyCode) else {
+            return 0
+        }
+        return keyCode
+    }
+
+    func syncMouseShortcutPicker(_ picker: NSPopUpButton, binding: HotkeyBinding?) {
+        let selected = mouseShortcutTag(for: binding)
+        if picker.selectItem(withTag: selected) {
+            return
+        }
+        picker.selectItem(at: 0)
+    }
+
+    private func syncMouseShortcutPickers(
+        primary: HotkeyBinding,
+        secondary: HotkeyBinding?,
+        screenshot: HotkeyBinding,
+        secondaryScreenshot: HotkeyBinding?,
+        screenshotTranslation: HotkeyBinding,
+        autoTranslate: HotkeyBinding?,
+        mainWindow: HotkeyBinding?,
+        ideaPill: HotkeyBinding?,
+        openClaw: HotkeyBinding?
+    ) {
+        syncMouseShortcutPicker(hotkeyMouseShortcutPicker, binding: primary)
+        syncMouseShortcutPicker(secondaryHotkeyMouseShortcutPicker, binding: secondary)
+        syncMouseShortcutPicker(screenshotHotkeyMouseShortcutPicker, binding: screenshot)
+        syncMouseShortcutPicker(secondaryScreenshotHotkeyMouseShortcutPicker, binding: secondaryScreenshot)
+        syncMouseShortcutPicker(screenshotTranslationHotkeyMouseShortcutPicker, binding: screenshotTranslation)
+        syncMouseShortcutPicker(autoTranslateHotkeyMouseShortcutPicker, binding: autoTranslate)
+        syncMouseShortcutPicker(mainWindowHotkeyMouseShortcutPicker, binding: mainWindow)
+        syncMouseShortcutPicker(ideaPillHotkeyMouseShortcutPicker, binding: ideaPill)
+        syncMouseShortcutPicker(openClawHotkeyMouseShortcutPicker, binding: openClaw)
+        syncMouseShortcutPicker(openClawHotkeyPanelMouseShortcutPicker, binding: openClaw)
     }
 
     func startHotkeyCaptureTap() {
@@ -223,6 +349,7 @@ extension MainViewController {
 
     func capture(event: CGEvent, type: CGEventType) -> Bool {
         guard isCapturingHotkey else { return false }
+        guard !SyntheticMediaKeyEvent.isTypeWhaleGenerated(event) else { return false }
         let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
         if type == .flagsChanged {
             if keyCode == HotkeyKeyCodes.function || event.flags.contains(.maskSecondaryFn) {
@@ -251,6 +378,10 @@ extension MainViewController {
     }
 
     func capture(event: NSEvent) {
+        if let cgEvent = event.cgEvent,
+           SyntheticMediaKeyEvent.isTypeWhaleGenerated(cgEvent) {
+            return
+        }
         let keyCode = Int(event.keyCode)
         if event.type == .systemDefined, captureMediaPlay(event: event) {
             return
@@ -384,6 +515,8 @@ extension MainViewController {
             binding.save(storageKey: HotkeyBinding.mainWindowStorageKey)
         case .ideaPill:
             binding.save(storageKey: HotkeyBinding.ideaPillStorageKey)
+        case .openClaw:
+            binding.save(storageKey: HotkeyBinding.openClawStorageKey)
         }
         refreshHotkeyLabels()
         emitHotkeysChange()
@@ -408,6 +541,10 @@ extension MainViewController {
         autoTranslateHotkeyCaptureButton.isEnabled = true
         mainWindowHotkeyCaptureButton.isEnabled = true
         ideaPillHotkeyCaptureButton.isEnabled = true
+        openClawHotkeyCaptureButton.isEnabled = true
+        openClawHotkeyPanelCaptureButton.isEnabled = true
+        allHotkeyMouseShortcutPickers.forEach { $0.isEnabled = true }
+        activeHotkeyCaptureButton = nil
         captureModifierKeyCodes.removeAll()
     }
 
@@ -423,7 +560,8 @@ extension MainViewController {
             ),
             autoTranslate: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.autoTranslateStorageKey),
             mainWindow: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey),
-            ideaPill: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.ideaPillStorageKey)
+            ideaPill: HotkeyBinding.loadOptional(storageKey: HotkeyBinding.ideaPillStorageKey),
+            openClaw: HotkeyBinding.loadOpenClaw()
         )
     }
 
@@ -439,11 +577,30 @@ extension MainViewController {
             ),
             HotkeyBinding.loadOptional(storageKey: HotkeyBinding.autoTranslateStorageKey),
             HotkeyBinding.loadOptional(storageKey: HotkeyBinding.mainWindowStorageKey),
-            HotkeyBinding.loadOptional(storageKey: HotkeyBinding.ideaPillStorageKey)
+            HotkeyBinding.loadOptional(storageKey: HotkeyBinding.ideaPillStorageKey),
+            HotkeyBinding.loadOpenClaw()
         )
     }
 
+    var allHotkeyMouseShortcutPickers: [NSPopUpButton] {
+        [
+            hotkeyMouseShortcutPicker,
+            secondaryHotkeyMouseShortcutPicker,
+            screenshotHotkeyMouseShortcutPicker,
+            secondaryScreenshotHotkeyMouseShortcutPicker,
+            screenshotTranslationHotkeyMouseShortcutPicker,
+            autoTranslateHotkeyMouseShortcutPicker,
+            mainWindowHotkeyMouseShortcutPicker,
+            ideaPillHotkeyMouseShortcutPicker,
+            openClawHotkeyMouseShortcutPicker,
+            openClawHotkeyPanelMouseShortcutPicker,
+        ]
+    }
+
     var activeHotkeyButton: NSButton? {
+        if let activeHotkeyCaptureButton {
+            return activeHotkeyCaptureButton
+        }
         switch capturingHotkeySlot {
         case .primary:
             return hotkeyCaptureButton
@@ -461,6 +618,8 @@ extension MainViewController {
             return mainWindowHotkeyCaptureButton
         case .ideaPill:
             return ideaPillHotkeyCaptureButton
+        case .openClaw:
+            return openClawHotkeyCaptureButton
         case nil:
             return nil
         }

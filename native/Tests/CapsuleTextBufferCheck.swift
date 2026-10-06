@@ -18,8 +18,8 @@ struct CapsuleTextBufferCheck {
         }
         assert(buffer.displayedDraft, equals: firstTarget)
 
-        _ = buffer.setTarget("今天我们先检查实时预览，然后修复静音后的跳字")
-        precondition(buffer.targetDraft == "今天我们先检查实时预览，然后修复静音后的跳字")
+        _ = buffer.setTarget("今天我们先检查实时预览继续")
+        precondition(buffer.targetDraft == "今天我们先检查实时预览继续")
         precondition(buffer.displayedDraft == firstTarget)
 
         let replacementTarget = "静音之后不要把新旧文本按位搅在一起"
@@ -27,10 +27,11 @@ struct CapsuleTextBufferCheck {
         guard case .updated(let fadeStartIndex?, let needsDraftTimer, let shouldStopDraftTimer) = replacement else {
             preconditionFailure("Expected replacement update")
         }
-        precondition(fadeStartIndex == firstTarget.count)
+        let expectedCatchUpCount = max(firstTarget.count, replacementTarget.count - 4)
+        precondition(fadeStartIndex == expectedCatchUpCount)
         precondition(needsDraftTimer)
         precondition(!shouldStopDraftTimer)
-        assert(buffer.displayedDraft, equals: String(replacementTarget.prefix(firstTarget.count)))
+        assert(buffer.displayedDraft, equals: String(replacementTarget.prefix(expectedCatchUpCount)))
         assert(buffer.targetDraft, equals: replacementTarget)
         while buffer.displayedDraft != buffer.targetDraft {
             _ = buffer.advance()
@@ -48,6 +49,42 @@ struct CapsuleTextBufferCheck {
         let expectedRefreshed = shorterTarget + String(replacementTarget.dropFirst(shorterTarget.count))
         assert(buffer.displayedDraft, equals: expectedRefreshed)
         assert(buffer.targetDraft, equals: expectedRefreshed)
+
+        let catchUpBuffer = CapsuleTextBuffer(animatedTailLimit: 4, firstPreviewMinimumCharacters: 2)
+        _ = catchUpBuffer.setTarget("短句开始")
+        while catchUpBuffer.displayedDraft != catchUpBuffer.targetDraft {
+            _ = catchUpBuffer.advance()
+        }
+        _ = catchUpBuffer.setTarget("短句开始之后突然收到一大段校正文本需要立刻追上实时说话位置")
+        precondition(
+            catchUpBuffer.targetDraft.count - catchUpBuffer.displayedDraft.count <= 4,
+            "every update must bound the animated backlog, not only the first preview"
+        )
+        var catchUpAdvanceCount = 0
+        while catchUpBuffer.displayedDraft != catchUpBuffer.targetDraft {
+            _ = catchUpBuffer.advance()
+            catchUpAdvanceCount += 1
+        }
+        precondition(catchUpAdvanceCount == 4, "the bounded tail should finish in exactly the configured number of steps")
+
+        let continuousBuffer = CapsuleTextBuffer(animatedTailLimit: 4, firstPreviewMinimumCharacters: 2)
+        let continuousTargets = [
+            "我们开始测试连续预览",
+            "我们开始测试连续预览是否能稳定跟上",
+            "我们开始测试连续预览是否能稳定跟上语速并保持丝滑",
+            "我们开始测试连续预览是否能稳定跟上语速并保持丝滑不会越来越慢"
+        ]
+        for target in continuousTargets {
+            _ = continuousBuffer.setTarget(target)
+            precondition(
+                continuousBuffer.targetDraft.count - continuousBuffer.displayedDraft.count <= 4,
+                "repeated realtime updates must never accumulate more than one animated tail"
+            )
+            for _ in 0..<6 {
+                _ = continuousBuffer.advance()
+            }
+        }
+        assert(continuousBuffer.displayedDraft, equals: continuousTargets.last!)
     }
 
     private static func assert(_ actual: String, equals expected: String) {

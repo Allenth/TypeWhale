@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="650" height="720" viewBox="0 0 650 720">
+  <rect width="650" height="720" rx="16" fill="#061020"/>
+  <text x="28" y="42" fill="#F5F7F2" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="18" font-weight="650">设置小米遥控器</text>
+  <text x="28" y="67" fill="#9AA7A5" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12">完成三步后即可按住语音键输入</text>
+  <g font-family="-apple-system, BlinkMacSystemFont, sans-serif">
+    <rect x="22" y="94" width="606" height="146" rx="12" fill="#12202E" stroke="#C6D1CF" stroke-opacity=".16"/>
+    <circle cx="54" cy="127" r="16" fill="#709EAF"/><text x="49" y="132" fill="#061020" font-size="13" font-weight="700">1</text>
+    <text x="82" y="132" fill="#F5F7F2" font-size="14" font-weight="650">让遥控器进入配对模式</text>
+    <text x="82" y="157" fill="#9AA7A5" font-size="12">同时按住 Home + Menu，直到指示灯闪烁</text>
+    <rect x="82" y="181" width="120" height="34" rx="8" fill="#6F9EAD"/><text x="109" y="202" fill="#061020" font-size="12" font-weight="700">开始扫描</text>
+    <rect x="22" y="254" width="606" height="146" rx="12" fill="#0F1B28" stroke="#C6D1CF" stroke-opacity=".13"/>
+    <circle cx="54" cy="287" r="16" fill="#2B3A46"/><text x="49" y="292" fill="#C7D0CF" font-size="13" font-weight="700">2</text>
+    <text x="82" y="292" fill="#DCE2DF" font-size="14" font-weight="650">连接并检查语音</text>
+    <text x="82" y="317" fill="#83908F" font-size="12">等待蓝牙、控制通道和音频协商完成</text>
+    <rect x="22" y="414" width="606" height="146" rx="12" fill="#0F1B28" stroke="#C6D1CF" stroke-opacity=".13"/>
+    <circle cx="54" cy="447" r="16" fill="#2B3A46"/><text x="49" y="452" fill="#C7D0CF" font-size="13" font-weight="700">3</text>
+    <text x="82" y="452" fill="#DCE2DF" font-size="14" font-weight="650">按住语音键开始输入</text>
+    <text x="82" y="477" fill="#83908F" font-size="12">松开后 TypeWhale 自动识别并写入</text>
+    <text x="28" y="606" fill="#9AA7A5" font-size="12">问题：完成后日常状态、映射与诊断被隐藏在向导之后。</text>
+  </g>
+</svg>

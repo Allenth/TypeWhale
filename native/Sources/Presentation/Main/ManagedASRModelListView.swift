@@ -108,37 +108,15 @@ final class ManagedASRModelListView: NSView {
         openButton.setContentHuggingPriority(.required, for: .horizontal)
         openButton.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-        let llmCaption = label("大模型", size: 10, weight: .medium)
-        llmCaption.textColor = UITheme.sectionTitle
-        llmCaption.setContentHuggingPriority(.required, for: .horizontal)
-        llmCaption.setContentCompressionResistancePriority(.required, for: .horizontal)
-
-        let llmHint = label("Ollama 本地整理模型", size: 10, weight: .medium)
-        llmHint.textColor = .secondaryLabelColor
-        llmHint.lineBreakMode = .byTruncatingTail
-        llmHint.maximumNumberOfLines = 1
-        llmHint.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-
-        let qwen8Button = linkButton(
-            title: "8B",
-            action: #selector(openQwen8BDownloadLink),
-            toolTip: "打开 Ollama Qwen3 8B 下载页：ollama run qwen3:8b"
-        )
-        let qwen35Button = linkButton(
-            title: "35B",
-            action: #selector(openQwen35BDownloadLink),
-            toolTip: "打开 Ollama Qwen3.6 35B 下载页：ollama run qwen3.6:35b-mlx"
-        )
-
-        [targetCaption, pathLabel, openButton, llmCaption, llmHint, qwen8Button, qwen35Button].forEach {
+        [targetCaption, pathLabel, openButton].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             header.addSubview($0)
         }
 
         NSLayoutConstraint.activate([
-            header.heightAnchor.constraint(equalToConstant: 68),
+            header.heightAnchor.constraint(equalToConstant: 40),
             targetCaption.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 12),
-            targetCaption.topAnchor.constraint(equalTo: header.topAnchor, constant: 11),
+            targetCaption.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             targetCaption.widthAnchor.constraint(equalToConstant: 52),
             openButton.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -12),
             openButton.centerYAnchor.constraint(equalTo: targetCaption.centerYAnchor),
@@ -146,33 +124,9 @@ final class ManagedASRModelListView: NSView {
             pathLabel.leadingAnchor.constraint(equalTo: targetCaption.trailingAnchor, constant: 8),
             pathLabel.trailingAnchor.constraint(equalTo: openButton.leadingAnchor, constant: -10),
             pathLabel.centerYAnchor.constraint(equalTo: targetCaption.centerYAnchor),
-
-            llmCaption.leadingAnchor.constraint(equalTo: targetCaption.leadingAnchor),
-            llmCaption.topAnchor.constraint(equalTo: targetCaption.bottomAnchor, constant: 11),
-            llmCaption.widthAnchor.constraint(equalTo: targetCaption.widthAnchor),
-            qwen35Button.trailingAnchor.constraint(equalTo: openButton.trailingAnchor),
-            qwen35Button.centerYAnchor.constraint(equalTo: llmCaption.centerYAnchor),
-            qwen35Button.widthAnchor.constraint(equalToConstant: 54),
-            qwen8Button.trailingAnchor.constraint(equalTo: qwen35Button.leadingAnchor, constant: -6),
-            qwen8Button.centerYAnchor.constraint(equalTo: llmCaption.centerYAnchor),
-            qwen8Button.widthAnchor.constraint(equalToConstant: 44),
-            llmHint.leadingAnchor.constraint(equalTo: llmCaption.trailingAnchor, constant: 8),
-            llmHint.trailingAnchor.constraint(equalTo: qwen8Button.leadingAnchor, constant: -10),
-            llmHint.centerYAnchor.constraint(equalTo: llmCaption.centerYAnchor),
         ])
 
         return header
-    }
-
-    private func linkButton(title: String, action: Selector, toolTip: String) -> NSButton {
-        let button = NSButton(title: title, target: self, action: action)
-        button.bezelStyle = .rounded
-        button.controlSize = .small
-        button.font = .systemFont(ofSize: 11, weight: .medium)
-        button.toolTip = toolTip
-        button.setContentHuggingPriority(.required, for: .horizontal)
-        button.setContentCompressionResistancePriority(.required, for: .horizontal)
-        return button
     }
 
     private func refresh() {
@@ -187,25 +141,6 @@ final class ManagedASRModelListView: NSView {
         NSWorkspace.shared.open(rootDirectory)
     }
 
-    @objc private func openQwen8BDownloadLink() {
-        openDownloadLink(
-            URL(string: "https://ollama.com/library/qwen3%3A8b"),
-            message: "打开 Qwen3 8B 下载链接"
-        )
-    }
-
-    @objc private func openQwen35BDownloadLink() {
-        openDownloadLink(
-            URL(string: "https://ollama.com/library/qwen3.6%3A35b-mlx"),
-            message: "打开 Qwen3.6 35B 下载链接"
-        )
-    }
-
-    private func openDownloadLink(_ url: URL?, message: String) {
-        guard let url else { return }
-        onMessage(message)
-        NSWorkspace.shared.open(url)
-    }
 }
 
 private final class ManagedASRModelRowView: NSView {
@@ -226,7 +161,7 @@ private final class ManagedASRModelRowView: NSView {
     init(model: ManagedASRModel, destination: URL) {
         self.model = model
         nameLabel = label(model.displayName, size: 12, weight: .semibold)
-        capabilityLabel = label("\(model.capabilityText) · \(model.sizeText)", size: 10, weight: .medium)
+        capabilityLabel = label("\(model.kind.displayName) · \(model.capabilityText) · \(model.sizeText)", size: 10, weight: .medium)
         detailLabel = label(model.detailText, size: 10)
         statusLabel = label("检查中", size: 10, weight: .medium)
         pathLabel = label(destination.lastPathComponent, size: 10)
@@ -337,11 +272,11 @@ private final class ManagedASRModelRowView: NSView {
             downloadButton.toolTip = destination.path
         case .downloading(let progress, let downloadedBytes):
             isDownloading = true
-            dot.layer?.backgroundColor = UITheme.brandYellow.cgColor
+            dot.layer?.backgroundColor = UITheme.waterInkWarning.cgColor
             progressRing.progress = progress
             progressRing.isHidden = false
             statusLabel.stringValue = "下载中 \(Int(progress * 100))% · \(Self.formatBytes(downloadedBytes))"
-            statusLabel.textColor = .secondaryLabelColor
+            statusLabel.textColor = UITheme.waterInkMuted
             downloadButton.title = "停止"
             downloadButton.isEnabled = true
             downloadButton.toolTip = "停止下载并清理临时文件"
@@ -417,7 +352,7 @@ private final class CircularProgressView: NSView {
             clockwise: true
         )
         ring.lineWidth = 2.4
-        UITheme.brandYellow.setStroke()
+        UITheme.waterInkWarning.setStroke()
         ring.stroke()
 
         let paragraph = NSMutableParagraphStyle()

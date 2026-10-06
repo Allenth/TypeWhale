@@ -1,3 +1,5 @@
+> 文档迁移（2026-09-05）：[现行文档](docs/current/README.md)。当前使用说明与产品状态已迁入新入口。下方保留历史说明和公开下载链接；版本字段仍由构建脚本维护，不能据该字段判断下方全部内容已同步。
+
 # TypeWhale Pro
 
 TypeWhale Pro is a local-first desktop speech input tool. It records from the microphone, runs local ASR through a native sherpa-onnx / ONNX Runtime pipeline, previews recognition in a compact capsule, and inserts the final text back into the active app.
@@ -10,7 +12,7 @@ This is a public Pro test build. It is not notarized with Developer ID yet, so m
 
 中文用户可以直接点击上面的链接下载安装包。如果浏览器没有开始下载，请右键链接选择“链接另存为”，或打开 [TypeWhale Pro 1.9.7 (552) Test Release](https://github.com/Allenth/TypeWhale/releases/tag/v1.9.7-build552) 页面，在 **Assets** 区域下载 `TypeWhale-Pro-1.9.7-552.dmg`。
 
-Current local release build in this repository is `1.9.7 (552)`. It has been built, installed locally from source, and packaged as `dist/TypeWhale-Pro-1.9.7-552.dmg`. The DMG bundles the baseline ASR/VAD models required for local speech input, but intentionally does not bundle Ollama / LLM models.
+Current local release build in this repository is `2.0.58 (919)`. It has been built and installed locally from source. The GitHub DMG linked above bundles the baseline ASR/VAD models required for local speech input; ordinary `./native/build_and_log.sh` compiles current source, increments the build number, and overwrites `/Applications/TypeWhale Pro.app` while keeping the short version unchanged. Use `./native/build_and_log.sh --full-version` to increment both the short version and build number, or `./native/build_and_log.sh --package` to create a new DMG.
 
 This branch builds the standalone Pro app identity: `TypeWhale Pro.app`, bundle identifier `com.waykingah.typewhale.pro`, and default install path `/Applications/TypeWhale Pro.app`. It can coexist with the regular TypeWhale app.
 
@@ -28,7 +30,7 @@ Realtime preview is only used as feedback. The final inserted text comes from th
 - Global hotkey recording: press to start/stop, or hold to talk and release to finish.
 - Non-activating recording capsule with animated microphone waveform.
 - Local SenseVoice / sherpa-onnx ASR integration.
-- Screenshot capture via a dedicated hotkey: region selection with resize handles, translucent hover-to-select window capture, inline annotation tools (rectangle, arrow, pen, text, undo), OCR text recognition, English-to-Chinese screenshot translation with source-text covering, copy to clipboard, and direct save to the configured folder.
+- Screenshot capture via a dedicated hotkey: region selection with resize handles, translucent hover-to-select window capture, create-only inline annotation tools (rectangle, arrow, pen, text, Gaussian-blur mosaic, undo/redo), OCR text recognition, English-to-Chinese screenshot translation with source-text covering, copy to clipboard, and direct save to the configured folder.
 - Configurable hotkeys for recording, screenshot, auto-translation toggle, and opening the main panel. Auto-translation and main-panel hotkeys are unset by default.
 - Clipboard-based final insertion with clipboard restoration.
 - Recent transcription history keeps the latest 20 items and supports double-click copy.
@@ -46,6 +48,7 @@ It intentionally does not include:
 - DMG / ZIP release artifacts.
 - ASR model files such as `model.onnx` or `silero_vad.onnx`.
 - ONNX Runtime / sherpa-onnx dynamic libraries.
+- The RC003 product photo referenced by the optional remote-control UI. Public builds show a clear placeholder unless a distributor supplies an independently authorized copy.
 - Developer certificates, notarization assets, local caches, or generated build folders.
 
 See [docs/MODEL_SETUP.md](docs/MODEL_SETUP.md) for model placement.
@@ -104,7 +107,7 @@ Important: SenseVoice / FunASR model redistribution terms need explicit review b
 
 Source code in this repository is released under the MIT License. See [LICENSE](LICENSE).
 
-Third-party components and models remain under their own licenses and terms.
+Third-party assets, libraries, models, and runtime components keep their own copyright and license terms; the MIT source-code license does not relicense them. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) before redistribution.
 
 ---
 
@@ -161,6 +164,12 @@ TypeWhale 需要两个系统权限：
 系统设置 -> 隐私与安全性 -> 麦克风 -> TypeWhale 已开启
 系统设置 -> 隐私与安全性 -> 辅助功能 -> TypeWhale 已开启
 ```
+
+### 选择主麦克风
+
+在主窗口“常用”页的“主麦克风”中，可以选择跟随 macOS 系统输入，也可以锁定 Mac 内建麦克风、AirPods、USB 麦克风等其他输入硬件。录音过程中切换会立即生效，并继续当前这轮录音。
+
+如果手动选择的设备断开，TypeWhale 会明确提示并永久改为跟随系统；设备重新连接后不会自动抢回，需要时可再次手动选择。
 
 ## 状态栏图标
 
@@ -228,7 +237,7 @@ TypeWhale 运行后会出现在 macOS 顶部状态栏。状态栏图标是黄色
 
 - 拖拽选择区域。
 - 悬停窗口并单击，TypeWhale 会先置顶该窗口，再重新截图并自动对齐窗口边框。
-- 在选区内直接标注矩形、箭头、画笔和文字。
+- 在选区内直接标注矩形、箭头、画笔、文字和马赛克；马赛克实际为高斯模糊，已有标注不可拖动或调整，可用撤销/前进修正。
 - OCR 识别选区文字并复制到剪贴板。
 - 对英文截图选区进行英译中，按 OCR 行级坐标遮盖英文原文并贴入中文译文；双击复制和保存本地都会包含译文层。
 - 复制截图或直接保存到配置的截图保存位置。
@@ -247,7 +256,7 @@ TypeWhale 运行后会出现在 macOS 顶部状态栏。状态栏图标是黄色
 
 ### 停顿自动完成
 
-开启后，说话停顿一段时间会自动结束录音。长按说话时仍以松开快捷键为准。
+开启后，切换式录音在确认说过话并持续停顿约 2 秒后会自动结束录音。长按说话仍以松开快捷键为准，不参与自动完成。开场一直没有检测到人声时，会在约 8 秒后取消空录音；实时预览和停顿自动完成可以独立开关。
 
 ### 胶囊实时预览
 
@@ -255,11 +264,11 @@ TypeWhale 运行后会出现在 macOS 顶部状态栏。状态栏图标是黄色
 
 ### 智能整理
 
-智能整理会在本地最终识别完成后、粘贴前整理文本。可选模式包括自动、原文、润色、开发需求和极致归纳。
+智能整理会在本地最终识别完成后、粘贴前整理文本。可选模式包括自动、原文、润色、聊天、开发需求和极致归纳；闪念胶囊有独立的“闪念整理”设置，默认使用即时归纳。
 
-自动模式会根据目标 App、Bundle ID、窗口标题和本次口述内容选择整理方式。例如编程窗口默认倾向开发需求；口述里包含“总结、归纳、要点、行动项”等意图时，会自动使用极致归纳。整理模型、自动范围、提示词、开发术语词库和 DeepSeek API Key 可在偏好设置里配置。
+自动模式会根据目标 App、Bundle ID、窗口标题和本次口述内容选择整理方式。例如编程窗口默认倾向开发需求，微信、Messages、Slack 等社交聊天窗口默认使用聊天整理；口述里包含“总结、归纳、要点、行动项”等意图时，会自动使用极致归纳。整理模式、闪念整理、归档整理、自动翻译、翻译方向、整理模型、自动范围、提示词、开发术语词库和 DeepSeek API Key 统一在“智能”Tab 配置；提示词编辑器开放所有可编辑整理模板，包括即时归纳。
 
-智能整理默认使用本机 Ollama 的 `qwen3.6:35b-mlx`；也可以切到 DeepSeek v4 flash。Ollama 未运行、模型缺失、超时或输出为空时，会回退到本地识别原文；选择 DeepSeek 时才需要配置 API Key，并受本机成本保护限制。
+智能整理默认使用本机 Ollama 的 `qwen3.5:2b-mlx`；也可以手动切到 `qwen3.5:9b-mlx`、`qwen3.6:35b-mlx` 或 DeepSeek v4 flash。Ollama 未运行、模型缺失、超时或输出为空时，会回退到本地识别原文；选择 DeepSeek 时才需要配置 API Key，并受本机成本保护限制。
 
 ### 开机自动启动
 

@@ -1,6 +1,22 @@
 import Foundation
 
 enum SmartRewriteOutputSanitizer {
+    static func finalize(_ text: String, mode: RewriteMode) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard mode != .raw,
+              mode != .command,
+              let last = trimmed.last else {
+            return trimmed
+        }
+        if last == "。" {
+            return String(trimmed.dropLast())
+        }
+        if last == ".", !trimmed.hasSuffix("..") {
+            return String(trimmed.dropLast())
+        }
+        return trimmed
+    }
+
     static func clean(_ text: String) -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return trimmed }
@@ -30,6 +46,12 @@ enum SmartRewriteOutputSanitizer {
     static func cleanLocalModel(_ text: String) -> String {
         let withoutThink = removingThinkBlocks(from: text)
         return clean(withoutThink)
+    }
+
+    static func cleanTranslation(_ text: String) -> String {
+        let cleaned = cleanLocalModel(text)
+        guard !looksLikeTranslationRefusal(cleaned) else { return "" }
+        return cleaned
     }
 
     private static func removingThinkBlocks(from text: String) -> String {
@@ -79,5 +101,29 @@ enum SmartRewriteOutputSanitizer {
             "整理后如下",
         ]
         return patterns.contains { normalized.contains($0) }
+    }
+
+    private static func looksLikeTranslationRefusal(_ text: String) -> Bool {
+        let normalized = text
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        guard !normalized.isEmpty else { return false }
+        let refusalSignals = [
+            "cannot translate",
+            "can't translate",
+            "unable to translate",
+            "not able to translate",
+            "capabilities are limited",
+            "native language",
+            "cannot provide a translation",
+            "无法翻译",
+            "不能翻译",
+            "无法将中文翻译成英文",
+        ]
+        let hasRefusal = refusalSignals.contains { normalized.contains($0) }
+        let mentionsTranslation = normalized.contains("translate") ||
+            normalized.contains("translation") ||
+            normalized.contains("翻译")
+        return hasRefusal && mentionsTranslation
     }
 }

@@ -13,6 +13,7 @@ enum HotkeyKeyCodes {
     static let rightControl = 62
     static let function = 63
     static let backslash = 42
+    static let f6 = 97
 
     static let modifierKeyCodes: Set<Int> = [
         leftCommand, rightCommand, leftShift, rightShift,
@@ -26,6 +27,8 @@ enum HotkeyKeyCodes {
         29: "0", 30: "]", 31: "O", 32: "U", 33: "[", 34: "I", 35: "P", 36: "Return",
         37: "L", 38: "J", 39: "'", 40: "K", 41: ";", backslash: "\\", 43: ",", 44: "/", 45: "N",
         46: "M", 47: ".", 49: "Space", 50: "`", 51: "Delete", 53: "Esc",
+        96: "F5", f6: "F6", 98: "F7", 99: "F3", 100: "F8", 101: "F9",
+        103: "F11", 109: "F10", 111: "F12", 118: "F4", 120: "F2", 122: "F1",
         leftCommand: "左 Cmd", rightCommand: "右 Cmd",
         leftShift: "左 Shift", rightShift: "右 Shift",
         leftOption: "左 Option", rightOption: "右 Option",
@@ -33,8 +36,24 @@ enum HotkeyKeyCodes {
         function: "Fn",
     ]
 
+    static let mouseButtonNames: [Int: String] = [
+        0: "左键",
+        1: "右键",
+        2: "中键",
+        3: "第三键",
+        4: "第四键",
+        5: "第五键",
+        6: "第六键",
+        7: "第七键",
+        8: "第八键",
+    ]
+
     static func displayName(for keyCode: Int) -> String {
         names[keyCode] ?? "Key \(keyCode)"
+    }
+
+    static func mouseDisplayName(for button: Int) -> String {
+        mouseButtonNames[button] ?? "鼠标第\(button)键"
     }
 
     static func modifierFlags(for keyCode: Int) -> NSEvent.ModifierFlags {
@@ -98,6 +117,7 @@ struct HotkeyBinding: Codable, Equatable {
         case modifier
         case combo
         case mediaPlay
+        case mouse
     }
 
     static let storageKey = "hotkeyBinding"
@@ -109,6 +129,7 @@ struct HotkeyBinding: Codable, Equatable {
     static let autoTranslateStorageKey = "autoTranslateHotkeyBinding"
     static let mainWindowStorageKey = "mainWindowHotkeyBinding"
     static let ideaPillStorageKey = "ideaPillHotkeyBinding"
+    static let openClawStorageKey = "openClawHotkeyBinding"
     static let fnDefaultMigrationKey = "hotkeyDefaultMigration.fnDefault.v1"
     let kind: Kind
     let keyCode: Int?
@@ -157,6 +178,15 @@ struct HotkeyBinding: Codable, Equatable {
         return binding
     }
 
+    static func loadOpenClaw() -> HotkeyBinding? {
+        guard let binding = loadOptional(storageKey: openClawStorageKey) else { return nil }
+        guard binding.isKnownUserFacingBinding else {
+            clear(storageKey: openClawStorageKey)
+            return nil
+        }
+        return binding
+    }
+
     static func loadOptional(storageKey: String) -> HotkeyBinding? {
         guard let data = UserDefaults.standard.data(forKey: storageKey) else { return nil }
         return try? JSONDecoder().decode(HotkeyBinding.self, from: data)
@@ -178,6 +208,8 @@ struct HotkeyBinding: Codable, Equatable {
             return "Fn"
         case .modifier:
             return keyCode.map { HotkeyKeyCodes.displayName(for: $0) } ?? "未设置"
+        case .mouse:
+            return keyCode.map { HotkeyKeyCodes.mouseDisplayName(for: $0) } ?? "未设置"
         case .combo:
             let modifiers = modifierKeyCodes.map { HotkeyKeyCodes.displayName(for: $0) }
             let key = keyCode.map { HotkeyKeyCodes.displayName(for: $0) } ?? "未设置"
@@ -187,11 +219,30 @@ struct HotkeyBinding: Codable, Equatable {
         }
     }
 
+    var isKnownUserFacingBinding: Bool {
+        switch kind {
+        case .function:
+            return keyCode == HotkeyKeyCodes.function
+        case .modifier:
+            guard let keyCode else { return false }
+            return HotkeyKeyCodes.names[keyCode] != nil
+        case .mouse:
+            guard let keyCode else { return false }
+            return keyCode >= 0
+        case .combo:
+            guard let keyCode else { return false }
+            return HotkeyKeyCodes.names[keyCode] != nil
+                && modifierKeyCodes.allSatisfy { HotkeyKeyCodes.names[$0] != nil }
+        case .mediaPlay:
+            return true
+        }
+    }
+
     var screenshotDisplayName: String {
         switch kind {
         case .function, .modifier:
             return "双击\(displayName)"
-        case .combo, .mediaPlay:
+        case .combo, .mediaPlay, .mouse:
             return displayName
         }
     }
@@ -215,12 +266,22 @@ struct HotkeyBinding: Codable, Equatable {
         "松开 \(displayName) 完成录音"
     }
 
-    static func fromCapture(keyCode: Int, modifierKeyCodes: Set<Int>) -> HotkeyBinding? {
+    static func fromCapture(
+        keyCode: Int,
+        modifierKeyCodes: Set<Int>,
+        sourceIsMouseButton: Bool = false
+    ) -> HotkeyBinding? {
+        if sourceIsMouseButton {
+            return HotkeyBinding(kind: .mouse, keyCode: keyCode, modifierKeyCodes: modifierKeyCodes.sorted())
+        }
         if keyCode == HotkeyKeyCodes.function {
             return HotkeyBinding(kind: .function, keyCode: HotkeyKeyCodes.function, modifierKeyCodes: [])
         }
         if HotkeyKeyCodes.modifierKeyCodes.contains(keyCode) {
             return HotkeyBinding(kind: .modifier, keyCode: keyCode, modifierKeyCodes: [])
+        }
+        if HotkeyKeyCodes.isFunctionKey(keyCode) {
+            return HotkeyBinding(kind: .combo, keyCode: keyCode, modifierKeyCodes: [])
         }
         guard !modifierKeyCodes.isEmpty else { return nil }
         return HotkeyBinding(kind: .combo, keyCode: keyCode, modifierKeyCodes: modifierKeyCodes.sorted())
@@ -228,6 +289,32 @@ struct HotkeyBinding: Codable, Equatable {
 
     static var mediaPlayBinding: HotkeyBinding {
         HotkeyBinding(kind: .mediaPlay, keyCode: nil, modifierKeyCodes: [])
+    }
+}
+
+extension HotkeyKeyCodes {
+    static func isFunctionKey(_ keyCode: Int) -> Bool {
+        (96...103).contains(keyCode) || keyCode == 109 || keyCode == 111 || keyCode == 118 || keyCode == 120 || keyCode == 122
+    }
+}
+
+struct EscapeCancellationGate {
+    private var consumedKeyDown = false
+
+    mutating func handle(
+        keyCode: Int,
+        isDown: Bool,
+        cancel: () -> Bool
+    ) -> Bool {
+        guard keyCode == 53 else { return false }
+        if isDown {
+            let cancelled = cancel()
+            consumedKeyDown = cancelled
+            return cancelled
+        }
+        guard consumedKeyDown else { return false }
+        consumedKeyDown = false
+        return true
     }
 }
 

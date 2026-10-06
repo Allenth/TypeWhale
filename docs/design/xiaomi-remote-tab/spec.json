@@ -1,0 +1,195 @@
+{
+  "schemaVersion": 1,
+  "sourceOfTruth": "structured-spec",
+  "status": "approved",
+  "page": {
+    "id": "P02-typewhale-remote-tab",
+    "name": "TypeWhale Remote Tab",
+    "platform": "macOS"
+  },
+  "canvas": {
+    "width": 650,
+    "height": 1680,
+    "unit": "pt",
+    "exportScale": 2
+  },
+  "coordinateSystem": {
+    "origin": "top-left",
+    "frames": "parent-relative"
+  },
+  "measurements": [
+    { "id": "hero-to-device", "type": "vertical-gap", "from": "hero-card", "to": "device-card", "value": 14 },
+    { "id": "device-to-voice", "type": "vertical-gap", "from": "device-card", "to": "voice-card", "value": 14 },
+    { "id": "voice-to-mappings", "type": "vertical-gap", "from": "voice-card", "to": "mapping-card", "value": 14 },
+    { "id": "mappings-to-permissions", "type": "vertical-gap", "from": "mapping-card", "to": "permission-card", "value": 14 },
+    { "id": "permissions-to-help", "type": "vertical-gap", "from": "permission-card", "to": "help-card", "value": 14 },
+    { "id": "help-to-guide", "type": "vertical-gap", "from": "help-card", "to": "button-guide-card", "value": 14 }
+  ],
+  "tokens": {
+    "colors": {
+      "canvas": "#061020",
+      "leadSurface": "#1E2B35",
+      "surface": "#12202E",
+      "control": "#223944",
+      "accent": "#6F9EAD",
+      "text": "#F5F7F2",
+      "muted": "#A1AEAC",
+      "faint": "#788684",
+      "warning": "#E6C776",
+      "border": "rgba(198,209,207,0.14)"
+    },
+    "typography": {
+      "family": "system-ui",
+      "title": { "size": 17, "weight": 650, "lineHeight": 22, "alignment": "left", "wrap": false },
+      "section": { "size": 11, "weight": 650, "lineHeight": 15, "alignment": "left", "wrap": false },
+      "body": { "size": 11, "weight": 400, "lineHeight": 16, "alignment": "left", "wrap": true },
+      "caption": { "size": 10, "weight": 400, "lineHeight": 14, "alignment": "left", "wrap": true }
+    },
+    "spacing": { "pageEdge": 18, "cardGap": 14, "cardInset": 14, "rowGap": 6 },
+    "radii": { "lead": 10, "card": 8, "control": 7, "pill": 12 },
+    "borders": { "card": { "width": 1, "colorToken": "border" } },
+    "shadows": { "none": { "color": "transparent", "blur": 0, "x": 0, "y": 0 } }
+  },
+  "root": {
+    "id": "remote-scroll-document",
+    "role": "scroll-document",
+    "frame": { "x": 0, "y": 0, "width": 650, "height": 1680 },
+    "cornerRadius": 0,
+    "style": { "fillToken": "canvas", "shadowToken": "none" },
+    "children": [
+      {
+        "id": "hero-card",
+        "role": "status-group",
+        "frame": { "x": 18, "y": 18, "width": 614, "height": 138 },
+        "cornerRadius": 10,
+        "style": { "fillToken": "leadSurface", "borderToken": "card" },
+        "children": [
+          { "id": "hero-status-dot", "role": "status-icon", "frame": { "x": 14, "y": 19, "width": 12, "height": 12 }, "cornerRadius": 6, "content": { "accessibilityLabel": "遥控器状态：等待遥控器" }, "children": [] },
+          { "id": "hero-title", "role": "heading", "frame": { "x": 36, "y": 14, "width": 310, "height": 24 }, "cornerRadius": 0, "content": { "text": "等待遥控器", "accessibilityLabel": "等待遥控器" }, "children": [] },
+          { "id": "hero-detail", "role": "text", "frame": { "x": 16, "y": 50, "width": 430, "height": 20 }, "cornerRadius": 0, "content": { "text": "按住 Home + Menu 进入配对模式，然后开始扫描" }, "children": [] },
+          { "id": "hero-action", "role": "primary-button", "frame": { "x": 476, "y": 13, "width": 104, "height": 32 }, "cornerRadius": 8, "content": { "text": "开始扫描", "accessibilityLabel": "开始扫描小米遥控器" }, "children": [] },
+          { "id": "hero-enable-label", "role": "label", "frame": { "x": 16, "y": 89, "width": 150, "height": 18 }, "cornerRadius": 0, "content": { "text": "遥控器输入" }, "children": [] },
+          { "id": "hero-enable-switch", "role": "switch", "frame": { "x": 524, "y": 79, "width": 42, "height": 24 }, "cornerRadius": 12, "content": { "accessibilityLabel": "启用遥控器输入" }, "children": [] },
+          { "id": "hero-privacy-caption", "role": "caption", "frame": { "x": 16, "y": 112, "width": 500, "height": 16 }, "cornerRadius": 0, "content": { "text": "语音在 TypeWhale 中直接处理，不使用虚拟麦克风" }, "children": [] }
+        ]
+      },
+      {
+        "id": "device-card",
+        "role": "group",
+        "frame": { "x": 18, "y": 170, "width": 614, "height": 148 },
+        "cornerRadius": 8,
+        "style": { "fillToken": "surface", "borderToken": "card" },
+        "children": [
+          { "id": "device-heading", "role": "heading", "frame": { "x": 14, "y": 12, "width": 100, "height": 16 }, "cornerRadius": 0, "content": { "text": "设备" }, "children": [] },
+          { "id": "device-name", "role": "status-text", "frame": { "x": 14, "y": 40, "width": 360, "height": 20 }, "cornerRadius": 0, "content": { "text": "尚未发现小米遥控器" }, "children": [] },
+          { "id": "device-metadata", "role": "metadata-row", "frame": { "x": 14, "y": 68, "width": 566, "height": 18 }, "cornerRadius": 0, "content": { "text": "型号 —    电量 —    信号 —" }, "children": [] },
+          { "id": "device-divider", "role": "separator", "frame": { "x": 14, "y": 94, "width": 566, "height": 1 }, "cornerRadius": 0, "children": [] },
+          { "id": "pairing-help", "role": "help-text", "frame": { "x": 14, "y": 104, "width": 566, "height": 32 }, "cornerRadius": 0, "content": { "text": "同时按住遥控器的 Home + Menu，看到指示灯闪烁后点击扫描。TypeWhale 会自动连接已配对且支持语音的设备。" }, "children": [] }
+        ]
+      },
+      {
+        "id": "voice-card",
+        "role": "diagnostic-group",
+        "frame": { "x": 18, "y": 332, "width": 614, "height": 165 },
+        "cornerRadius": 8,
+        "style": { "fillToken": "surface", "borderToken": "card" },
+        "children": [
+          { "id": "voice-heading", "role": "heading", "frame": { "x": 14, "y": 12, "width": 110, "height": 16 }, "cornerRadius": 0, "content": { "text": "语音链路" }, "children": [] },
+          { "id": "voice-pipeline", "role": "progress-indicator", "frame": { "x": 14, "y": 43, "width": 566, "height": 54 }, "cornerRadius": 0, "content": { "text": "蓝牙 → 控制通道 → 音频包 → PCM → TypeWhale", "accessibilityLabel": "语音链路：等待蓝牙" }, "children": [] },
+          { "id": "voice-detail", "role": "help-text", "frame": { "x": 14, "y": 111, "width": 566, "height": 40 }, "cornerRadius": 0, "content": { "text": "连接后逐步显示协议协商、音频包和识别会话。按住语音键开始，松开后结束并写入当前输入位置。" }, "children": [] }
+        ]
+      },
+      {
+        "id": "mapping-card",
+        "role": "settings-group",
+        "frame": { "x": 18, "y": 511, "width": 614, "height": 310 },
+        "cornerRadius": 8,
+        "style": { "fillToken": "surface", "borderToken": "card" },
+        "children": [
+          { "id": "mapping-heading", "role": "heading", "frame": { "x": 14, "y": 12, "width": 120, "height": 16 }, "cornerRadius": 0, "content": { "text": "按键映射" }, "children": [] },
+          { "id": "mapping-reset", "role": "button", "frame": { "x": 500, "y": 8, "width": 80, "height": 24 }, "cornerRadius": 6, "content": { "text": "恢复默认", "accessibilityLabel": "恢复默认按键映射" }, "children": [] },
+          { "id": "mapping-voice", "role": "mapping-row", "frame": { "x": 14, "y": 39, "width": 566, "height": 29 }, "cornerRadius": 0, "content": { "text": "语音键 — 按住说话", "accessibilityLabel": "语音键，固定为按住说话" }, "children": [] },
+          {
+            "id": "mapping-columns",
+            "role": "mapping-grid",
+            "frame": { "x": 14, "y": 75, "width": 566, "height": 186 },
+            "cornerRadius": 0,
+            "children": [
+              { "id": "mapping-left-column", "role": "mapping-column", "frame": { "x": 0, "y": 0, "width": 276, "height": 186 }, "cornerRadius": 0, "content": { "text": "方向上、方向下、方向左、方向右、确定键、返回键；每行显示一个现有动作下拉框" }, "children": [] },
+              { "id": "mapping-right-column", "role": "mapping-column", "frame": { "x": 290, "y": 0, "width": 276, "height": 186 }, "cornerRadius": 0, "content": { "text": "主页键、菜单键、音量加、音量减、电视键、电源键；每行显示一个现有动作下拉框" }, "children": [] }
+            ]
+          },
+          { "id": "mapping-caption", "role": "caption", "frame": { "x": 14, "y": 276, "width": 566, "height": 22 }, "cornerRadius": 0, "content": { "text": "所有按键默认保留 macOS 原动作；自定义动作会在系统动作之外附加执行。" }, "children": [] }
+        ]
+      },
+      {
+        "id": "permission-card",
+        "role": "permissions-group",
+        "frame": { "x": 18, "y": 835, "width": 614, "height": 125 },
+        "cornerRadius": 8,
+        "style": { "fillToken": "surface", "borderToken": "card" },
+        "children": [
+          { "id": "permission-heading", "role": "heading", "frame": { "x": 14, "y": 12, "width": 140, "height": 16 }, "cornerRadius": 0, "content": { "text": "权限与隐私" }, "children": [] },
+          { "id": "bluetooth-permission", "role": "permission-row", "frame": { "x": 14, "y": 40, "width": 420, "height": 20 }, "cornerRadius": 0, "content": { "text": "蓝牙 — 等待系统授权", "accessibilityLabel": "蓝牙权限：等待系统授权" }, "children": [] },
+          { "id": "input-permission", "role": "permission-row", "frame": { "x": 14, "y": 69, "width": 420, "height": 20 }, "cornerRadius": 0, "content": { "text": "输入监控 — 仅用于自定义按键", "accessibilityLabel": "输入监控权限：仅用于自定义按键" }, "children": [] },
+          { "id": "permission-action", "role": "button", "frame": { "x": 474, "y": 39, "width": 106, "height": 30 }, "cornerRadius": 7, "content": { "text": "打开系统设置", "accessibilityLabel": "打开隐私与安全系统设置" }, "children": [] },
+          { "id": "privacy-caption", "role": "caption", "frame": { "x": 14, "y": 99, "width": 566, "height": 16 }, "cornerRadius": 0, "content": { "text": "不保存原始语音，不记录蓝牙地址；识别隐私取决于你选择的 TypeWhale 模型。" }, "children": [] }
+        ]
+      },
+      {
+        "id": "help-card",
+        "role": "help-group",
+        "frame": { "x": 18, "y": 974, "width": 614, "height": 148 },
+        "cornerRadius": 8,
+        "style": { "fillToken": "surface", "borderToken": "card" },
+        "children": [
+          { "id": "help-heading", "role": "heading", "frame": { "x": 14, "y": 12, "width": 140, "height": 16 }, "cornerRadius": 0, "content": { "text": "使用与排障" }, "children": [] },
+          { "id": "help-step-1", "role": "instruction", "frame": { "x": 14, "y": 41, "width": 566, "height": 22 }, "cornerRadius": 0, "content": { "text": "1  Home + Menu 进入配对，点击“开始扫描”" }, "children": [] },
+          { "id": "help-step-2", "role": "instruction", "frame": { "x": 14, "y": 71, "width": 566, "height": 22 }, "cornerRadius": 0, "content": { "text": "2  显示“可以说话”后，按住语音键讲话" }, "children": [] },
+          { "id": "help-step-3", "role": "instruction", "frame": { "x": 14, "y": 101, "width": 566, "height": 22 }, "cornerRadius": 0, "content": { "text": "3  松开语音键，TypeWhale 完成识别和写入" }, "children": [] },
+          { "id": "help-recovery", "role": "link", "frame": { "x": 380, "y": 125, "width": 200, "height": 14 }, "cornerRadius": 0, "content": { "text": "断连或无声？重试并查看语音链路", "accessibilityLabel": "查看遥控器恢复说明" }, "children": [] }
+        ]
+      },
+      {
+        "id": "button-guide-card",
+        "role": "device-guide-group",
+        "frame": { "x": 18, "y": 1136, "width": 614, "height": 520 },
+        "cornerRadius": 8,
+        "style": { "fillToken": "surface", "borderToken": "card" },
+        "children": [
+          { "id": "button-guide-heading", "role": "heading", "frame": { "x": 14, "y": 12, "width": 180, "height": 16 }, "cornerRadius": 0, "content": { "text": "设备与按键说明" }, "children": [] },
+          { "id": "button-guide-illustration", "role": "decorative-image", "frame": { "x": 215, "y": 44, "width": 156, "height": 440 }, "cornerRadius": 31, "content": { "text": "原创矢量 RC003 位置示意，不使用第三方图片或 Logo", "accessibilityLabel": "" }, "children": [] },
+          { "id": "button-guide-left", "role": "button-callout-column", "frame": { "x": 14, "y": 44, "width": 174, "height": 440 }, "cornerRadius": 0, "content": { "text": "电源键、方向上、方向左、返回键、音量加、音量减；每项显示当前功能并由折线连接对应按钮", "accessibilityLabel": "左侧六个按键及当前功能" }, "children": [] },
+          { "id": "button-guide-right", "role": "button-callout-column", "frame": { "x": 398, "y": 44, "width": 182, "height": 440 }, "cornerRadius": 0, "content": { "text": "语音键、方向右、确定键、方向下、主页键、菜单键、电视键；每项显示当前功能并由折线连接对应按钮", "accessibilityLabel": "右侧七个按键及当前功能" }, "children": [] }
+        ]
+      }
+    ]
+  },
+  "states": [
+    "disabled",
+    "bluetooth-unavailable",
+    "unpaired",
+    "scanning",
+    "connecting",
+    "negotiating",
+    "ready",
+    "listening",
+    "processing",
+    "busy",
+    "disconnected-retrying",
+    "protocol-failure",
+    "long-content",
+    "mapping-customized",
+    "mapping-restored",
+    "mist-light",
+    "dark",
+    "compact-width"
+  ],
+  "assets": [],
+  "acceptance": {
+    "geometryTolerance": 1,
+    "colorDeltaE": 3,
+    "requiredStates": ["unpaired", "scanning", "ready", "listening", "busy", "protocol-failure", "long-content", "mapping-customized", "mapping-restored", "mist-light", "dark", "compact-width"],
+    "requiredEvidence": ["installed-screenshot", "accessibility-tree", "scroll-bottom-screenshot", "light-dark-screenshots", "compact-width-screenshot", "state-tests"]
+  }
+}

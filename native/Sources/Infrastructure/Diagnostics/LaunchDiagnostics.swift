@@ -2,6 +2,11 @@ import Foundation
 
 enum LaunchDiagnostics {
     private static let subsystem = AppBrand.logsDirectoryName
+    private static let writeLock = NSLock()
+    private static let asyncWriteQueue = DispatchQueue(
+        label: "com.waykingah.typewhale.launch-diagnostics",
+        qos: .utility
+    )
 
     /// 日志根目录：~/Library/Logs/<AppBrand.logsDirectoryName>
     static var baseDirectory: URL {
@@ -40,6 +45,8 @@ enum LaunchDiagnostics {
     }
 
     static func mark(_ message: String) {
+        writeLock.lock()
+        defer { writeLock.unlock() }
         let url = logFileURL
         do {
             try FileManager.default.createDirectory(
@@ -61,6 +68,12 @@ enum LaunchDiagnostics {
             }
         } catch {
             // Diagnostics must never prevent app launch.
+        }
+    }
+
+    static func markAsync(_ message: String) {
+        asyncWriteQueue.async {
+            mark(message)
         }
     }
 

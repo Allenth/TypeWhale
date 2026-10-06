@@ -3,6 +3,18 @@ import Foundation
 enum SpeechInputPurpose: Equatable {
     case dictation
     case ideaPill
+    case openClawChat
+
+    var logName: String {
+        switch self {
+        case .dictation:
+            return "dictation"
+        case .ideaPill:
+            return "ideaPill"
+        case .openClawChat:
+            return "openClawChat"
+        }
+    }
 
     var capsuleModeName: String {
         switch self {
@@ -10,6 +22,8 @@ enum SpeechInputPurpose: Equatable {
             return ""
         case .ideaPill:
             return "闪念胶囊"
+        case .openClawChat:
+            return "OpenClaw"
         }
     }
 
@@ -17,7 +31,7 @@ enum SpeechInputPurpose: Equatable {
         switch self {
         case .dictation:
             return true
-        case .ideaPill:
+        case .ideaPill, .openClawChat:
             return false
         }
     }

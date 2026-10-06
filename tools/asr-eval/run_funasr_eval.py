@@ -18,8 +18,6 @@ from typing import Any
 SUPPORTED_PROVIDERS = {
     "dry-run",
     "fun-asr-nano-2512",
-    "paraformer-hotword-contextual",
-    "paraformer-zh",
 }
 
 
@@ -77,6 +75,40 @@ def dry_run_text(case: dict[str, Any], audio_exists: bool) -> str:
     return str(case.get("expectedText", ""))
 
 
+def build_provider_model(provider: str, model_dir: str) -> Any:
+    if not model_dir:
+        raise ValueError(f"model_dir_required: {provider}")
+    from funasr import AutoModel
+
+    common: dict[str, Any] = {
+        "model": model_dir,
+        "device": "cpu",
+        "disable_update": True,
+    }
+    common["trust_remote_code"] = True
+    return AutoModel(**common)
+
+
+def transcribe_with_provider(
+    *,
+    model: Any,
+    provider: str,
+    audio_path: Path,
+    hotwords: list[str],
+) -> str:
+    arguments: dict[str, Any] = {
+        "input": [str(audio_path)],
+        "cache": {},
+        "batch_size": 1,
+    }
+    arguments.update({"hotwords": hotwords, "language": "中文", "itn": True})
+
+    result = model.generate(**arguments)
+    if not isinstance(result, list) or not result or not isinstance(result[0], dict):
+        raise ValueError(f"provider_invalid_result: {provider}")
+    return str(result[0].get("text", "")).strip()
+
+
 def evaluate_case(
     *,
     case: dict[str, Any],
@@ -84,6 +116,7 @@ def evaluate_case(
     manifest_path: Path,
     model_dir: str,
     hotwords: list[str],
+    model: Any | None = None,
 ) -> dict[str, Any]:
     started = time.monotonic()
     case_id = str(case.get("id", ""))
@@ -101,11 +134,21 @@ def evaluate_case(
     elif provider == "dry-run":
         raw_text = dry_run_text(case, audio_exists=True)
     else:
-        status = "error"
-        error = (
-            f"provider_runtime_not_wired: {provider}; "
-            "install FunASR runtime wiring before running real model evaluation"
-        )
+        try:
+            if model is None:
+                raise RuntimeError(f"provider_model_not_loaded: {provider}")
+            raw_text = transcribe_with_provider(
+                model=model,
+                provider=provider,
+                audio_path=audio_path,
+                hotwords=hotwords,
+            )
+            if not raw_text:
+                status = "error"
+                error = f"provider_empty_result: {provider}"
+        except Exception as exc:
+            status = "error"
+            error = f"{type(exc).__name__}: {exc}"
 
     hits, missing = hotword_hits(raw_text, required_hotwords)
     elapsed_ms = max(0, int((time.monotonic() - started) * 1000))
@@ -113,6 +156,7 @@ def evaluate_case(
     return {
         "caseId": case_id,
         "provider": provider,
+        "engine": "dry-run" if provider == "dry-run" else f"{provider}/funasr-python",
         "status": status,
         "rawText": raw_text,
         "elapsedMs": elapsed_ms,
@@ -134,6 +178,7 @@ def main() -> int:
         raise ValueError("Manifest field 'cases' must be a list")
 
     hotwords = load_hotwords(args.hotwords)
+    model = None if args.provider == "dry-run" else build_provider_model(args.provider, args.model_dir)
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -147,6 +192,7 @@ def main() -> int:
                 manifest_path=manifest_path,
                 model_dir=args.model_dir,
                 hotwords=hotwords,
+                model=model,
             )
             handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 

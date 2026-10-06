@@ -1,0 +1,16 @@
+{
+  "entries": [
+    {
+      "modelID": "zipvoice-distill-int8-zh-en-emilia",
+      "source": "~/Library/Application Support/LocalTTSLab/models/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia",
+      "target": "~/Library/Application Support/TypeWhale Pro/Models/tts/zipvoice-distill-int8-zh-en-emilia",
+      "modelDirectory": "~/Library/Application Support/TypeWhale Pro/Models/tts/zipvoice-distill-int8-zh-en-emilia"
+    },
+    {
+      "modelID": "zipvoice-distill-int8-zh-en-emilia",
+      "source": "~/Library/Application Support/LocalTTSLab/models/vocos_24khz.onnx",
+      "target": "~/Library/Application Support/TypeWhale Pro/Models/tts/zipvoice-distill-int8-zh-en-emilia/vocos_24khz.onnx",
+      "modelDirectory": "~/Library/Application Support/TypeWhale Pro/Models/tts/zipvoice-distill-int8-zh-en-emilia"
+    }
+  ]
+}

@@ -5,6 +5,7 @@ enum AppPaths {
     static let resources = Bundle.main.resourceURL!
     static let caches = userDirectory(.cachesDirectory)
     static let recordings = caches.appendingPathComponent("Recordings")
+    static let runtimes = userDirectory(.applicationSupportDirectory).appendingPathComponent("Runtimes")
     static let models: URL = {
         if let override = ProcessInfo.processInfo.environment["TYPESPEAKER_MODELS_DIR"], !override.isEmpty {
             return URL(fileURLWithPath: override, isDirectory: true)
@@ -13,7 +14,7 @@ enum AppPaths {
     }()
 
     static func prepare() throws {
-        for directory in [recordings, models] {
+        for directory in [recordings, models, runtimes] {
             try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         }
     }
@@ -56,6 +57,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         lifecycle.onMainInterfaceOpened = { [weak self] in
             self?.speechInput.refreshUserVisibleDiagnostics()
         }
+        lifecycle.onMainWindowShown = { [weak self] in
+            self?.controller.refreshOpenClawConnectionOnMainWindowOpen()
+        }
         LaunchDiagnostics.mark("lifecycle.setup done")
         do {
             LaunchDiagnostics.mark("AppPaths.prepare begin")
@@ -72,6 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         speechInput.start()
         LaunchDiagnostics.mark("speechInput.start done")
         applyLaunchVisibilityPolicy()
+        LaunchAnimationPresenter.shared.playIfNeeded()
     }
 
     private func applyLaunchVisibilityPolicy() {
@@ -83,6 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        ManagedLLMRuntimeService.shared.stop()
         speechInput.stop()
     }
 

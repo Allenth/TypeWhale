@@ -3,16 +3,29 @@ import AppKit
 extension MainViewController {
     func configureOptionAccessibility() {
         smartRewriteMode.setAccessibilityLabel("智能整理")
+        ideaPillRewriteMode.setAccessibilityLabel("闪念胶囊整理模式")
         smartAIModelMode.setAccessibilityLabel("智能整理模型")
+        modelTabSmartAIModelMode.setAccessibilityLabel("模型页智能整理模型")
+        localModelHealthCheckButton.setAccessibilityLabel("检测本地整理模型")
+        localModelHealthCopyButton.setAccessibilityLabel("复制本地模型诊断")
+        localModelHealthStatusLabel.setAccessibilityLabel("本地模型检测状态")
+        localModelHealthDetailLabel.setAccessibilityLabel("本地模型检测详情")
         asrBackendMode.setAccessibilityLabel("识别模型")
         asrBackendMode.toolTip = "选择 final 识别使用的本地 ASR 后端"
+        asrSwitchProgress.setAccessibilityLabel("识别模型切换进度")
+        asrSwitchProgressLabel.setAccessibilityLabel("识别模型切换状态")
         deepSeekKeyButton.setAccessibilityLabel("DeepSeek API Key")
         promptSettingsButton.setAccessibilityLabel("智能整理提示词")
-        autoScopeButton.setAccessibilityLabel("智能整理自动范围")
+        autoScopeButton.setAccessibilityLabel("智能整理应用范围")
+        autoSendAfterPaste.setAccessibilityLabel("粘贴后自动发送")
+        autoSendCountdownSeconds.setAccessibilityLabel("自动发送倒计时")
+        autoSendApplicationScopeButton.setAccessibilityLabel("自动发送应用范围")
         developerTermsButton.setAccessibilityLabel("开发术语词库")
         autoTranslate.setAccessibilityLabel("自动翻译")
         autoTranslate.toolTip = "可在快捷键设置中配置快速打开或关闭"
         ideaPillHotkeyCaptureButton.setAccessibilityLabel("闪念胶囊快捷键")
+        openClawHotkeyCaptureButton.setAccessibilityLabel("OpenClaw 语音快捷键")
+        openClawHotkeyPanelCaptureButton.setAccessibilityLabel("OpenClaw 快捷键")
         translationDirectionMode.setAccessibilityLabel("翻译方向")
         translationPromptButton.setAccessibilityLabel("翻译提示词")
         socialScopeButton.setAccessibilityLabel("社交应用清单")
@@ -20,13 +33,85 @@ extension MainViewController {
         screenshotArchiveMode.setAccessibilityLabel("截图归档整理模式")
         backlogDirectoryButton.setAccessibilityLabel("需求池目录")
         realtime.setAccessibilityLabel("胶囊实时预览")
+        shadowPreviewExperiment.setAccessibilityLabel("旁路预览（诊断）")
+        shadowPreviewExperiment.toolTip = "诊断用：在主胶囊旁显示旁路结果；不参与最终识别和粘贴。"
+        onlineASRProviderMode.setAccessibilityLabel("在线旁路服务（诊断）")
+        doubaoASRKeyButton.setAccessibilityLabel("豆包 API Key")
+        mimoASRKeyButton.setAccessibilityLabel("MiMo API Key")
+        correctedPreviewExperiment.setAccessibilityLabel("重叠矫正")
+        correctedPreviewExperiment.toolTip = "使用跨分块音频矫正接缝；默认关闭，仅支持 SenseVoice。"
+        longFormIncrementalOutputExperiment.setAccessibilityLabel("长录音增量输出（实验）")
+        longFormIncrementalOutputExperiment.toolTip = "自动启用重叠校正；最长 4 小时，停止时使用增量转录而不是重识别整段音频。"
         autoFinish.setAccessibilityLabel("停顿自动完成")
+        reRecognizeWholeRecordingAfterStop.setAccessibilityLabel("停止后重新识别整段录音")
+        reRecognizeWholeRecordingAfterStop.toolTip = "SenseVoice 可直接使用完整实时缓存以获得更快结果；选择其他识别模型时，停止录音后会自动运行所选模型。所选模型失败时会直接提示失败，不会切换到 SenseVoice。"
         duckSystemAudio.setAccessibilityLabel("录音时降低系统音量")
+        pauseSystemMedia.setAccessibilityLabel("录音时暂停媒体")
+        pauseSystemMedia.toolTip = "录音开始时仅暂停正在播放的系统媒体；录音结束后只恢复本次暂停的内容。"
         audioInputDeviceMode.setAccessibilityLabel("麦克风输入设备")
         audioInputRefreshButton.setAccessibilityLabel("刷新麦克风输入设备")
-        micNoiseReduction.setAccessibilityLabel("麦克风降噪（语音增强）")
-        micNoiseReduction.toolTip = "开启 Apple 语音增强（回声消除+噪声抑制），嘈杂环境识别更稳；但会增加每次开始录音的延迟，建议仅在嘈杂时临时开启。默认关闭。"
+        preferBuiltInMicForBluetoothAudio.setAccessibilityLabel("蓝牙耳机播放时使用 Mac 麦克风")
+        preferBuiltInMicForBluetoothAudio.toolTip = "开启后，主麦克风为“跟随系统”且系统默认输入像蓝牙耳机时，录音会优先采集 Mac 内置麦克风；手动选择的麦克风不受影响。"
         launchAtLogin.setAccessibilityLabel("开机自动启动")
+        openClawGatewayField.setAccessibilityLabel("OpenClaw Gateway 地址")
+        openClawAgentField.setAccessibilityLabel("OpenClaw Agent")
+        openClawSessionField.setAccessibilityLabel("OpenClaw Session")
+        openClawCLIPathField.setAccessibilityLabel("OpenClaw CLI 路径")
+        openClawVoiceEnabledSwitch.setAccessibilityLabel("小龙虾说话开关")
+        openClawVoiceVolumeSlider.setAccessibilityLabel("小龙虾音量")
+        openClawVoiceRateSlider.setAccessibilityLabel("小龙虾语速")
+        openClawVoiceMode.setAccessibilityLabel("小龙虾朗读音色")
+        openClawVoicePlaybackMode.setAccessibilityLabel("小龙虾播放内容")
+        openClawVoiceInterruptMode.setAccessibilityLabel("小龙虾打断策略")
+        ttsReadingLabView.textView.setAccessibilityLabel("朗读测试文字")
+        ttsReadingLabView.modelPopup.setAccessibilityLabel("本地朗读模型")
+        ttsReadingLabView.playButton.setAccessibilityLabel("播放或停止朗读测试")
+        ttsReadingLabView.replayButton.setAccessibilityLabel("重播最近朗读音频")
+    }
+
+    func configureOnlineASRControls(settings: OnlineASRSettings) {
+        onlineASRProviderMode.removeAllItems()
+        for selection in OnlineASRProviderSelection.allCases {
+            onlineASRProviderMode.addItem(withTitle: selection.displayName)
+            onlineASRProviderMode.lastItem?.representedObject = selection.rawValue
+        }
+        if let index = OnlineASRProviderSelection.allCases.firstIndex(of: settings.selection) {
+            onlineASRProviderMode.selectItem(at: index)
+        }
+        onlineASRProviderMode.bezelStyle = .rounded
+        onlineASRProviderMode.controlSize = .small
+        onlineASRProviderMode.font = .systemFont(ofSize: 11, weight: .medium)
+        onlineASRProviderMode.target = self
+        onlineASRProviderMode.action = #selector(saveOnlineASRSettings)
+        onlineASRProviderMode.toolTip = "在线旁路：关闭 / 豆包 ASR / MiMo‑V2.5-ASR。选择只对下一轮录音生效。"
+
+        [doubaoASRKeyButton, mimoASRKeyButton].forEach {
+            $0.bezelStyle = .rounded
+            $0.controlSize = .small
+            $0.font = .systemFont(ofSize: 11, weight: .medium)
+        }
+        doubaoASRKeyButton.target = self
+        doubaoASRKeyButton.action = #selector(configureDoubaoASRKey)
+        mimoASRKeyButton.target = self
+        mimoASRKeyButton.action = #selector(configureMiMoASRKey)
+        onlineASRPrivacyNote.font = .systemFont(ofSize: 11)
+        onlineASRPrivacyNote.textColor = UITheme.waterInkMuted
+        onlineASRPrivacyNote.maximumNumberOfLines = 2
+        onlineASRPrivacyNote.lineBreakMode = .byWordWrapping
+        onlineASRPrivacyNote.setAccessibilityLabel("在线旁路隐私说明")
+        refreshOnlineASRCredentialButtons()
+    }
+
+    func refreshOnlineASRCredentialButtons() {
+        let credentialStore = OnlineASRCredentialStore()
+        doubaoASRKeyButton.title = credentialStore.has(.doubaoAPIKey) ? "已配置" : "未配置"
+        mimoASRKeyButton.title = credentialStore.has(.mimoAPIKey) ? "已配置" : "未配置"
+        doubaoASRKeyButton.toolTip = credentialStore.has(.doubaoAPIKey)
+            ? "豆包 Key 已安全保存在 macOS Keychain；点击可覆盖或清除。"
+            : "点击配置豆包 API Key。"
+        mimoASRKeyButton.toolTip = credentialStore.has(.mimoAPIKey)
+            ? "MiMo Key 已安全保存在 macOS Keychain；点击可覆盖或清除。"
+            : "点击配置 MiMo API Key。"
     }
 
     func configureAudioInputDeviceControls(selectedUID: String) {
@@ -35,6 +120,7 @@ extension MainViewController {
         audioInputDeviceMode.font = .systemFont(ofSize: 11, weight: .medium)
         audioInputDeviceMode.toolTip = "默认跟随系统输入；通话场景录不到音时可手动锁定正在使用的麦克风。"
         configureDeferredAudioInputDeviceMenu(selectedUID: selectedUID)
+        audioInputDeviceMode.menu?.delegate = self
 
         let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)
         audioInputRefreshButton.image = NSImage(
@@ -56,12 +142,17 @@ extension MainViewController {
             audioInputDeviceMode.addItem(withTitle: "跟随系统")
             audioInputDeviceMode.lastItem?.representedObject = AudioInputDevice.systemDefaultUID
             audioInputDeviceMode.toolTip = "录音时跟随 macOS 当前系统输入；点刷新可查看设备列表。"
+            audioInputStatus.stringValue = "跟随 macOS 系统输入"
         } else {
-            audioInputDeviceMode.addItem(withTitle: "已选择麦克风")
+            let selectedName = AudioInputDevice.selectedName
+            audioInputDeviceMode.addItem(withTitle: selectedName.isEmpty ? "已选择麦克风" : selectedName)
             audioInputDeviceMode.lastItem?.representedObject = selectedUID
             audioInputDeviceMode.addItem(withTitle: "跟随系统")
             audioInputDeviceMode.lastItem?.representedObject = AudioInputDevice.systemDefaultUID
             audioInputDeviceMode.toolTip = "录音时会校验已选择麦克风；点刷新可查看当前设备列表。"
+            audioInputStatus.stringValue = selectedName.isEmpty
+                ? "已保存主麦克风，打开列表可确认连接状态"
+                : "主麦克风：\(selectedName)"
         }
         audioInputDeviceMode.selectItem(at: 0)
         audioInputDeviceMenuHasLoaded = false
@@ -89,6 +180,11 @@ extension MainViewController {
             AudioInputDevice.saveSelectedUID(AudioInputDevice.systemDefaultUID)
             detail.stringValue = "已找不到上次选择的麦克风，已回到跟随系统。"
             LaunchDiagnostics.mark("audio_input_selection_downgrade reason=device_missing selected_uid=\(targetUID)")
+            audioInputStatus.stringValue = "设备已断开，已改为跟随系统"
+        } else if resolvedUID.isEmpty {
+            audioInputStatus.stringValue = "正在使用：\(defaultName)（跟随系统）"
+        } else {
+            audioInputStatus.stringValue = "正在使用：\(devices.first(where: { $0.uid == resolvedUID })?.name ?? "所选麦克风")"
         }
         selectAudioInputDeviceMenuItem(uid: resolvedUID)
         audioInputDeviceMode.toolTip = resolvedUID.isEmpty
@@ -141,30 +237,85 @@ extension MainViewController {
         smartRewriteMode.font = .systemFont(ofSize: 12)
     }
 
-    func configureSmartAIModelMenu(_ model: SmartAIModel) {
-        smartAIModelMode.removeAllItems()
-        for item in SmartAIModel.allCases {
-            smartAIModelMode.addItem(withTitle: item.displayName)
-            smartAIModelMode.lastItem?.tag = item.menuTag
+    func configureIdeaPillRewriteModeMenu(_ preference: SmartRewritePreference) {
+        ideaPillRewriteMode.removeAllItems()
+        for item in IdeaPillRewriteModeStore.supportedModes {
+            ideaPillRewriteMode.addItem(withTitle: item.displayName)
+            ideaPillRewriteMode.lastItem?.representedObject = item.rawValue
         }
-        smartAIModelMode.selectItem(withTag: model.menuTag)
-        smartAIModelMode.toolTip = "选择智能整理、自动翻译和截图翻译使用的模型"
-        smartAIModelMode.bezelStyle = .rounded
-        smartAIModelMode.controlSize = .regular
-        smartAIModelMode.font = .systemFont(ofSize: 12)
+        let selected = IdeaPillRewriteModeStore.supportedModes.contains(preference)
+            ? preference
+            : IdeaPillRewriteModeStore.defaultMode
+        let selectedItem = ideaPillRewriteMode.itemArray.first {
+            ($0.representedObject as? String) == selected.rawValue
+        }
+        ideaPillRewriteMode.select(selectedItem)
+        ideaPillRewriteMode.toolTip = "闪念胶囊录音完成后使用的整理模式，默认即时归纳"
+        ideaPillRewriteMode.bezelStyle = .rounded
+        ideaPillRewriteMode.controlSize = .regular
+        ideaPillRewriteMode.font = .systemFont(ofSize: 12)
+    }
+
+    func configureSmartAIModelMenu(_ model: SmartAIModel) {
+        configureSmartAIModelMenu(model, popup: smartAIModelMode)
+        configureSmartAIModelMenu(model, popup: modelTabSmartAIModelMode)
+    }
+
+    func configureSmartAIModelMenu(_ model: SmartAIModel, popup: NSPopUpButton) {
+        popup.removeAllItems()
+        for item in SmartAIModel.allCases {
+            popup.addItem(withTitle: item.displayName)
+            popup.lastItem?.tag = item.menuTag
+        }
+        popup.selectItem(withTag: model.menuTag)
+        popup.toolTip = "选择智能整理模型；语音翻译与截图翻译共用当前所选模型"
+        popup.bezelStyle = .rounded
+        popup.controlSize = .regular
+        popup.font = .systemFont(ofSize: 12)
+    }
+
+    func configureLocalModelHealthCheckControls() {
+        [localModelHealthCheckButton, localModelHealthCopyButton].forEach {
+            $0.bezelStyle = .rounded
+            $0.controlSize = .small
+            $0.font = .systemFont(ofSize: 11, weight: .medium)
+            $0.setContentHuggingPriority(.required, for: .horizontal)
+            $0.setContentCompressionResistancePriority(.required, for: .horizontal)
+        }
+        localModelHealthCheckButton.target = self
+        localModelHealthCheckButton.action = #selector(runLocalModelHealthCheck)
+        localModelHealthCheckButton.toolTip = "实际检查运行环境、模型文件、模型加载与最小生成"
+
+        localModelHealthCopyButton.target = self
+        localModelHealthCopyButton.action = #selector(copyLocalModelHealthDiagnostic)
+        localModelHealthCopyButton.toolTip = "复制不含录音、转录、提示词和密钥的诊断信息"
+        localModelHealthCopyButton.isHidden = true
+        localModelHealthCopyButton.isEnabled = false
+
+        localModelHealthStatusLabel.textColor = UITheme.sectionTitle
+        localModelHealthStatusLabel.maximumNumberOfLines = 2
+        localModelHealthStatusLabel.lineBreakMode = .byWordWrapping
+        localModelHealthDetailLabel.font = .systemFont(ofSize: 11)
+        localModelHealthDetailLabel.textColor = UITheme.waterInkMuted
+        localModelHealthDetailLabel.maximumNumberOfLines = 3
+        localModelHealthDetailLabel.lineBreakMode = .byWordWrapping
     }
 
     func configureASRBackendMenu(_ backend: ASRBackend) {
-        asrBackendMode.removeAllItems()
-        for item in ASRBackend.allCases {
-            asrBackendMode.addItem(withTitle: item.displayName)
-            asrBackendMode.lastItem?.tag = item.menuTag
+        let items = ASRBackend.allCases.map { item -> ASRBackendSegmentedSelector.Item in
+            let ready = isASRBackendReadyForSelection(item)
+            let descriptor = liveASRModelRegistry.descriptor(for: item.candidateID)
+            let title = ready ? item.displayName : "\(item.displayName)（不可用）"
+            let reason: String
+            switch descriptor?.readiness {
+            case .unavailable(let message): reason = message
+            case .validating: reason = "尚未通过真实转写验证"
+            default: reason = ready ? "下一次录音使用此模型" : "模型或运行环境尚未就绪"
+            }
+            return .init(title:title,tag:item.menuTag,isEnabled:ready,toolTip:reason)
         }
-        asrBackendMode.selectItem(withTag: backend.menuTag)
-        asrBackendMode.toolTip = "自动模式优先使用已安装的 Qwen3-ASR，否则回退 SenseVoice"
-        asrBackendMode.bezelStyle = .rounded
-        asrBackendMode.controlSize = .regular
-        asrBackendMode.font = .systemFont(ofSize: 12)
+        asrBackendMode.configure(items, selectedTag: backend.menuTag)
+        asrBackendMode.toolTip = "SenseVoice 为默认稳定识别；全部模型按钮自动换行，可直接选择，当前录音不受中途切换影响"
     }
 
     func configureDeepSeekKeyButton() {
@@ -198,7 +349,51 @@ extension MainViewController {
         autoScopeButton.bezelStyle = .rounded
         autoScopeButton.controlSize = .regular
         autoScopeButton.font = .systemFont(ofSize: 12, weight: .medium)
-        autoScopeButton.toolTip = "设置自动模式在不同窗口中使用的整理模式"
+        autoScopeButton.toolTip = "按应用设置默认整理模式，并管理通用高级规则"
+    }
+
+    func configureAutoSendControls() {
+        let configuration = AutoSendSettingsStore.load()
+        autoSendAfterPaste.state = configuration.isEnabled ? .on : .off
+        autoSendAfterPaste.target = self
+        autoSendAfterPaste.action = #selector(saveAutoSendEnabled)
+
+        autoSendCountdownValueLabel.stringValue =
+            "\(configuration.countdownSeconds) 秒"
+        autoSendCountdownValueLabel.font = .systemFont(
+            ofSize: 12,
+            weight: .medium
+        )
+        autoSendCountdownValueLabel.textColor = UITheme.waterInkMuted
+        autoSendCountdownValueLabel.alignment = .right
+        autoSendCountdownValueLabel.widthAnchor.constraint(
+            equalToConstant: 34
+        ).isActive = true
+
+        autoSendCountdownSeconds.minValue = 1
+        autoSendCountdownSeconds.maxValue = 10
+        autoSendCountdownSeconds.increment = 1
+        autoSendCountdownSeconds.integerValue = configuration.countdownSeconds
+        autoSendCountdownSeconds.valueWraps = false
+        autoSendCountdownSeconds.target = self
+        autoSendCountdownSeconds.action = #selector(
+            saveAutoSendCountdownSeconds
+        )
+        autoSendCountdownSeconds.toolTip =
+            "粘贴后等待 1–10 秒再发送；倒计时期间可取消"
+
+        autoSendApplicationScopeButton.target = self
+        autoSendApplicationScopeButton.action = #selector(
+            configureAutoSendApplicationScope
+        )
+        autoSendApplicationScopeButton.bezelStyle = .rounded
+        autoSendApplicationScopeButton.controlSize = .regular
+        autoSendApplicationScopeButton.font = .systemFont(
+            ofSize: 12,
+            weight: .medium
+        )
+        autoSendApplicationScopeButton.toolTip =
+            "为不同应用设置关闭、回车或 Command + 回车"
     }
 
     func configureDeveloperTermsButton() {
@@ -275,7 +470,7 @@ extension MainViewController {
     func refreshDeepSeekKeyButton() {
         let hasKey = DeepSeekAPIKeyStore.hasAPIKey()
         deepSeekKeyButton.title = "Key"
-        deepSeekKeyButton.contentTintColor = hasKey ? UITheme.brandYellow : .secondaryLabelColor
+        deepSeekKeyButton.contentTintColor = hasKey ? UITheme.waterInkAccent : UITheme.waterInkMuted
         deepSeekKeyButton.toolTip = hasKey
             ? "DeepSeek API Key 已录入，点击可覆盖或清除"
             : "DeepSeek API Key 未录入，点击设置"
@@ -283,7 +478,7 @@ extension MainViewController {
             string: "Key",
             attributes: [
                 .font: NSFont.systemFont(ofSize: 12, weight: hasKey ? .semibold : .medium),
-                .foregroundColor: hasKey ? UITheme.brandYellow : NSColor.secondaryLabelColor,
+                .foregroundColor: hasKey ? UITheme.waterInkAccent : UITheme.waterInkMuted,
             ]
         )
     }
@@ -310,7 +505,7 @@ extension MainViewController {
             translationDirectionMode.lastItem?.tag = item.menuTag
         }
         translationDirectionMode.selectItem(withTag: direction.menuTag)
-        translationDirectionMode.toolTip = "自动翻译开启后使用的转换方向"
+        translationDirectionMode.toolTip = "自动翻译开启后使用的转换方向；多表情聊天模式会生成更轻松的英文聊天表达"
         translationDirectionMode.bezelStyle = .rounded
         translationDirectionMode.controlSize = .regular
         translationDirectionMode.font = .systemFont(ofSize: 12)
@@ -427,6 +622,97 @@ extension MainViewController {
         popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxX)
     }
 
+    @objc func showMouseShortcutTest(_ sender: NSButton) {
+        if let popover = mouseShortcutTestPopover, popover.isShown {
+            stopMouseShortcutTestMonitor()
+            mouseShortcutTestPopover = nil
+            popover.performClose(nil)
+            return
+        }
+
+        stopMouseShortcutTestMonitor()
+        mouseShortcutTestViewController.reset()
+        mouseShortcutTestViewController.onClose = { [weak self] in
+            self?.closeMouseShortcutTest()
+        }
+
+        let popover = mouseShortcutTestPopover ?? NSPopover()
+        popover.behavior = .applicationDefined
+        popover.animates = true
+        popover.contentSize = NSSize(width: 340, height: 190)
+        popover.contentViewController = mouseShortcutTestViewController
+        mouseShortcutTestPopover = popover
+        popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxX)
+        startMouseShortcutTestMonitor()
+    }
+
+    func closeMouseShortcutTest() {
+        stopMouseShortcutTestMonitor()
+        guard let popover = mouseShortcutTestPopover else { return }
+        popover.performClose(nil)
+        mouseShortcutTestPopover = nil
+    }
+
+    func startMouseShortcutTestMonitor() {
+        stopMouseShortcutTestMonitor()
+        NotificationCenter.default.post(
+            name: .typeWhaleMouseShortcutHandlingSuspensionDidChange,
+            object: true
+        )
+        mouseShortcutTestViewController.setStatus(
+            "等待点击任意鼠标键。请先点击一次第 3/4/5/6 键。",
+            detail: ""
+        )
+        mouseShortcutTestMonitor = NSEvent.addGlobalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        ) { [weak self] event in
+            guard let self else { return }
+            let buttonNumber = Int(event.buttonNumber)
+            let rawName = HotkeyKeyCodes.mouseDisplayName(for: buttonNumber)
+            let mappedTags = self.compatibleHotkeyMouseTags(for: buttonNumber)
+            let detail = mappedTags.isEmpty
+                ? "当前事件未在第3~6按钮识别范围内。"
+                : "TypeWhale 会把这个物理键当作：\(mappedTags.map { "第\($0)键" }.joined(separator: " / "))."
+            self.mouseShortcutTestViewController.setStatus(
+                "识别到按钮号: \(buttonNumber)（\(rawName)）",
+                detail: detail
+            )
+        }
+    }
+
+    private func stopMouseShortcutTestMonitor() {
+        NotificationCenter.default.post(
+            name: .typeWhaleMouseShortcutHandlingSuspensionDidChange,
+            object: false
+        )
+        if let monitor = mouseShortcutTestMonitor {
+            NSEvent.removeMonitor(monitor)
+            mouseShortcutTestMonitor = nil
+        }
+    }
+
+    func compatibleMouseShortcutDisplayNames(for buttonNumber: Int) -> String {
+        let compatibleTags = compatibleHotkeyMouseTags(for: buttonNumber)
+        return compatibleTags.map { "第\($0)键" }.joined(separator: " / ")
+    }
+
+    func compatibleHotkeyMouseTags(for buttonNumber: Int) -> [Int] {
+        var result = Set<Int>()
+        switch buttonNumber {
+        case 2:
+            result.insert(3)
+        case 3:
+            result.insert(4)
+        case 4:
+            result.insert(5)
+        case 5, 6, 7, 8:
+            result.insert(6)
+        default:
+            break
+        }
+        return result.sorted()
+    }
+
     @objc func showModelDetail(_ sender: NSGestureRecognizer) {
         guard let anchor = sender.view else { return }
         if let popover = modelDetailPopover, popover.isShown {
@@ -437,7 +723,7 @@ extension MainViewController {
         if modelDetailPopover == nil {
             popover.behavior = .transient
             popover.animates = true
-            popover.contentSize = NSSize(width: 300, height: 282)
+            popover.contentSize = NSSize(width: 600, height: 326)
             popover.contentViewController = makeModelDetailController()
             modelDetailPopover = popover
         }
@@ -445,7 +731,7 @@ extension MainViewController {
     }
 
     func makeModelDetailController() -> NSViewController {
-        let icon = symbolIcon("cpu", size: 18, color: UITheme.brandYellow)
+        let icon = symbolIcon("cpu", size: 18, color: UITheme.waterInkAccent)
         let title = label("本地 ASR 模型", size: 14, weight: .semibold)
         let titleRow = NSStackView(views: [icon, title])
         titleRow.orientation = .horizontal
@@ -454,15 +740,6 @@ extension MainViewController {
 
         modelValue.maximumNumberOfLines = 2
         modelValue.lineBreakMode = .byWordWrapping
-
-        let backendCaption = label("识别模型", size: 11, weight: .medium)
-        backendCaption.textColor = UITheme.sectionTitle
-        asrBackendMode.setContentHuggingPriority(.required, for: .horizontal)
-        asrBackendMode.widthAnchor.constraint(equalToConstant: 154).isActive = true
-        let backendRow = NSStackView(views: [backendCaption, flexSpacer(), asrBackendMode])
-        backendRow.orientation = .horizontal
-        backendRow.alignment = .centerY
-        backendRow.spacing = 10
 
         let desc = label("本地离线语音识别模型，全程在本机推理，不上传音频。Qwen3-ASR 使用原生 sherpa-onnx 链路。", size: 12)
         desc.textColor = .secondaryLabelColor
@@ -487,7 +764,7 @@ extension MainViewController {
         let installRow = NSStackView(views: [flexSpacer(), modelInstallButton])
         installRow.orientation = .horizontal
 
-        let stack = NSStackView(views: [titleRow, hairlineView(), backendRow, modelValue, modelProgress, desc, pathCaption, modelPathLabel, installRow])
+        let stack = NSStackView(views: [titleRow, hairlineView(), modelValue, modelProgress, desc, pathCaption, modelPathLabel, installRow])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 9
@@ -502,7 +779,6 @@ extension MainViewController {
             stack.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -16),
             stack.widthAnchor.constraint(equalToConstant: 268),
             modelValue.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            backendRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
             desc.widthAnchor.constraint(equalTo: stack.widthAnchor),
             modelPathLabel.widthAnchor.constraint(equalTo: stack.widthAnchor),
             modelProgress.widthAnchor.constraint(equalTo: stack.widthAnchor),
@@ -511,5 +787,15 @@ extension MainViewController {
         let controller = NSViewController()
         controller.view = content
         return controller
+    }
+}
+
+extension MainViewController: NSMenuDelegate {
+    func menuWillOpen(_ menu: NSMenu) {
+        guard menu === audioInputDeviceMode.menu else { return }
+        guard !audioInputDeviceMenuHasLoaded else { return }
+        let selectedUID = selectedAudioInputDeviceUID
+        refreshAudioInputDeviceMenu(selectedUID: selectedUID)
+        LaunchDiagnostics.mark("audio_input_selection_refresh source=menu_will_open")
     }
 }

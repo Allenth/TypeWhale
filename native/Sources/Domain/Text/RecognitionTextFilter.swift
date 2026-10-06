@@ -12,6 +12,7 @@ func isMeaningfulRecognitionText(
 /// 即使误过滤，最终路径仍会正常识别并粘贴，取一个平衡。
 private let realtimePreviewSilencePhrases: Set<String> = [
     "我", "嗯", "啊", "呃", "额", "哦", "唔", "呣", "诶", "哎", "呐", "嗯嗯", "啊啊",
+    "我想",
     "谢谢", "谢谢大家", "谢谢观看", "谢谢观赏", "请", "请观看", "字幕", "中文字幕", "字幕志愿者",
 ]
 
@@ -21,7 +22,7 @@ private let realtimePreviewSilenceLatinPhrases: Set<String> = [
     "yeah", "yeahthe", "the", "you", "thankyou", "thankyouverymuch", "thanks",
     "thanksforwatching", "bye", "byebye", "okay", "ok", "uh", "um", "umm",
     "mm", "mmm", "hmm", "uhhuh", "huh", "so", "oh", "hi", "hey", "well",
-    "please", "subscribe", "and", "amen", "iknow",
+    "please", "subscribe", "and", "amen", "iknow", "i",
 ]
 
 func isMeaningfulRealtimePreviewText(

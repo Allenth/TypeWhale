@@ -27,7 +27,7 @@ final class SmartTranslationPromptDialog: NSObject {
         sheet.present(
             in: parent,
             title: "翻译提示词",
-            message: "选择翻译方向，修改语气和表达规则后保存。“中译英（社交）”只在社交窗口生效，其余应用的中译英仍走常规提示词。",
+            message: "选择翻译方向，修改语气和表达规则后保存。“中译英（社交）”只在社交窗口自动生效，“中译英·多表情聊天”可手动强制使用。",
             contentView: content,
             contentSize: NSSize(width: 460, height: 320),
             buttons: [
@@ -96,7 +96,7 @@ final class SmartTranslationPromptDialog: NSObject {
         scrollView.documentView = textView
         scrollView.translatesAutoresizingMaskIntoConstraints = false
 
-        let hint = NSTextField(labelWithString: "保存空内容会恢复默认。这里只写翻译语气和表达规则，原文会由 TypeWhale 自动附加。社交窗口清单在“社交应用清单”里维护。")
+        let hint = NSTextField(labelWithString: "保存空内容会恢复默认。这里只写翻译语气和表达规则，原文会由 TypeWhale 自动附加。社交自动范围在“社交应用清单”里维护。")
         hint.font = .systemFont(ofSize: 11)
         hint.textColor = .secondaryLabelColor
         hint.maximumNumberOfLines = 2
@@ -115,7 +115,7 @@ final class SmartTranslationPromptDialog: NSObject {
             stack.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             stack.topAnchor.constraint(equalTo: container.topAnchor),
             stack.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            directionPicker.widthAnchor.constraint(equalToConstant: 160),
+            directionPicker.widthAnchor.constraint(equalToConstant: 190),
             scrollView.widthAnchor.constraint(equalToConstant: 460),
             scrollView.heightAnchor.constraint(equalToConstant: 260),
             hint.widthAnchor.constraint(equalToConstant: 460),

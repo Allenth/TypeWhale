@@ -6,7 +6,9 @@ RUNNER="$ROOT_DIR/tools/asr-eval/run_funasr_eval.py"
 MANIFEST="$ROOT_DIR/docs/asr-eval/pro-hotword-eval-cases.json"
 HOTWORDS="$ROOT_DIR/tools/asr-eval/hotwords-dev.txt"
 OUTPUT="$(mktemp "${TMPDIR:-/tmp}/typewhale-funasr-eval.XXXXXX.jsonl")"
-trap 'rm -f "$OUTPUT"' EXIT
+PROVIDER_OUTPUT="$(mktemp "${TMPDIR:-/tmp}/typewhale-funasr-provider.XXXXXX.jsonl")"
+FIXTURE_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/typewhale-funasr-fixture.XXXXXX")"
+trap 'rm -f "$OUTPUT" "$PROVIDER_OUTPUT"; rm -rf "$FIXTURE_ROOT"' EXIT
 
 if [[ ! -x "$RUNNER" ]]; then
   echo "Missing executable FunASR eval runner: $RUNNER" >&2
@@ -78,4 +80,63 @@ if skipped_count == 0:
     raise SystemExit("Contract check expects missing local audio to produce skipped rows")
 
 print("FunASREvalRunnerContractCheck passed")
+PY
+
+mkdir -p "$FIXTURE_ROOT/funasr" "$FIXTURE_ROOT/model"
+cat > "$FIXTURE_ROOT/funasr/__init__.py" <<'PY'
+class AutoModel:
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+
+    def generate(self, **kwargs):
+        return [{"text": "把 Qwen3-ASR 接到 SpeechInputCoordinator"}]
+PY
+
+python3 - "$FIXTURE_ROOT" <<'PY'
+import json
+import sys
+import wave
+from pathlib import Path
+
+root = Path(sys.argv[1])
+audio = root / "sample.wav"
+with wave.open(str(audio), "wb") as handle:
+    handle.setnchannels(1)
+    handle.setsampwidth(2)
+    handle.setframerate(16000)
+    handle.writeframes(b"\0\0" * 1600)
+
+(root / "manifest.json").write_text(json.dumps({
+    "cases": [{
+        "id": "provider-contract",
+        "audioPath": str(audio),
+        "requiredHotwords": ["Qwen3-ASR", "SpeechInputCoordinator"]
+    }]
+}), encoding="utf-8")
+PY
+
+PYTHONPATH="$FIXTURE_ROOT" python3 "$RUNNER" \
+  --manifest "$FIXTURE_ROOT/manifest.json" \
+  --provider fun-asr-nano-2512 \
+  --model-dir "$FIXTURE_ROOT/model" \
+  --hotwords "$HOTWORDS" \
+  --output "$PROVIDER_OUTPUT"
+
+python3 - "$PROVIDER_OUTPUT" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+rows = [json.loads(line) for line in Path(sys.argv[1]).read_text(encoding="utf-8").splitlines() if line]
+if len(rows) != 1:
+    raise SystemExit(f"Expected one provider row, got {len(rows)}")
+row = rows[0]
+if row["status"] != "ok":
+    raise SystemExit(f"Expected wired provider status=ok, got {row['status']}: {row['error']}")
+if row["rawText"] != "把 Qwen3-ASR 接到 SpeechInputCoordinator":
+    raise SystemExit(f"Unexpected provider text: {row['rawText']!r}")
+if row.get("engine") != "fun-asr-nano-2512/funasr-python":
+    raise SystemExit(f"Unexpected provider engine: {row.get('engine')!r}")
+
+print("FunASR provider contract passed")
 PY

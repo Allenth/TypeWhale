@@ -15,7 +15,7 @@
 - Current ASR fallback must remain available.
 - Hotword support must be effective in acoustic, decoder, contextual, KWS, or word-spotter stage; text-only post-processing is not enough.
 - The first shipped iteration should optimize recognition accuracy and speed, not streaming.
-- Model files live under `/Users/waykingah/Library/Application Support/TypeWhale Pro/Models/funasr/` and must survive app rebuilds or overwrite installs.
+- Model files live under `$HOME/Library/Application Support/TypeWhale Pro/Models/funasr/` and must survive app rebuilds or overwrite installs.
 - Commercial redistribution rights for FunASR / SenseVoice family models remain unresolved and must not be claimed as closed.
 
 ---

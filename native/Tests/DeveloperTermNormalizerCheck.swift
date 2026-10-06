@@ -129,6 +129,20 @@ struct DeveloperTermNormalizerCheck {
             normalizer.normalize("刷新 onnxruntime 和 mlx 的加载流程", context: context).text,
             equals: "刷新 ONNX Runtime 和 MLX 的加载流程"
         )
+        assert(
+            normalizer.normalize(
+                "GPT 和 chatGTP 不是同一个名称，Codex 和 XCode 也不能混在一起",
+                context: context
+            ).text,
+            equals: "GPT 和 ChatGPT 不是同一个名称，Codex 和 Xcode 也不能混在一起"
+        )
+        assert(
+            normalizer.normalize(
+                "使用千问3 ASR，对照 CommaNet 3 ASR 和 Cover Night ASR",
+                context: context
+            ).text,
+            equals: "使用 Qwen3-ASR，对照 CommaNet 3 ASR 和 Cover Night ASR"
+        )
 
         let storageKey = "developerLexicon.terms.v1"
         let originalData = UserDefaults.standard.data(forKey: storageKey)
@@ -146,6 +160,23 @@ struct DeveloperTermNormalizerCheck {
         assert(
             migratedNormalizer.normalize("把 Jason 输出给接口", context: context).text,
             equals: "把 JSON 输出给接口"
+        )
+        DeveloperLexiconStore.save([
+            DeveloperTerm(
+                canonical: "ChatGPT",
+                aliases: ["chat gpt", "chatgpt", "GPT", "gpt"],
+                category: .tool
+            )
+        ])
+        let migratedChatGPTNormalizer = DeveloperTermNormalizer(
+            termsProvider: { DeveloperLexiconStore.load() }
+        )
+        assert(
+            migratedChatGPTNormalizer.normalize(
+                "GPT 和 chatGTP 不是同一个名称",
+                context: context
+            ).text,
+            equals: "GPT 和 ChatGPT 不是同一个名称"
         )
 
         let secure = normalizer.normalize(

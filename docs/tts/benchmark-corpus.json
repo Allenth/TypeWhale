@@ -1,0 +1,18 @@
+[
+  {
+    "id": "short-zh",
+    "text": "你好，这是 TypeWhale 的本地朗读测试。"
+  },
+  {
+    "id": "mixed-technical",
+    "text": "TypeWhale 会测试 OpenAI、GitHub、JSON 和 Core ML 的中英混合朗读。"
+  },
+  {
+    "id": "numbers-symbols",
+    "text": "今天是 2026 年 7 月 27 日，进度 85%，金额 1,299.50 元，网址是 example.com。"
+  },
+  {
+    "id": "long-zh",
+    "text": "当文字较长时，朗读系统需要保持句子完整、停顿自然，并且能够在用户点击停止后迅速结束生成和播放。下一次重新开始测试时，不应该听到上一轮残留的声音，也不应该留下仍在后台占用内存的模型进程。"
+  }
+]

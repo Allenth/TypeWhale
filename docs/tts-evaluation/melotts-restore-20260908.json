@@ -1,0 +1,161 @@
+{
+  "date": "2026-09-08",
+  "status": "three-round-offline-passed",
+  "network": "denied by macOS sandbox-exec",
+  "python": "3.10.19",
+  "threads": 4,
+  "interopThreads": 1,
+  "limitations": [
+    "Local macOS arm64 machine; performance varies by device and load.",
+    "Protocol ready is not model ready. Cold prepare measured separately.",
+    "Metrics validate generation and PCM; naturalness still requires listening."
+  ],
+  "priorExperiments": {
+    "initialOwnedRuntimeColdSeconds": 43.05096,
+    "defaultThreadsWarmRangeSeconds": [
+      0.421,
+      6.447
+    ],
+    "fourThreadExperimentWarmRangeSeconds": [
+      0.26,
+      2.438
+    ]
+  },
+  "results": [
+    {
+      "phase": "protocol-ready",
+      "seconds": 0.02604933304246515
+    },
+    {
+      "phase": "prepare",
+      "cold": true,
+      "prepareSeconds": 9.36630699998932
+    },
+    {
+      "rssBytes": 3706437632,
+      "text": "你好，我已经准备好了。",
+      "seconds": 0.261143958021421,
+      "wallSeconds": 0.2651539169601165,
+      "audioSeconds": 1.8727664399092971
+    },
+    {
+      "rssBytes": 3846275072,
+      "text": "快速自然的响应，我觉得才是最重要的。",
+      "seconds": 0.41328525001881644,
+      "wallSeconds": 0.4161322920117527,
+      "audioSeconds": 2.9292743764172338
+    },
+    {
+      "rssBytes": 3943268352,
+      "text": "我们可以用 Python 调用 MeloTTS，让 TypeWhale 自然地读出回复。",
+      "seconds": 1.057915207988117,
+      "wallSeconds": 1.0606521659647115,
+      "audioSeconds": 5.312879818594104
+    },
+    {
+      "rssBytes": 4056006656,
+      "text": "今天下午三点开会，预算是二百五十元，完成了百分之八十。",
+      "seconds": 0.7517047910369001,
+      "wallSeconds": 0.7545715000014752,
+      "audioSeconds": 5.127120181405895
+    },
+    {
+      "rssBytes": 4056842240,
+      "text": "你好，我已经准备好了。",
+      "seconds": 0.28588345798198134,
+      "wallSeconds": 0.28888366697356105,
+      "audioSeconds": 1.9656462585034014
+    },
+    {
+      "rssBytes": 4065607680,
+      "text": "这次我们希望找回快速自然的语音体验。文字准备好之后，先自然地说出第一句话，再连贯地读完后面的内容。遇到英文名称、数字和标点，也要完整处理，不能跳过段落。你可以随时停止，或者开始下一次对话。",
+      "seconds": 2.4220306670176797,
+      "wallSeconds": 2.424928250024095,
+      "audioSeconds": 17.006757369614512
+    },
+    {
+      "rssBytes": 4064559104,
+      "text": "你好，我已经准备好了。",
+      "seconds": 0.28629462502431124,
+      "wallSeconds": 0.28920995898079127,
+      "audioSeconds": 1.907596371882086
+    },
+    {
+      "rssBytes": 4073275392,
+      "text": "快速自然的响应，我觉得才是最重要的。",
+      "seconds": 0.4349879579967819,
+      "wallSeconds": 0.43800799996824935,
+      "audioSeconds": 2.987324263038549
+    },
+    {
+      "rssBytes": 4090167296,
+      "text": "我们可以用 Python 调用 MeloTTS，让 TypeWhale 自然地读出回复。",
+      "seconds": 0.9746192080201581,
+      "wallSeconds": 0.9775337919709273,
+      "audioSeconds": 5.243219954648526
+    },
+    {
+      "rssBytes": 4090118144,
+      "text": "今天下午三点开会，预算是二百五十元，完成了百分之八十。",
+      "seconds": 0.7252288750023581,
+      "wallSeconds": 0.7280771249788813,
+      "audioSeconds": 5.196780045351474
+    },
+    {
+      "rssBytes": 4089069568,
+      "text": "你好，我已经准备好了。",
+      "seconds": 0.3118675840087235,
+      "wallSeconds": 0.3147065420052968,
+      "audioSeconds": 1.8843764172335602
+    },
+    {
+      "rssBytes": 4093722624,
+      "text": "这次我们希望找回快速自然的语音体验。文字准备好之后，先自然地说出第一句话，再连贯地读完后面的内容。遇到英文名称、数字和标点，也要完整处理，不能跳过段落。你可以随时停止，或者开始下一次对话。",
+      "seconds": 2.4429586670012213,
+      "wallSeconds": 2.445858708990272,
+      "audioSeconds": 17.11124716553288
+    },
+    {
+      "rssBytes": 4093722624,
+      "text": "你好，我已经准备好了。",
+      "seconds": 0.2863136670202948,
+      "wallSeconds": 0.2892207080149092,
+      "audioSeconds": 1.9888662131519275
+    },
+    {
+      "rssBytes": 4094050304,
+      "text": "快速自然的响应，我觉得才是最重要的。",
+      "seconds": 0.4280577080207877,
+      "wallSeconds": 0.43099662504391745,
+      "audioSeconds": 3.033764172335601
+    },
+    {
+      "rssBytes": 4094066688,
+      "text": "我们可以用 Python 调用 MeloTTS，让 TypeWhale 自然地读出回复。",
+      "seconds": 0.9969871659995988,
+      "wallSeconds": 0.9998660840210505,
+      "audioSeconds": 5.312879818594104
+    },
+    {
+      "rssBytes": 4094771200,
+      "text": "今天下午三点开会，预算是二百五十元，完成了百分之八十。",
+      "seconds": 0.7379549579927698,
+      "wallSeconds": 0.7407790830475278,
+      "audioSeconds": 5.069070294784581
+    },
+    {
+      "rssBytes": 4099538944,
+      "text": "你好，我已经准备好了。",
+      "seconds": 0.2830907499883324,
+      "wallSeconds": 0.2859227500157431,
+      "audioSeconds": 1.9308163265306122
+    },
+    {
+      "rssBytes": 4112957440,
+      "text": "这次我们希望找回快速自然的语音体验。文字准备好之后，先自然地说出第一句话，再连贯地读完后面的内容。遇到英文名称、数字和标点，也要完整处理，不能跳过段落。你可以随时停止，或者开始下一次对话。",
+      "seconds": 2.5189037499949336,
+      "wallSeconds": 2.521788000012748,
+      "audioSeconds": 17.30861678004535
+    }
+  ]
+}

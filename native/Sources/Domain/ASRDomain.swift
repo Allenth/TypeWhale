@@ -38,14 +38,43 @@ enum RecognitionLanguageMode: String, CaseIterable {
 }
 
 enum ASRBackend: String, CaseIterable, Codable {
-    case automatic
     case senseVoice
-    case qwen3ASR
+    case parakeetSherpa
+    case funASRNano
+    case qwen3MLX06B
+    case qwen3MLX17B
 
     static let defaultsKey = "asrBackend"
+    private static let retiredRawValues: Set<String> = [
+        "zipformerSherpa",
+        "qwen3Sherpa",
+        "paraformerContextual",
+        "paraformerZH",
+        "seacoParaformer",
+        "whisperSmallMLX",
+        "whisperTinyMLX",
+        "qwen3ASR",
+    ]
 
     static func load() -> ASRBackend {
-        ASRBackend(rawValue: UserDefaults.standard.string(forKey: defaultsKey) ?? "") ?? .automatic
+        let rawValue = UserDefaults.standard.string(forKey: defaultsKey) ?? ""
+        if let backend = ASRBackend(rawValue: rawValue) {
+            return backend
+        }
+        let migratedBackend: ASRBackend?
+        switch rawValue {
+        case "qwen3ASR06BMLX8Bit": migratedBackend = .qwen3MLX06B
+        case "qwen3ASR17BMLX8Bit": migratedBackend = .qwen3MLX17B
+        default: migratedBackend = nil
+        }
+        if let migratedBackend {
+            UserDefaults.standard.set(migratedBackend.rawValue, forKey: defaultsKey)
+            return migratedBackend
+        }
+        if retiredRawValues.contains(rawValue) || rawValue == "automatic" {
+            UserDefaults.standard.set(ASRBackend.senseVoice.rawValue, forKey: defaultsKey)
+        }
+        return .senseVoice
     }
 
     func save() {
@@ -54,31 +83,54 @@ enum ASRBackend: String, CaseIterable, Codable {
 
     var displayName: String {
         switch self {
-        case .automatic: return "自动"
         case .senseVoice: return "SenseVoice int8"
-        case .qwen3ASR: return "Qwen3-ASR 0.6B"
+        case .parakeetSherpa: return "Parakeet TDT 0.6B v2 · Sherpa int8"
+        case .funASRNano: return "Fun-ASR Nano"
+        case .qwen3MLX06B: return "Qwen3-ASR 0.6B · MLX 8-bit"
+        case .qwen3MLX17B: return "Qwen3-ASR 1.7B · MLX 8-bit"
         }
     }
 
     var menuTag: Int {
         switch self {
-        case .automatic: return 0
-        case .senseVoice: return 1
-        case .qwen3ASR: return 2
+        case .senseVoice: return 0
+        case .parakeetSherpa: return 1
+        case .funASRNano: return 2
+        case .qwen3MLX06B: return 3
+        case .qwen3MLX17B: return 4
+        }
+    }
+
+    var candidateID: ASRCandidateID {
+        switch self {
+        case .senseVoice: return .senseVoiceInt8
+        case .parakeetSherpa: return .parakeetTDT06B
+        case .funASRNano: return .funASRNano2512
+        case .qwen3MLX06B: return .qwen3MLX06B
+        case .qwen3MLX17B: return .qwen3MLX17B
         }
     }
 
     var resolvedBackend: ASRBackend {
+        self
+    }
+
+    var supportsFunASRSidecarWarmup: Bool {
         switch self {
-        case .automatic:
-            return Qwen3ASRModelManifest.preferredModelDirectory == nil ? .senseVoice : .qwen3ASR
-        case .senseVoice, .qwen3ASR:
-            return self
+        case .funASRNano: return true
+        case .senseVoice, .parakeetSherpa, .qwen3MLX06B, .qwen3MLX17B: return false
         }
     }
 
     static func fromMenuTag(_ tag: Int) -> ASRBackend {
-        Self.allCases.first { $0.menuTag == tag } ?? .automatic
+        Self.allCases.first { $0.menuTag == tag } ?? .senseVoice
+    }
+
+    static func fromMenuValue(_ value: String?) -> ASRBackend {
+        guard let value, let backend = ASRBackend(rawValue: value) else {
+            return .senseVoice
+        }
+        return backend
     }
 }
 
@@ -99,6 +151,9 @@ struct RecordingTask {
     let purpose: SpeechInputPurpose
     let duration: TimeInterval
     let finishRequestedAt: Date
+    /// 从 SpeechSession 继承的本次录音收尾策略，禁止在停止后重新读取 UI。
+    let reRecognizeWholeRecordingAfterStop: Bool
+    var realtimePreviewTextAtFinish: String = ""
 }
 
 struct RecentTranscription: Codable, Equatable {

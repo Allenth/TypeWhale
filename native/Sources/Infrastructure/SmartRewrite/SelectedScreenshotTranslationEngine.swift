@@ -2,22 +2,18 @@ import Foundation
 
 final class SelectedScreenshotTranslationEngine: ScreenshotTranslationEngine {
     private let deepSeek: ScreenshotTranslationEngine
-    private let ollama: (SmartAIModel) -> ScreenshotTranslationEngine
+    private let managed: (ManagedLLMModelID) -> ScreenshotTranslationEngine
     private let modelProvider: () -> SmartAIModel
 
     init(
         deepSeek: ScreenshotTranslationEngine = DeepSeekRewriteEngine(),
-        ollama: @escaping (SmartAIModel) -> ScreenshotTranslationEngine = {
-            OllamaRewriteEngine(
-                model: $0,
-                serverRecovery: PassiveOllamaServerRecovery(),
-                requestProfile: .screenshotTranslation
-            )
+        managed: @escaping (ManagedLLMModelID) -> ScreenshotTranslationEngine = {
+            ManagedLLMRuntimeService.shared.screenshotEngine(for: $0)
         },
         modelProvider: @escaping () -> SmartAIModel = { SmartAIModelStore.load() }
     ) {
         self.deepSeek = deepSeek
-        self.ollama = ollama
+        self.managed = managed
         self.modelProvider = modelProvider
     }
 
@@ -39,8 +35,8 @@ final class SelectedScreenshotTranslationEngine: ScreenshotTranslationEngine {
 
     private func engine(for model: SmartAIModel) -> ScreenshotTranslationEngine {
         switch model {
-        case .ollamaQwen35B:
-            return ollama(model)
+        case .typeWhaleQwen3_4BInstruct:
+            return managed(.qwen3_4BInstruct2507_4bit)
         case .deepSeekV4Flash:
             return deepSeek
         }

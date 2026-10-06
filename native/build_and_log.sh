@@ -1,17 +1,19 @@
 #!/bin/zsh
-# TypeWhale Pro 固定构建动作：构建 → 覆盖安装本地 → 打开 → 写构建日志。
+# TypeWhale Pro 固定构建动作：编译当前源码 → 覆盖安装 → 打开 → 写构建日志。
 #
 # 用法：
-#   ./native/build_and_log.sh                # 源码有变更才构建；默认只递增 build
-#   ./native/build_and_log.sh --full-version # 强制递增短版本号 + build
+#   ./native/build_and_log.sh                # 编译当前源码，短版本不变，build +1
+#   ./native/build_and_log.sh --install-only # 不编译；仅覆盖安装已有 App 包
+#   ./native/build_and_log.sh --full-version # 递增短版本号 + build，并重新编译
 #   ./native/build_and_log.sh --package      # 完整版本构建并立即打大包，忽略变更检测
-#   ./native/build_and_log.sh --auto     # Stop hook 兜底用：无 native 源码变更则静默跳过
+#   ./native/build_and_log.sh --auto         # Stop hook 兜底用：无 native 源码变更则静默跳过
 #
 # 设计：
 # - 变更检测：对 native/ 下的 .swift/.c/.h 内容做哈希，与上次成功构建的哈希比对；
-#   --auto 模式下无变更则直接跳过，避免每轮对话结束都空跑一次构建。
-# - 普通代码验证构建只递增 build，保持短版本号不变。
-# - 每累计 N 次（默认 3）本地构建，或显式 --full-version/--package，执行完整版本构建。
+#   --auto 模式下无变更则直接跳过，避免每轮对话结束都空跑一次覆盖安装。
+# - 普通 build 编译当前源码并覆盖安装，短版本号不变，build 号递增。
+# - 只有显式 --full-version/--package 才递增短版本号。
+#   如需临时恢复累计触发，可设置 TYPEWHALE_FULL_VERSION_EVERY 为正整数。
 # - 打大包只在显式 --package 时执行；如需恢复自动打包，可设置 TYPEWHALE_PACKAGE_EVERY。
 set -euo pipefail
 
@@ -22,15 +24,17 @@ PACKAGE_SCRIPT="$ROOT/native/package_dmg.sh"
 BUILD_LOG="$ROOT/docs/构建日志.md"
 STATE_DIR="$ROOT/.runtime"
 STATE_FILE="$STATE_DIR/build_state"
-FULL_VERSION_EVERY="${TYPEWHALE_FULL_VERSION_EVERY:-3}"
+FULL_VERSION_EVERY="${TYPEWHALE_FULL_VERSION_EVERY:-0}"
 PACKAGE_EVERY="${TYPEWHALE_PACKAGE_EVERY:-0}"
 
 mode_auto=0
 force_package=0
 force_full_version=0
+force_install_only=0
 for arg in "$@"; do
   case "$arg" in
     --auto) mode_auto=1 ;;
+    --install-only) force_install_only=1 ;;
     --full-version) force_full_version=1 ;;
     --package) force_package=1; force_full_version=1 ;;
     *) echo "Unknown argument: $arg" >&2; exit 2 ;;
@@ -38,6 +42,10 @@ for arg in "$@"; do
 done
 [[ "${TYPEWHALE_FORCE_PACKAGE:-0}" == "1" ]] && force_package=1
 [[ "$force_package" == "1" ]] && force_full_version=1
+if [[ "$force_install_only" == "1" && "$force_full_version" == "1" ]]; then
+  echo "--install-only cannot be combined with --full-version or --package" >&2
+  exit 2
+fi
 
 mkdir -p "$STATE_DIR"
 
@@ -58,7 +66,7 @@ if [[ -f "$STATE_FILE" ]]; then
   [[ "$build_count" =~ ^[0-9]+$ ]] || build_count=0
 fi
 
-# Stop hook 兜底：无源码变更且未强制打包 → 静默跳过，不构建。
+# Stop hook 兜底：无源码变更且未强制打包 → 静默跳过，不覆盖安装/不构建。
 if [[ "$mode_auto" == "1" && "$force_package" == "0" && "$current_hash" == "$last_hash" ]]; then
   exit 0
 fi
@@ -70,15 +78,17 @@ if [[ -d "$LOCK_DIR" ]] && [[ -z "$(find "$LOCK_DIR" -prune -mmin -30 2>/dev/nul
   rmdir "$LOCK_DIR" 2>/dev/null || true
 fi
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-  echo "==> 已有构建在进行中，跳过本次（由正在运行的构建产出最新安装版）。" >&2
+  echo "==> 已有构建/安装在进行中，跳过本次（由正在运行的动作产出最新安装版）。" >&2
   exit 0
 fi
 trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
 
-echo "==> TypeWhale Pro build_and_log: 构建并覆盖安装本地…"
+echo "==> TypeWhale Pro build_and_log: 编译当前源码并覆盖安装；完整版本更新才递增版本…"
 next_build_count=$((build_count + 1))
 release_mode="--build-only"
-if [[ "$force_full_version" == "1" ]]; then
+if [[ "$force_install_only" == "1" ]]; then
+  release_mode="--install-only"
+elif [[ "$force_full_version" == "1" ]]; then
   release_mode="--full-version"
 elif [[ "$FULL_VERSION_EVERY" =~ ^[1-9][0-9]*$ ]] && (( next_build_count % FULL_VERSION_EVERY == 0 )); then
   release_mode="--full-version"
@@ -106,8 +116,10 @@ fi
 
 if [[ "$release_mode" == "--full-version" ]]; then
   action="完整版本构建+覆盖安装+打开"
+elif [[ "$release_mode" == "--install-only" ]]; then
+  action="覆盖安装+打开（未编译）"
 else
-  action="build-only覆盖安装+打开"
+  action="build-only构建+覆盖安装+打开"
 fi
 dmg_note=""
 if [[ "$do_package" == "1" ]]; then

@@ -11,6 +11,7 @@ struct BacklogSaveContext {
 enum BacklogWriter {
     private static let ideaPillDirectoryName = "闪念胶囊"
     private static let knowledgeArchiveDirectoryName = "归档（未处理）"
+    private static let knowledgeArchiveAttachmentDirectoryName = "附件"
 
     static func shouldSave(rawText: String) -> Bool {
         let text = normalized(rawText)
@@ -31,9 +32,7 @@ enum BacklogWriter {
         rootDirectory: URL = BacklogDirectoryStore.directory,
         now: Date = Date()
     ) throws -> URL {
-        let directoryURL = BacklogDirectoryStore.ensureDirectory(
-            rootDirectory.appendingPathComponent(ideaPillDirectoryName, isDirectory: true)
-        )
+        let directoryURL = ideaPillDayDirectory(in: rootDirectory, now: now)
         let title = titleText(from: context.finalText, fallback: context.rawText)
         let fileURL = uniqueIdeaPillFileURL(in: directoryURL, title: title, now: now)
         let body = ideaPillMarkdown(context: context, title: title, now: now)
@@ -44,12 +43,22 @@ enum BacklogWriter {
     static func saveKnowledgeArchive(
         _ context: BacklogSaveContext,
         rootDirectory: URL = BacklogDirectoryStore.defaultDirectory,
-        now: Date = Date()
+        now: Date = Date(),
+        screenshotPNGData: Data? = nil
     ) throws -> URL {
         let directoryURL = knowledgeArchiveDayDirectory(in: rootDirectory, now: now)
         let title = titleText(from: context.finalText, fallback: context.rawText)
         let fileURL = uniqueKnowledgeArchiveFileURL(in: directoryURL, title: title, now: now)
-        let body = knowledgeArchiveMarkdown(context: context, title: title, now: now)
+        let screenshotFileName = try saveKnowledgeArchiveScreenshotIfNeeded(
+            screenshotPNGData,
+            nextTo: fileURL
+        )
+        let body = knowledgeArchiveMarkdown(
+            context: context,
+            title: title,
+            now: now,
+            screenshotFileName: screenshotFileName
+        )
         try body.write(to: fileURL, atomically: true, encoding: .utf8)
         return fileURL
     }
@@ -112,11 +121,24 @@ enum BacklogWriter {
         """
     }
 
-    private static func knowledgeArchiveMarkdown(context: BacklogSaveContext, title: String, now: Date) -> String {
+    private static func knowledgeArchiveMarkdown(
+        context: BacklogSaveContext,
+        title: String,
+        now: Date,
+        screenshotFileName: String?
+    ) -> String {
         let createdAt = isoFormatter.string(from: now)
         let cleanFinal = cleanedContent(context.finalText)
         let cleanRaw = cleanedContent(context.rawText)
         let target = context.targetAppName ?? "知识点"
+        let screenshotSection = screenshotFileName.map {
+            """
+
+            ## 截图
+
+            ![截图](\($0))
+            """
+        } ?? ""
         return """
         ---
         type: knowledge_archive
@@ -136,8 +158,27 @@ enum BacklogWriter {
         ## OCR 原文
 
         \(cleanRaw)
+        \(screenshotSection)
 
         """
+    }
+
+    private static func saveKnowledgeArchiveScreenshotIfNeeded(
+        _ screenshotPNGData: Data?,
+        nextTo fileURL: URL
+    ) throws -> String? {
+        guard let screenshotPNGData else { return nil }
+        let attachmentDirectoryURL = BacklogDirectoryStore.ensureDirectory(
+            fileURL
+                .deletingLastPathComponent()
+                .appendingPathComponent(knowledgeArchiveAttachmentDirectoryName, isDirectory: true)
+        )
+        let screenshotURL = attachmentDirectoryURL
+            .appendingPathComponent(fileURL.deletingPathExtension().lastPathComponent)
+            .appendingPathExtension("png")
+        let relativePath = "\(knowledgeArchiveAttachmentDirectoryName)/\(screenshotURL.lastPathComponent)"
+        try screenshotPNGData.write(to: screenshotURL, options: .atomic)
+        return relativePath
     }
 
     private static func titleText(from finalText: String, fallback rawText: String) -> String {
@@ -179,6 +220,15 @@ enum BacklogWriter {
         return BacklogDirectoryStore.ensureDirectory(
             rootDirectory
                 .appendingPathComponent(knowledgeArchiveDirectoryName, isDirectory: true)
+                .appendingPathComponent(day, isDirectory: true)
+        )
+    }
+
+    private static func ideaPillDayDirectory(in rootDirectory: URL, now: Date) -> URL {
+        let day = knowledgeArchiveDayFormatter.string(from: now)
+        return BacklogDirectoryStore.ensureDirectory(
+            rootDirectory
+                .appendingPathComponent(ideaPillDirectoryName, isDirectory: true)
                 .appendingPathComponent(day, isDirectory: true)
         )
     }

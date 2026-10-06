@@ -33,6 +33,24 @@ private final class CapturingRewriteEngine: SmartRewriteEngine {
     }
 }
 
+private final class FixedRewriteEngine: SmartRewriteEngine {
+    let displayName = "Fixed Test Engine"
+    private let output: String
+
+    init(output: String) {
+        self.output = output
+    }
+
+    func rewrite(
+        rawText: String,
+        mode: RewriteMode,
+        context: SmartInputContext,
+        preference: SmartRewritePreference
+    ) async throws -> SmartRewriteEngineOutput {
+        SmartRewriteEngineOutput(text: output, usage: nil)
+    }
+}
+
 @main
 struct SmartInputCheck {
     static func main() async {
@@ -61,11 +79,18 @@ struct SmartInputCheck {
             "Expected default lexicon to include Ollama, got \(termNames)"
         )
         precondition(!SmartRewriteAutoRuleStore.selectableModes.contains(.note))
-        precondition(!SmartRewriteAutoRuleStore.selectableModes.contains(.chat))
+        precondition(SmartRewriteAutoRuleStore.selectableModes.contains(.chat))
+        precondition(SmartRewritePreference.allCases.contains(.chat))
+        precondition(!SmartRewritePreference.allCases.contains(.instantSummary))
+        precondition(SmartRewritePreference.instantSummary.displayName == "即时归纳")
+        precondition(SmartRewritePreference.instantSummary.manualMode == .note)
+        precondition(RewriteMode.note.displayName == "即时归纳")
+        precondition(SmartRewritePreference.chat.manualMode == .chat)
         precondition(SmartRewriteAutoRuleStore.selectableModes.contains(.developerStatement))
         precondition(SmartRewriteAutoRuleStore.selectableModes.contains(.codeCommit))
-        precondition(!SmartRewriteAutoRuleStore.defaultConfiguration.rules.contains { $0.mode == .note || $0.mode == .chat })
-        precondition(!SmartRewriteAutoRuleStore.defaultConfiguration.rules.contains { $0.id == "notes" || $0.id == "chat" })
+        precondition(!SmartRewriteAutoRuleStore.defaultConfiguration.rules.contains { $0.mode == .note })
+        precondition(SmartRewriteAutoRuleStore.defaultConfiguration.rules.contains { $0.id == "social-chat" && $0.mode == .chat })
+        precondition(!SmartRewriteAutoRuleStore.defaultConfiguration.rules.contains { $0.id == "notes" })
 
         let noopRouter = SmartInputRouter(engine: NoopRewriteEngine())
 
@@ -120,6 +145,27 @@ struct SmartInputCheck {
         precondition(summaryResult.mode == .exhaustiveSummary)
         precondition(summaryResult.text == "今天讲了产品方向、风险和下一步计划")
 
+        let shortSummaryEngine = CapturingRewriteEngine()
+        let shortSummaryRouter = SmartInputRouter(engine: shortSummaryEngine)
+        let shortSummaryResult = await shortSummaryRouter.rewrite(
+            rawText: "你要确保他成功。",
+            preference: .exhaustiveSummary,
+            context: codex
+        )
+        precondition(shortSummaryResult.mode == .exhaustiveSummary)
+        precondition(shortSummaryResult.text == "你要确保他成功。")
+        precondition(!shortSummaryResult.didFallback)
+        precondition(shortSummaryResult.modelName == nil)
+        precondition(shortSummaryEngine.lastRawText == nil)
+
+        let instantSummaryResult = await noopRouter.rewrite(
+            rawText: "  刚想到一个产品入口调整  ",
+            preference: .instantSummary,
+            context: codex
+        )
+        precondition(instantSummaryResult.mode == .note)
+        precondition(instantSummaryResult.text == "刚想到一个产品入口调整")
+
         let automaticSummaryResult = await noopRouter.rewrite(
             rawText: "  帮我总结一下今天会议的要点和行动项  ",
             preference: .automatic,
@@ -141,7 +187,15 @@ struct SmartInputCheck {
             preference: .automatic,
             context: SmartInputContext(targetAppName: "WeChat", targetBundleIdentifier: "com.tencent.xinWeChat")
         )
-        precondition(chatResult.mode == .polish)
+        precondition(chatResult.mode == .chat)
+        precondition(chatResult.text == "晚点发给你")
+
+        let manualChatResult = await noopRouter.rewrite(
+            rawText: "  晚点发给你  ",
+            preference: .chat,
+            context: codex
+        )
+        precondition(manualChatResult.mode == .chat)
         precondition(chatResult.text == "晚点发给你")
 
         let secureResult = await noopRouter.rewrite(
@@ -164,6 +218,165 @@ struct SmartInputCheck {
         )
         precondition(timeoutResult.didFallback)
         precondition(timeoutResult.text == "需要回退")
+
+        let modelOutput = "我的表达内容没有被准确理解和妥善处理，沟通中还存在曲解。"
+        let directDeliveryRouter = SmartInputRouter(
+            engine: FixedRewriteEngine(output: modelOutput)
+        )
+        let directDeliveryResult = await directDeliveryRouter.rewrite(
+            rawText: "你说的这个方案让架构师过一遍。",
+            preference: .developerRequirement,
+            context: codex
+        )
+        precondition(!directDeliveryResult.didFallback)
+        precondition(directDeliveryResult.text == String(modelOutput.dropLast()))
+
+        let developerPeriodRouter = SmartInputRouter(
+            engine: FixedRewriteEngine(
+                output: "倒计时条与胶囊横向、纵向中心完全重合。"
+            )
+        )
+        let developerPeriodResult = await developerPeriodRouter.rewrite(
+            rawText: "倒计时条的位置要跟胶囊中心对齐",
+            preference: .developerRequirement,
+            context: codex
+        )
+        precondition(
+            developerPeriodResult.text
+                == "倒计时条与胶囊横向、纵向中心完全重合"
+        )
+
+        let englishPeriodRouter = SmartInputRouter(
+            engine: FixedRewriteEngine(output: "Keep existing behavior.")
+        )
+        let englishPeriodResult = await englishPeriodRouter.rewrite(
+            rawText: "Keep existing behavior",
+            preference: .developerRequirement,
+            context: codex
+        )
+        precondition(englishPeriodResult.text == "Keep existing behavior")
+
+        let multiSentencePeriodRouter = SmartInputRouter(
+            engine: FixedRewriteEngine(
+                output: "第一项已经完成。第二项继续处理。"
+            )
+        )
+        let multiSentencePeriodResult =
+            await multiSentencePeriodRouter.rewrite(
+                rawText: "第一项已经完成，第二项继续处理",
+                preference: .developerRequirement,
+                context: codex
+            )
+        precondition(
+            multiSentencePeriodResult.text
+                == "第一项已经完成。第二项继续处理"
+        )
+
+        let questionRouter = SmartInputRouter(
+            engine: FixedRewriteEngine(output: "这个问题为什么会发生？")
+        )
+        let questionResult = await questionRouter.rewrite(
+            rawText: "这个问题为什么会发生",
+            preference: .developerRequirement,
+            context: codex
+        )
+        precondition(questionResult.text == "这个问题为什么会发生？")
+
+        let exclamationRouter = SmartInputRouter(
+            engine: FixedRewriteEngine(output: "必须保留现有逻辑！")
+        )
+        let exclamationResult = await exclamationRouter.rewrite(
+            rawText: "必须保留现有逻辑",
+            preference: .developerRequirement,
+            context: codex
+        )
+        precondition(exclamationResult.text == "必须保留现有逻辑！")
+
+        let polishPeriodRouter = SmartInputRouter(
+            engine: FixedRewriteEngine(output: "普通润色仍保留句号。")
+        )
+        let polishPeriodResult = await polishPeriodRouter.rewrite(
+            rawText: "普通润色仍保留句号",
+            preference: .polish,
+            context: codex
+        )
+        precondition(polishPeriodResult.text == "普通润色仍保留句号")
+
+        let ellipsisRouter = SmartInputRouter(
+            engine: FixedRewriteEngine(output: "这个术语暂时不确定...")
+        )
+        let ellipsisResult = await ellipsisRouter.rewrite(
+            rawText: "这个术语暂时不确定",
+            preference: .developerRequirement,
+            context: codex
+        )
+        precondition(ellipsisResult.text == "这个术语暂时不确定...")
+
+        let equivalentConstraintOutput = "原文只说响应速度，不得改为影响速度。"
+        let equivalentConstraintRouter = SmartInputRouter(
+            engine: FixedRewriteEngine(output: equivalentConstraintOutput)
+        )
+        let equivalentConstraintResult = await equivalentConstraintRouter.rewrite(
+            rawText: "原文只说响应速度，就不能改成影响速度。",
+            preference: .exhaustiveSummary,
+            context: codex
+        )
+        precondition(!equivalentConstraintResult.didFallback)
+        precondition(
+            equivalentConstraintResult.text
+                == String(equivalentConstraintOutput.dropLast())
+        )
+
+        for mode in SmartRewritePromptStore.editableModes {
+            precondition(
+                SmartRewriteOutputSanitizer.finalize(
+                    "整理结果。",
+                    mode: mode
+                ) == "整理结果"
+            )
+            precondition(
+                SmartRewriteOutputSanitizer.finalize(
+                    "Result.",
+                    mode: mode
+                ) == "Result"
+            )
+            precondition(
+                SmartRewriteOutputSanitizer.finalize(
+                    "为什么？",
+                    mode: mode
+                ) == "为什么？"
+            )
+            precondition(
+                SmartRewriteOutputSanitizer.finalize(
+                    "必须保留！",
+                    mode: mode
+                ) == "必须保留！"
+            )
+            precondition(
+                SmartRewriteOutputSanitizer.finalize(
+                    "暂不确定...",
+                    mode: mode
+                ) == "暂不确定..."
+            )
+            precondition(
+                SmartRewriteOutputSanitizer.finalize(
+                    "第一句。第二句。",
+                    mode: mode
+                ) == "第一句。第二句"
+            )
+        }
+        precondition(
+            SmartRewriteOutputSanitizer.finalize(
+                "原文。",
+                mode: .raw
+            ) == "原文。"
+        )
+        precondition(
+            SmartRewriteOutputSanitizer.finalize(
+                "命令。",
+                mode: .command
+            ) == "命令。"
+        )
 
         let captureEngine = CapturingRewriteEngine()
         let captureRouter = SmartInputRouter(engine: captureEngine)
@@ -200,6 +413,56 @@ struct SmartInputCheck {
             "Expected normalized result, got \(fuzzyResult.text)"
         )
 
+        let restartCaptureEngine = CapturingRewriteEngine()
+        let restartRouter = SmartInputRouter(engine: restartCaptureEngine)
+        _ = await restartRouter.rewrite(
+            rawText: "倒计时条不显不显示取消按钮，点击整条后取消",
+            preference: .developerRequirement,
+            context: codex
+        )
+        precondition(
+            restartCaptureEngine.lastRawText
+                == "倒计时条不显示取消按钮，点击整条后取消"
+        )
+
+        let contrastCaptureEngine = CapturingRewriteEngine()
+        let contrastRouter = SmartInputRouter(engine: contrastCaptureEngine)
+        _ = await contrastRouter.rewrite(
+            rawText: "不要因为他不听不信就改变原意",
+            preference: .developerRequirement,
+            context: codex
+        )
+        precondition(
+            contrastCaptureEngine.lastRawText
+                == "不要因为他不听不信就改变原意"
+        )
+
+        let parallelCaptureEngine = CapturingRewriteEngine()
+        let parallelRouter = SmartInputRouter(engine: parallelCaptureEngine)
+        _ = await parallelRouter.rewrite(
+            rawText: "分贝颜色恢复以前，绿色镜框也恢复成以前的颜色",
+            preference: .developerRequirement,
+            context: codex
+        )
+        precondition(
+            parallelCaptureEngine.lastRawText
+                == "分贝颜色恢复以前。绿色镜框也恢复成以前的颜色"
+        )
+
+        let ordinaryCommaCaptureEngine = CapturingRewriteEngine()
+        let ordinaryCommaRouter = SmartInputRouter(
+            engine: ordinaryCommaCaptureEngine
+        )
+        _ = await ordinaryCommaRouter.rewrite(
+            rawText: "取消按钮去掉，但提前按回车的逻辑继续保留",
+            preference: .developerRequirement,
+            context: codex
+        )
+        precondition(
+            ordinaryCommaCaptureEngine.lastRawText
+                == "取消按钮去掉，但提前按回车的逻辑继续保留"
+        )
+
         let legacyJSON = """
         {
           "rules": [
@@ -232,10 +495,12 @@ struct SmartInputCheck {
         let migrated = SmartRewriteAutoRuleStore.load()
         precondition(!migrated.rules.contains { $0.id == "notes" || $0.id == "chat" })
         let legacyRule = migrated.rules.first { $0.id == "legacy-custom" }
-        precondition(legacyRule?.mode == .polish)
+        precondition(legacyRule?.mode == .chat)
         precondition(legacyRule?.matchTarget == true)
         precondition(legacyRule?.matchContent == false)
-        precondition(migrated.fallbackMode == .polish)
+        precondition(migrated.appModesByBundleID.isEmpty)
+        precondition(migrated.fallbackMode == .chat)
         precondition(migrated.rules.contains { $0.id == "summary-intent" && $0.matchContent && !$0.matchTarget })
+        precondition(migrated.rules.contains { $0.id == "social-chat" && $0.mode == .chat })
     }
 }

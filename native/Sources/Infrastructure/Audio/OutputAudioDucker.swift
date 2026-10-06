@@ -2,39 +2,99 @@ import CoreAudio
 import Foundation
 
 final class OutputAudioDucker {
-    private struct VolumeSnapshot {
+    struct VolumeControl: Hashable {
         let deviceID: AudioDeviceID
         let element: AudioObjectPropertyElement
-        let originalVolume: Float32
-        let duckedVolume: Float32
     }
 
-    private static let duckedVolume: Float32 = 0.05
+    private final class VolumeSnapshot {
+        let control: VolumeControl
+        let originalVolume: Float32
+        let duckedVolume: Float32
+        var lastAppliedVolume: Float32
+
+        init(control: VolumeControl, originalVolume: Float32, duckedVolume: Float32) {
+            self.control = control
+            self.originalVolume = originalVolume
+            self.duckedVolume = duckedVolume
+            lastAppliedVolume = duckedVolume
+        }
+    }
+
+    private static let duckedVolume: Float32 = 0.0
     private static let restoreTolerance: Float32 = 0.03
     private static let restoreDelay: TimeInterval = 1.0
     private static let restoreRampDuration: TimeInterval = 0.5
     private static let restoreRampSteps = 8
+    private let controls: () -> [VolumeControl]
+    private let readVolume: (VolumeControl) -> Float32?
+    private let writeVolume: (Float32, VolumeControl) -> Void
+    private let schedule: (TimeInterval, DispatchWorkItem) -> Void
     private var snapshots: [VolumeSnapshot] = []
     private var restoreWorkItems: [DispatchWorkItem] = []
+    private var restoreGeneration: UInt = 0
+
+    convenience init() {
+        self.init(
+            controls: {
+                guard let deviceID = OutputAudioDucker.defaultOutputDeviceID() else { return [] }
+                return OutputAudioDucker.writableVolumeControls(for: deviceID).map {
+                    VolumeControl(deviceID: deviceID, element: $0)
+                }
+            },
+            readVolume: { control in
+                OutputAudioDucker.volume(deviceID: control.deviceID, element: control.element)
+            },
+            writeVolume: { volume, control in
+                OutputAudioDucker.setVolume(volume, deviceID: control.deviceID, element: control.element)
+            },
+            schedule: { delay, workItem in
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+            }
+        )
+    }
+
+    init(
+        controls: @escaping () -> [VolumeControl],
+        readVolume: @escaping (VolumeControl) -> Float32?,
+        writeVolume: @escaping (Float32, VolumeControl) -> Void,
+        schedule: @escaping (TimeInterval, DispatchWorkItem) -> Void
+    ) {
+        self.controls = controls
+        self.readVolume = readVolume
+        self.writeVolume = writeVolume
+        self.schedule = schedule
+    }
 
     var isDucking: Bool {
         !snapshots.isEmpty
     }
 
     func duckIfNeeded(enabled: Bool) {
+        guard enabled else { return }
         cancelPendingRestore()
-        guard enabled, snapshots.isEmpty, let deviceID = Self.defaultOutputDeviceID() else { return }
-        let controls = Self.writableVolumeControls(for: deviceID)
-        guard !controls.isEmpty else { return }
+        let availableControls = controls()
+        guard !availableControls.isEmpty || !snapshots.isEmpty else { return }
 
         var captured: [VolumeSnapshot] = []
-        for element in controls {
-            guard let volume = Self.volume(deviceID: deviceID, element: element) else { continue }
+        var retainedControls = Set<VolumeControl>()
+        for snapshot in snapshots {
+            guard let currentVolume = readVolume(snapshot.control),
+                  abs(currentVolume - snapshot.lastAppliedVolume) <= Self.restoreTolerance else {
+                continue
+            }
+            writeVolume(snapshot.duckedVolume, snapshot.control)
+            snapshot.lastAppliedVolume = snapshot.duckedVolume
+            captured.append(snapshot)
+            retainedControls.insert(snapshot.control)
+        }
+
+        for control in availableControls where !retainedControls.contains(control) {
+            guard let volume = readVolume(control) else { continue }
             let duckedVolume = min(volume, Self.duckedVolume)
-            Self.setVolume(duckedVolume, deviceID: deviceID, element: element)
+            writeVolume(duckedVolume, control)
             captured.append(VolumeSnapshot(
-                deviceID: deviceID,
-                element: element,
+                control: control,
                 originalVolume: volume,
                 duckedVolume: duckedVolume
             ))
@@ -43,32 +103,34 @@ final class OutputAudioDucker {
     }
 
     func restore() {
-        let captured = snapshots
-        snapshots = []
         cancelPendingRestore()
-        guard !captured.isEmpty else { return }
+        guard !snapshots.isEmpty else { return }
+        let generation = restoreGeneration
 
         let startWorkItem = DispatchWorkItem { [weak self] in
-            self?.startRampRestore(captured)
+            self?.startRampRestore(generation: generation)
         }
         restoreWorkItems.append(startWorkItem)
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.restoreDelay, execute: startWorkItem)
+        schedule(Self.restoreDelay, startWorkItem)
     }
 
-    private func startRampRestore(_ captured: [VolumeSnapshot]) {
+    private func startRampRestore(generation: UInt) {
+        guard generation == restoreGeneration else { return }
         restoreWorkItems.removeAll { $0.isCancelled }
-        for snapshot in captured {
-            guard let currentVolume = Self.volume(deviceID: snapshot.deviceID, element: snapshot.element),
-                  abs(currentVolume - snapshot.duckedVolume) <= Self.restoreTolerance else {
+        for snapshot in snapshots {
+            guard let currentVolume = readVolume(snapshot.control),
+                  abs(currentVolume - snapshot.lastAppliedVolume) <= Self.restoreTolerance else {
+                release(snapshot)
                 continue
             }
-            scheduleRampRestore(snapshot: snapshot, from: currentVolume)
+            scheduleRampRestore(snapshot: snapshot, from: currentVolume, generation: generation)
         }
     }
 
-    private func scheduleRampRestore(snapshot: VolumeSnapshot, from startVolume: Float32) {
+    private func scheduleRampRestore(snapshot: VolumeSnapshot, from startVolume: Float32, generation: UInt) {
         guard Self.restoreRampSteps > 0 else {
-            Self.setVolume(snapshot.originalVolume, deviceID: snapshot.deviceID, element: snapshot.element)
+            writeVolume(snapshot.originalVolume, snapshot.control)
+            release(snapshot)
             return
         }
         for step in 1...Self.restoreRampSteps {
@@ -76,26 +138,42 @@ final class OutputAudioDucker {
             let targetVolume = startVolume + (snapshot.originalVolume - startVolume) * progress
             let delay = Self.restoreRampDuration * TimeInterval(step) / TimeInterval(Self.restoreRampSteps)
             let workItem = DispatchWorkItem { [weak self] in
-                guard self != nil,
-                      let currentVolume = Self.volume(deviceID: snapshot.deviceID, element: snapshot.element),
-                      abs(currentVolume - startVolume) <= Self.restoreTolerance || step > 1 else {
+                guard let self,
+                      generation == self.restoreGeneration,
+                      self.owns(snapshot),
+                      let currentVolume = self.readVolume(snapshot.control),
+                      abs(currentVolume - snapshot.lastAppliedVolume) <= Self.restoreTolerance else {
+                    if let self, generation == self.restoreGeneration, self.owns(snapshot) {
+                        self.release(snapshot)
+                    }
                     return
                 }
-                if step > 1, let currentVolume = Self.volume(deviceID: snapshot.deviceID, element: snapshot.element) {
-                    let previousProgress = Float32(step - 1) / Float32(Self.restoreRampSteps)
-                    let expectedPrevious = startVolume + (snapshot.originalVolume - startVolume) * previousProgress
-                    guard abs(currentVolume - expectedPrevious) <= Self.restoreTolerance else { return }
+                self.writeVolume(targetVolume, snapshot.control)
+                snapshot.lastAppliedVolume = targetVolume
+                if step == Self.restoreRampSteps {
+                    self.release(snapshot)
                 }
-                Self.setVolume(targetVolume, deviceID: snapshot.deviceID, element: snapshot.element)
             }
             restoreWorkItems.append(workItem)
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+            schedule(delay, workItem)
         }
     }
 
     private func cancelPendingRestore() {
+        restoreGeneration &+= 1
         restoreWorkItems.forEach { $0.cancel() }
         restoreWorkItems.removeAll()
+    }
+
+    private func owns(_ snapshot: VolumeSnapshot) -> Bool {
+        snapshots.contains { $0 === snapshot }
+    }
+
+    private func release(_ snapshot: VolumeSnapshot) {
+        snapshots.removeAll { $0 === snapshot }
+        if snapshots.isEmpty {
+            restoreWorkItems.removeAll()
+        }
     }
 
     private static func defaultOutputDeviceID() -> AudioDeviceID? {

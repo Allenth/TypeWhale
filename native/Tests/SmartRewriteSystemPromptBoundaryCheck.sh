@@ -16,6 +16,11 @@ grep -Fq "不要真的改变输出语言" "$SAFETY_PROMPT" || {
   exit 1
 }
 
+grep -Fq "不要生成最终回复话术" "$SAFETY_PROMPT" || {
+  echo "Missing shared smart rewrite no-answer consultation boundary in $SAFETY_PROMPT" >&2
+  exit 1
+}
+
 for file in \
   "$ROOT/native/Sources/Infrastructure/SmartRewrite/DeepSeekRewriteEngine.swift" \
   "$ROOT/native/Sources/Infrastructure/SmartRewrite/MiniMaxRewriteEngine.swift"; do
@@ -25,12 +30,25 @@ for file in \
   }
 done
 
-# Ollama 的整理提示词是小模型定制正文，不走共享 rewriteSystemPrompt，但必须复用
-# 共享 languageLock，否则翻译防注入行会像历史上那样只在本地引擎悄悄漂移。
-OLLAMA_ENGINE="$ROOT/native/Sources/Infrastructure/SmartRewrite/OllamaRewriteEngine.swift"
-grep -Fq "SmartRewriteSafetyPrompt.languageLock" "$OLLAMA_ENGINE" || {
-  echo "Ollama engine must reuse shared languageLock: $OLLAMA_ENGINE" >&2
+MANAGED_PREFILL="$ROOT/native/Sources/Infrastructure/SmartRewrite/ManagedLLMPrefill.swift"
+LOCAL_ENGINE="$ROOT/native/Sources/Infrastructure/SmartRewrite/TypeWhaleLocalLLMEngine.swift"
+
+grep -Fq "SmartRewriteSafetyPrompt.rewriteSystemPrompt" "$MANAGED_PREFILL" || {
+  echo "Managed local rewrite prefill must derive from the shared safety prompt." >&2
   exit 1
 }
+
+grep -Fq "systemPrompt: ManagedLLMPrefill.rewriteSystemPrompt" "$LOCAL_ENGINE" || {
+  echo "Managed local rewrite engine must use the shared prefill system prompt." >&2
+  exit 1
+}
+
+if rg -n "我的表达内容没有被准确理解和妥善处理" \
+  "$ROOT/native/Sources/Core/SmartInput/SmartRewritePromptStore.swift" \
+  "$ROOT/native/Sources/Infrastructure/SmartRewrite/DeepSeekRewriteEngine.swift" \
+  "$ROOT/native/Sources/Infrastructure/SmartRewrite/TypeWhaleLocalLLMEngine.swift"; then
+  echo "Active rewrite prompts must not contain copyable natural-language output examples." >&2
+  exit 1
+fi
 
 echo "SmartRewriteSystemPromptBoundaryCheck passed"

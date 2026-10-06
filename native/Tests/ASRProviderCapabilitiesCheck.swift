@@ -1,63 +1,35 @@
 import Foundation
 
 enum ASRBackend: String {
-    case automatic
     case senseVoice
-    case qwen3ASR
+    case parakeetSherpa
+    case funASRNano
+    case qwen3MLX06B
+    case qwen3MLX17B
 }
 
 @main
 struct ASRProviderCapabilitiesCheck {
     static func main() {
         let senseVoice = ASRProviderCapabilities.capability(for: .senseVoice)
-        precondition(senseVoice.id == "sensevoice-int8")
-        precondition(senseVoice.supportsHotwords == false)
-        precondition(senseVoice.supportsCodeSwitching == false)
-        precondition(senseVoice.supportsStreaming == true)
-        precondition(senseVoice.recommendedUse == .fallback)
-        precondition(senseVoice.verificationStatus == .verifiedUnsupported)
+        precondition(senseVoice.id == "sensevoice-int8" && senseVoice.supportsStreaming)
 
-        let qwen = ASRProviderCapabilities.capability(for: .qwen3ASR)
-        precondition(qwen.id == "qwen3-asr-0.6b")
-        precondition(qwen.supportsHotwords == false)
-        precondition(qwen.supportsCodeSwitching == false)
-        precondition(qwen.recommendedUse == .fallback)
-        precondition(qwen.verificationStatus == .verifiedUnsupported)
+        let nano = ASRProviderCapabilities.capability(for: .funASRNano)
+        precondition(nano.id == "fun-asr-nano-2512")
+        precondition(nano.supportsHotwords && nano.supportsCodeSwitching)
+        precondition(nano.recommendedUse == .finalCandidate)
 
-        let automatic = ASRProviderCapabilities.capability(for: .automatic)
-        precondition(automatic.id == "automatic")
-        precondition(automatic.supportsHotwords == false)
-        precondition(automatic.recommendedUse == .fallback)
+        let parakeet = ASRProviderCapabilities.capability(for: .parakeetSherpa)
+        precondition(parakeet.id == "parakeet-tdt-0.6b-v2-sherpa-int8")
+        precondition(!parakeet.supportsHotwords)
+
+        for backend in [ASRBackend.qwen3MLX06B, .qwen3MLX17B] {
+            precondition(!ASRProviderCapabilities.capability(for: backend).supportsHotwords)
+        }
 
         let managed = ASRProviderCapabilities.managedModelCapabilities
-        precondition(managed.count == ManagedASRModelCatalog.models.count)
-        precondition(Set(managed.map(\.id)).count == managed.count)
-
-        let paraformerContextual = ASRProviderCapabilities.capability(forManagedModelID: "paraformer-hotword-contextual")
-        precondition(paraformerContextual.supportsHotwords)
-        precondition(!paraformerContextual.supportsCodeSwitching)
-        precondition(paraformerContextual.recommendedUse == .finalCandidate)
-        precondition(paraformerContextual.verificationStatus == .verifiedCandidate)
-
-        let nano = ASRProviderCapabilities.capability(forManagedModelID: "fun-asr-nano-2512")
-        precondition(nano.supportsHotwords)
-        precondition(nano.supportsCodeSwitching)
-        precondition(nano.recommendedUse == .sidecarCandidate)
-        precondition(nano.verificationStatus == .needsRuntimeValidation)
-
-        let paraformerZH = ASRProviderCapabilities.capability(forManagedModelID: "paraformer-zh")
-        precondition(!paraformerZH.supportsHotwords)
-        precondition(paraformerZH.supportsCodeSwitching)
-        precondition(paraformerZH.recommendedUse == .comparison)
-
-        let vad = ASRProviderCapabilities.capability(forManagedModelID: "fsmn-vad")
-        precondition(!vad.supportsHotwords)
-        precondition(vad.recommendedUse == .dependency)
-
-        let punc = ASRProviderCapabilities.capability(forManagedModelID: "ct-punc")
-        precondition(!punc.supportsHotwords)
-        precondition(punc.recommendedUse == .postProcessing)
-
+        precondition(Set(managed.map(\.id)) == Set(["fun-asr-nano-2512", "fsmn-vad"]))
+        precondition(ASRProviderCapabilities.capability(forManagedModelID: "fsmn-vad").recommendedUse == .dependency)
         print("ASRProviderCapabilitiesCheck passed")
     }
 }

@@ -1,24 +1,33 @@
 import AppKit
 
-/// 主界面「预览主题」列里的一个可点击预览瓦片：程序绘制对应主题的迷你示意图 + 标题。
-/// 点击触发 `onSelect` 切换主题；选中态用品牌色边框高亮。
+/// 主界面「预览主题」列里的一个可点击截图瓦片。
+/// 图片只用于主题选择预览；点击行为和主题存储仍由外层控制。
 final class ThemePreviewTile: NSView {
-    enum Kind { case classic, notch }
+    enum Kind {
+        case classic
+        case notch
+        case minimalBlack
+    }
 
     let kind: Kind
     var onSelect: (() -> Void)?
     var isSelected = false { didSet { needsDisplay = true } }
 
     private let titleText: String
+    private let previewImage: NSImage?
     private let titleHeight: CGFloat = 18
 
     init(kind: Kind, title: String) {
         self.kind = kind
         self.titleText = title
+        previewImage = CapsuleThemeSnapshotFactory.makeSnapshot(for: kind)
         super.init(frame: .zero)
         wantsLayer = true
         translatesAutoresizingMaskIntoConstraints = false
-        heightAnchor.constraint(equalToConstant: 78).isActive = true
+        heightAnchor.constraint(equalToConstant: 116).isActive = true
+        toolTip = "\(title)预览"
+        setAccessibilityLabel("\(title)预览")
+        setAccessibilityRole(.button)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -28,77 +37,77 @@ final class ThemePreviewTile: NSView {
     override func mouseDown(with event: NSEvent) { onSelect?() }
 
     override func draw(_ dirtyRect: NSRect) {
-        let sceneRect = NSRect(x: 1, y: titleHeight, width: bounds.width - 2, height: bounds.height - titleHeight - 1)
+        let sceneRect = NSRect(
+            x: 1,
+            y: titleHeight,
+            width: bounds.width - 2,
+            height: bounds.height - titleHeight - 1
+        )
         let card = NSBezierPath(roundedRect: sceneRect, xRadius: 8, yRadius: 8)
-        NSColor(calibratedWhite: 1, alpha: 0.05).setFill()
+        UITheme.panelFill.withAlphaComponent(0.70).setFill()
         card.fill()
         card.lineWidth = isSelected ? 2 : 1
-        (isSelected ? UITheme.brandGreen : UITheme.cardBorder).setStroke()
+        (isSelected ? UITheme.capsuleAccent : UITheme.cardBorder).setStroke()
         card.stroke()
 
-        // 模拟一个屏幕画面（裁剪范围只作用于场景，不影响标题）。
         NSGraphicsContext.current?.saveGraphicsState()
-        let screen = sceneRect.insetBy(dx: 12, dy: 12)
+        let screen = sceneRect.insetBy(dx: 5, dy: 5)
         let screenPath = NSBezierPath(roundedRect: screen, xRadius: 6, yRadius: 6)
-        NSColor(calibratedWhite: 1, alpha: 0.05).setFill()
+        UITheme.waterInkBackground.setFill()
         screenPath.fill()
         screenPath.addClip()
-        switch kind {
-        case .classic: drawClassic(in: screen)
-        case .notch: drawNotch(in: screen)
-        }
+        drawPreviewImage(in: screen)
         NSGraphicsContext.current?.restoreGraphicsState()
 
-        // 标题。
-        let attrs: [NSAttributedString.Key: Any] = [
+        let titleAttributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 11, weight: isSelected ? .semibold : .regular),
-            .foregroundColor: isSelected ? UITheme.brandGreen : NSColor.secondaryLabelColor,
+            .foregroundColor: isSelected ? UITheme.waterInkAccent : UITheme.waterInkMuted,
         ]
-        let size = (titleText as NSString).size(withAttributes: attrs)
+        let titleSize = (titleText as NSString).size(withAttributes: titleAttributes)
         (titleText as NSString).draw(
-            at: NSPoint(x: (bounds.width - size.width) / 2, y: 1),
-            withAttributes: attrs
+            at: NSPoint(x: (bounds.width - titleSize.width) / 2, y: 1),
+            withAttributes: titleAttributes
         )
     }
 
-    /// 默认主题：底部居中胶囊 + 品牌绿波形线。
-    private func drawClassic(in screen: NSRect) {
-        let pillW = screen.width * 0.64
-        let pillH: CGFloat = 13
-        let pill = NSRect(x: screen.midX - pillW / 2, y: screen.minY + 9, width: pillW, height: pillH)
-        NSColor(calibratedWhite: 0.1, alpha: 0.92).setFill()
-        NSBezierPath(roundedRect: pill, xRadius: pillH / 2, yRadius: pillH / 2).fill()
-
-        let mid = pill.midY
-        let line = NSBezierPath()
-        line.move(to: NSPoint(x: pill.minX + 7, y: mid))
-        let n = 6
-        for i in 1...n {
-            let x = pill.minX + 7 + (pill.width - 14) * CGFloat(i) / CGFloat(n)
-            line.line(to: NSPoint(x: x, y: mid + (i % 2 == 0 ? 3 : -3)))
+    private func drawPreviewImage(in rect: NSRect) {
+        guard let previewImage else {
+            drawMissingPreview(in: rect)
+            return
         }
-        line.lineWidth = 1.5
-        line.lineCapStyle = .round
-        UITheme.brandGreen.setStroke()
-        line.stroke()
+        let sourceSize = previewImage.size
+        guard sourceSize.width > 0, sourceSize.height > 0 else {
+            drawMissingPreview(in: rect)
+            return
+        }
+
+        let scale = min(rect.width / sourceSize.width, rect.height / sourceSize.height)
+        let destination = NSRect(
+            x: rect.midX - sourceSize.width * scale / 2,
+            y: rect.midY - sourceSize.height * scale / 2,
+            width: sourceSize.width * scale,
+            height: sourceSize.height * scale
+        )
+        previewImage.draw(
+            in: destination,
+            from: NSRect(origin: .zero, size: sourceSize),
+            operation: .sourceOver,
+            fraction: 1,
+            respectFlipped: true,
+            hints: [.interpolation: NSImageInterpolation.high]
+        )
     }
 
-    /// 刘海主题：状态栏下方居中的圆角黑岛（灵动岛）+ 左图标点/右脉冲点 + 文字条。
-    private func drawNotch(in screen: NSRect) {
-        let islandW = screen.width * 0.56
-        let islandH: CGFloat = 15
-        let island = NSRect(x: screen.midX - islandW / 2, y: screen.maxY - islandH - 7, width: islandW, height: islandH)
-        NSColor.black.setFill()
-        NSBezierPath(roundedRect: island, xRadius: islandH / 2, yRadius: islandH / 2).fill()
-
-        let dotR: CGFloat = 2.3
-        NSColor(calibratedWhite: 0.82, alpha: 1).setFill()
-        NSBezierPath(ovalIn: NSRect(x: island.minX + 5, y: island.midY - dotR, width: dotR * 2, height: dotR * 2)).fill()
-        UITheme.brandGreen.setFill()
-        NSBezierPath(ovalIn: NSRect(x: island.maxX - 5 - dotR * 2, y: island.midY - dotR, width: dotR * 2, height: dotR * 2)).fill()
-
-        let bar = NSRect(x: island.midX - islandW * 0.16, y: island.midY - 1.5, width: islandW * 0.32, height: 3)
-        NSColor(calibratedWhite: 1, alpha: 0.5).setFill()
-        NSBezierPath(roundedRect: bar, xRadius: 1.5, yRadius: 1.5).fill()
+    private func drawMissingPreview(in rect: NSRect) {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        ("预览图缺失" as NSString).draw(
+            in: NSRect(x: rect.minX, y: rect.midY - 8, width: rect.width, height: 16),
+            withAttributes: [
+                .font: NSFont.systemFont(ofSize: 10, weight: .medium),
+                .foregroundColor: UITheme.waterInkMuted,
+                .paragraphStyle: paragraph,
+            ]
+        )
     }
 }

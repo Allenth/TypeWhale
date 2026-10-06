@@ -1,0 +1,17 @@
+2026-07-17T13:50:00Z recording_start task_id=AAAAAAAA-1111-4111-8111-AAAAAAAAAAAA purpose=dictation activation=toggle realtime=true voice_detect=silero
+2026-07-17T13:50:08Z recording_finish_requested task_id=AAAAAAAA-1111-4111-8111-AAAAAAAAAAAA reason=manual_or_trigger
+2026-07-17T13:50:09Z recording_finish_saved task_id=AAAAAAAA-1111-4111-8111-AAAAAAAAAAAA duration_ms=8000 url=recording_20260717_215009_AAAAAAAA.wav
+2026-07-17T13:50:09Z final_asr_result task_id=AAAAAAAA-1111-4111-8111-AAAAAAAAAAAA audio_duration_ms=8000 recognition_ms=120 chars=18 engine=sensevoice-small/sherpa-native
+2026-07-17T13:50:09Z paste_finish target=ChatGPT[com.openai.codex#78175] outcome=restored
+2026-07-17T13:51:00Z shadow_preview_mode task_id=BBBBBBBB provider=sensevoice_snapshot source=local_fallback
+2026-07-17T13:51:00Z recording_start task_id=BBBBBBBB-2222-4222-8222-BBBBBBBBBBBB purpose=dictation activation=toggle realtime=true voice_detect=silero
+2026-07-17T13:51:00Z shadow_preview_render session=BBBBBBBB sequence=0 chars=0 draw_ms=0
+2026-07-17T13:51:00Z candidate_preview_render session=BBBBBBBB sequence=0 target_chars=0 displayed_chars=0 action=show draw_ms=0
+2026-07-17T13:51:02Z recording_cancel_requested reason=coordinator_stop task_id=BBBBBBBB
+2026-07-17T13:51:02Z shadow_preview_teardown cancelled=true had_runtime=true had_candidate_runtime=true had_audio_subscription=true
+2026-07-17T13:51:20Z shadow_preview_mode task_id=CCCCCCCC provider=sensevoice_snapshot source=local_fallback
+2026-07-17T13:51:20Z recording_start task_id=CCCCCCCC-3333-4333-8333-CCCCCCCCCCCC purpose=dictation activation=toggle realtime=true voice_detect=silero
+2026-07-17T13:51:20Z shadow_preview_render session=CCCCCCCC sequence=0 chars=0 draw_ms=0
+2026-07-17T13:51:25Z recording_finish_saved task_id=CCCCCCCC-3333-4333-8333-CCCCCCCCCCCC duration_ms=5000 url=recording_20260717_215125_CCCCCCCC.wav
+2026-07-17T13:51:25Z final_asr_result task_id=CCCCCCCC-3333-4333-8333-CCCCCCCCCCCC audio_duration_ms=5000 recognition_ms=80 chars=12 engine=sensevoice-small/sherpa-native
+2026-07-17T13:51:25Z paste_finish target=ChatGPT[com.openai.codex#78175] outcome=restored

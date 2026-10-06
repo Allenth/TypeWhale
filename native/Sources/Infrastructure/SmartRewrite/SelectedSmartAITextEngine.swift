@@ -2,17 +2,19 @@ import Foundation
 
 final class SelectedSmartAITextEngine: SmartAITextEngine {
     private let deepSeek: SmartAITextEngine
-    private let ollama: (SmartAIModel) -> SmartAITextEngine
-    private let modelProvider: () -> SmartAIModel
+    private let managed: (ManagedLLMModelID) -> SmartAITextEngine
+    private let selectionProvider: () -> SmartAIModel
 
     init(
         deepSeek: SmartAITextEngine = DeepSeekRewriteEngine(),
-        ollama: @escaping (SmartAIModel) -> SmartAITextEngine = { OllamaRewriteEngine(model: $0) },
-        modelProvider: @escaping () -> SmartAIModel = { SmartAIModelStore.load() }
+        managed: @escaping (ManagedLLMModelID) -> SmartAITextEngine = {
+            ManagedLLMRuntimeService.shared.engine(for: $0)
+        },
+        selectionProvider: @escaping () -> SmartAIModel = { SmartAIModelStore.load() }
     ) {
         self.deepSeek = deepSeek
-        self.ollama = ollama
-        self.modelProvider = modelProvider
+        self.managed = managed
+        self.selectionProvider = selectionProvider
     }
 
     var displayName: String {
@@ -33,9 +35,9 @@ final class SelectedSmartAITextEngine: SmartAITextEngine {
         context: SmartInputContext,
         preference: SmartRewritePreference
     ) async throws -> SmartRewriteEngineOutput {
-        let model = modelProvider()
-        LaunchDiagnostics.mark("smart_ai_route triggered_by=final_smart_rewrite provider=\(model.provider.rawValue) model=\(model.rawValue)")
-        return try await engine(for: model).rewrite(
+        let selection = selectionProvider()
+        logRoute(selection, triggeredBy: "final_smart_rewrite")
+        return try await engine(for: selection).rewrite(
             rawText: rawText,
             mode: mode,
             context: context,
@@ -49,9 +51,9 @@ final class SelectedSmartAITextEngine: SmartAITextEngine {
         context: SmartInputContext,
         triggeredBy: String = "final_translation"
     ) async throws -> SmartTranslationOutput {
-        let model = modelProvider()
-        LaunchDiagnostics.mark("smart_ai_route triggered_by=\(triggeredBy) provider=\(model.provider.rawValue) model=\(model.rawValue)")
-        return try await engine(for: model).translate(
+        let selection = selectionProvider()
+        logRoute(selection, triggeredBy: triggeredBy)
+        return try await engine(for: selection).translate(
             rawText: rawText,
             direction: direction,
             context: context,
@@ -60,15 +62,21 @@ final class SelectedSmartAITextEngine: SmartAITextEngine {
     }
 
     private var activeEngine: SmartAITextEngine {
-        engine(for: modelProvider())
+        engine(for: selectionProvider())
     }
 
     private func engine(for model: SmartAIModel) -> SmartAITextEngine {
         switch model {
-        case .ollamaQwen35B:
-            return ollama(model)
+        case .typeWhaleQwen3_4BInstruct:
+            return managed(.qwen3_4BInstruct2507_4bit)
         case .deepSeekV4Flash:
             return deepSeek
         }
+    }
+
+    private func logRoute(_ model: SmartAIModel, triggeredBy: String) {
+        LaunchDiagnostics.mark(
+            "smart_ai_route triggered_by=\(triggeredBy) provider=\(model.provider.rawValue) model=\(model.rawValue)"
+        )
     }
 }

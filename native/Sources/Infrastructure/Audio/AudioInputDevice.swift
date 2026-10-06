@@ -4,21 +4,50 @@ import Foundation
 struct AudioInputDevice: Equatable {
     static let systemDefaultUID = ""
     static let selectionStorageKey = "audioInputDeviceUID"
+    static let selectionNameStorageKey = "audioInputDeviceName"
 
     let id: AudioDeviceID
     let uid: String
     let name: String
     let isDefault: Bool
+    let transportType: UInt32?
+
+    init(
+        id: AudioDeviceID,
+        uid: String,
+        name: String,
+        isDefault: Bool,
+        transportType: UInt32? = nil
+    ) {
+        self.id = id
+        self.uid = uid
+        self.name = name
+        self.isDefault = isDefault
+        self.transportType = transportType
+    }
 
     static var selectedUID: String {
         UserDefaults.standard.string(forKey: selectionStorageKey) ?? systemDefaultUID
     }
 
+    static var selectedName: String {
+        UserDefaults.standard.string(forKey: selectionNameStorageKey) ?? ""
+    }
+
     static func saveSelectedUID(_ uid: String) {
         if uid.isEmpty {
             UserDefaults.standard.removeObject(forKey: selectionStorageKey)
+            UserDefaults.standard.removeObject(forKey: selectionNameStorageKey)
         } else {
             UserDefaults.standard.set(uid, forKey: selectionStorageKey)
+        }
+    }
+
+    static func saveSelectedName(_ name: String) {
+        if name.isEmpty {
+            UserDefaults.standard.removeObject(forKey: selectionNameStorageKey)
+        } else {
+            UserDefaults.standard.set(name, forKey: selectionNameStorageKey)
         }
     }
 }
@@ -29,9 +58,10 @@ enum AudioInputDeviceProvider {
         let selectedUID: String
         let matchedDeviceName: String?
         let didDowngradeToSystemDefault: Bool
+        let usesPreferredBuiltInMic: Bool
 
         var isFollowingSystemDefault: Bool {
-            selectedUID.isEmpty || deviceID == nil
+            selectedUID.isEmpty
         }
     }
 
@@ -53,7 +83,8 @@ enum AudioInputDeviceProvider {
                 id: id,
                 uid: uid,
                 name: name,
-                isDefault: id == defaultID
+                isDefault: id == defaultID,
+                transportType: transportType(for: id)
             )
         }
         .sorted { first, second in
@@ -69,30 +100,64 @@ enum AudioInputDeviceProvider {
     }
 
     static func resolveSelectedManualDevice() -> ManualSelectionResolution {
+        resolveSelectedInput(preferBuiltInMicForBluetoothSystemDefault: false)
+    }
+
+    static func resolveSelectedInput(
+        preferBuiltInMicForBluetoothSystemDefault: Bool
+    ) -> ManualSelectionResolution {
         let selectedUID = AudioInputDevice.selectedUID
-        guard !selectedUID.isEmpty else {
+        let currentDevices = devices()
+        let resolution = AudioInputRoutePolicy.resolve(
+            selectedUID: selectedUID,
+            devices: currentDevices,
+            defaultDeviceID: defaultInputDeviceID(),
+            preferBuiltInMicForBluetoothSystemDefault: preferBuiltInMicForBluetoothSystemDefault
+        )
+
+        switch resolution {
+        case .systemDefault(let device):
             return ManualSelectionResolution(
                 deviceID: nil,
                 selectedUID: selectedUID,
-                matchedDeviceName: nil,
-                didDowngradeToSystemDefault: false
+                matchedDeviceName: device.name,
+                didDowngradeToSystemDefault: false,
+                usesPreferredBuiltInMic: false
             )
-        }
-        if let device = devices().first(where: { $0.uid == selectedUID }) {
+        case .preferredBuiltIn(let device, _):
+            return ManualSelectionResolution(
+                deviceID: device.id,
+                selectedUID: AudioInputDevice.systemDefaultUID,
+                matchedDeviceName: device.name,
+                didDowngradeToSystemDefault: false,
+                usesPreferredBuiltInMic: true
+            )
+        case .manual(let device):
             return ManualSelectionResolution(
                 deviceID: device.id,
                 selectedUID: selectedUID,
                 matchedDeviceName: device.name,
-                didDowngradeToSystemDefault: false
+                didDowngradeToSystemDefault: false,
+                usesPreferredBuiltInMic: false
+            )
+        case .downgradeToSystemDefault:
+            AudioInputDevice.saveSelectedUID(AudioInputDevice.systemDefaultUID)
+            return ManualSelectionResolution(
+                deviceID: nil,
+                selectedUID: selectedUID,
+                matchedDeviceName: nil,
+                didDowngradeToSystemDefault: true,
+                usesPreferredBuiltInMic: false
+            )
+        case .unavailable:
+            return ManualSelectionResolution(
+                deviceID: nil,
+                selectedUID: selectedUID,
+                matchedDeviceName: nil,
+                didDowngradeToSystemDefault: false,
+                usesPreferredBuiltInMic: false
             )
         }
-        AudioInputDevice.saveSelectedUID(AudioInputDevice.systemDefaultUID)
-        return ManualSelectionResolution(
-            deviceID: nil,
-            selectedUID: selectedUID,
-            matchedDeviceName: nil,
-            didDowngradeToSystemDefault: true
-        )
     }
 
     static func defaultInputDeviceName() -> String? {
@@ -181,6 +246,19 @@ enum AudioInputDeviceProvider {
         }
         guard status == noErr else { return nil }
         return value as String?
+    }
+
+    private static func transportType(for deviceID: AudioDeviceID) -> UInt32? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyTransportType,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var value = UInt32(0)
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        let status = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &value)
+        guard status == noErr else { return nil }
+        return value
     }
 }
 

@@ -213,7 +213,11 @@ final class MiniMaxRewriteEngine: SmartAITextEngine, ScreenshotTranslationEngine
         }
         let rawContent = decoded.choices.first?.message.content?
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let content = rawContent.map(SmartRewriteOutputSanitizer.cleanMiniMax)
+        let content = rawContent.map {
+            triggeredBy.contains("translation")
+                ? SmartRewriteOutputSanitizer.cleanTranslation($0)
+                : SmartRewriteOutputSanitizer.cleanMiniMax($0)
+        }
         guard let content, !content.isEmpty else {
             throw MiniMaxRewriteError.emptyContent
         }

@@ -42,7 +42,8 @@ struct IdeaPillWriterCheck {
         )
 
         let firstURL = try BacklogWriter.saveIdeaPill(context, rootDirectory: root, now: fixedDate)
-        precondition(firstURL.deletingLastPathComponent().lastPathComponent == "闪念胶囊")
+        precondition(firstURL.deletingLastPathComponent().lastPathComponent == "2026-07-05")
+        precondition(firstURL.deletingLastPathComponent().deletingLastPathComponent().lastPathComponent == "闪念胶囊")
         precondition(firstURL.lastPathComponent == "260705-0908-AI-胶囊自动归档-idea-pill.md")
 
         let firstContent = try String(contentsOf: firstURL, encoding: .utf8)
@@ -56,7 +57,16 @@ struct IdeaPillWriterCheck {
         precondition(firstContent.contains("我刚想到一个 AI 胶囊自动归档的想法。"))
 
         let secondURL = try BacklogWriter.saveIdeaPill(context, rootDirectory: root, now: fixedDate)
+        precondition(secondURL.deletingLastPathComponent().path == firstURL.deletingLastPathComponent().path)
         precondition(secondURL.lastPathComponent == "260705-0908-AI-胶囊自动归档-idea-pill-2.md")
+
+        let nextDayIdeaPillURL = try BacklogWriter.saveIdeaPill(
+            context,
+            rootDirectory: root,
+            now: fixedDate.addingTimeInterval(60 * 60 * 24)
+        )
+        precondition(nextDayIdeaPillURL.deletingLastPathComponent().lastPathComponent == "2026-07-06")
+        precondition(nextDayIdeaPillURL.deletingLastPathComponent().path != firstURL.deletingLastPathComponent().path)
 
         let archiveContext = BacklogSaveContext(
             rawText: context.rawText,
@@ -65,10 +75,24 @@ struct IdeaPillWriterCheck {
             targetAppName: "知识点",
             recordingSessionID: context.recordingSessionID
         )
-        let archiveURL = try BacklogWriter.saveKnowledgeArchive(archiveContext, rootDirectory: root, now: fixedDate)
+        let screenshotPNGData = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+        let archiveURL = try BacklogWriter.saveKnowledgeArchive(
+            archiveContext,
+            rootDirectory: root,
+            now: fixedDate,
+            screenshotPNGData: screenshotPNGData
+        )
         precondition(archiveURL.deletingLastPathComponent().lastPathComponent == "2026-07-05")
         precondition(archiveURL.deletingLastPathComponent().deletingLastPathComponent().lastPathComponent == "归档（未处理）")
         precondition(archiveURL.lastPathComponent == "归档-260705-0908-AI-胶囊自动归档.md")
+        let archiveScreenshotURL = archiveURL
+            .deletingLastPathComponent()
+            .appendingPathComponent("附件", isDirectory: true)
+            .appendingPathComponent(archiveURL.deletingPathExtension().lastPathComponent)
+            .appendingPathExtension("png")
+        precondition(FileManager.default.fileExists(atPath: archiveScreenshotURL.path))
+        let archivedScreenshotData = try Data(contentsOf: archiveScreenshotURL)
+        precondition(archivedScreenshotData == screenshotPNGData)
 
         let sameDayArchiveURL = try BacklogWriter.saveKnowledgeArchive(
             archiveContext,
@@ -94,6 +118,8 @@ struct IdeaPillWriterCheck {
         precondition(archiveContent.contains("## 知识点"))
         precondition(archiveContent.contains("把闪念胶囊里的整理结果自动保存成 Obsidian 笔记。"))
         precondition(archiveContent.contains("## OCR 原文"))
+        precondition(archiveContent.contains("## 截图"))
+        precondition(archiveContent.contains("![截图](附件/归档-260705-0908-AI-胶囊自动归档.png)"))
 
         print("IdeaPillWriterCheck passed")
     }
