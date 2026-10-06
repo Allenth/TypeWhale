@@ -12,10 +12,10 @@ TypeWhale Pro 是本地优先的 macOS 桌面语音输入与智能文字处理�
 | 代码基线 | Build 919 在 Build 918 翻译忠实性修复上移除生产默认值、VS Code 配置和协作规则中的开发者个人路径；首次需求池改为当前用户的文稿目录，已有自定义目录不变 | Git；[近期记录](DEVELOPMENT_LOG.md) |
 | 日常开发分支 | `codex/typewhale-pro-asr-hotwords` | [协作规则](../../AGENTS.md) |
 | 最后成功构建记录 | 2026-10-06，Build 919，日常 build-only 覆盖安装成功 | [自动构建流水](../构建日志.md) |
-| 已知公开下载入口 | 旧 README 指向 1.9.7 (552)；本轮没有在线核验最新公开资产 | [历史下载说明](../../README.md) |
-| 验证范围 | Build 918 的翻译与本地模型基线保持；开源隐私边界先红后绿，Build 919 完整编译、覆盖安装、版本、深度签名和启动通过。隔离的公开源码候选已完成密钥、个人路径、大文件、许可证和无受限照片构建核对；远端分支／PR／主分支仍须在推送后复核。浅色主题和 VoiceOver 实播未专项复验 | [近期记录](DEVELOPMENT_LOG.md)、[验收与发布](RELEASE_QA.md) |
+| 公开源码／下载入口 | 公开源码发布记录为 [GitHub PR #2](https://github.com/Allenth/TypeWhale/pull/2)，`main` 是公开源码基线；旧 README 继续指向 1.9.7 (552) 测试 DMG，本轮没有发布新安装包 | [历史下载说明](../../README.md) |
+| 验证范围 | Build 918 的翻译与本地模型基线保持；开源隐私边界先红后绿，Build 919 完整编译、覆盖安装、版本、深度签名和启动通过。隔离的公开源码候选已完成密钥、个人路径、大文件、许可证和无受限照片构建核对；发布通过 PR #2 留存审计记录，并以远端 `main` 树核对作为完成门槛。浅色主题和 VoiceOver 实播未专项复验 | [近期记录](DEVELOPMENT_LOG.md)、[验收与发布](RELEASE_QA.md) |
 
-这是一次有日期的核验快照，不能把本地安装成功或候选分支通过等同于 GitHub 主分支已经发布，也不能将旧 DMG 当成 Build 919。
+这是一次有日期的核验快照；公开源码状态以 [GitHub PR #2](https://github.com/Allenth/TypeWhale/pull/2) 和远端 `main` 为准，旧 DMG 不能当成 Build 919。
 
 ## 日常只维护这些文档
 

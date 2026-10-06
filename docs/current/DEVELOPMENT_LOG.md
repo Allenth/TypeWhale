@@ -6,6 +6,7 @@
 
 - 用户明确要求把当前代码开源并提交 GitHub。远端 `Allenth/TypeWhale` 已是公开仓库，但当前开发分支比公开 `main` 多 776 个未公开提交；直接推送会把开发过程中的个人绝对路径与中间历史永久公开。发布策略确定为从公开 `main` 建立 `codex/open-source-build-919` 隔离分支，只导入最终代码快照，完成审计后再公开，不推送本地开发历史或未跟踪目录。
 - 公共分发复核发现 RC003 产品照片的公开再分发文书未随仓库提供，因此公开快照主动排除该图片，不把口头／私有授权扩大为 MIT 授权。加载器与构建保持可选资源机制；缺图时界面显示明确占位且 13 键映射继续可用。快照测试改用运行时生成的测试图验证绘制与按键反馈，并独立覆盖缺图降级，不下载或复制受限照片。
+- 最终源码快照通过 `codex/open-source-build-919` 推送至公开仓库，并以 [GitHub PR #2](https://github.com/Allenth/TypeWhale/pull/2) 保留可审计的差异、验证范围和分发边界；合并完成后以远端 `main` 的提交与树内容复核作为发布完成证据。
 - 发布门禁发现 `BacklogDirectoryStore.defaultDirectory` 写死开发者个人 Obsidian 路径，`.vscode/settings.json` 与协作规则也包含本机 checkout 路径。先新增 `OpenSourceReleasePrivacyBoundaryCheck` 并确认旧实现失败，再将首次默认需求池改为当前用户的 `~/Documents/TypeWhale/需求池`，VS Code 改用 `${workspaceFolder}`，协作规则改用仓库根目录；已有用户保存的 `backlogDirectory` 不变，不迁移或删除文件。
 - 本轮只准备公开源码，不发布新 DMG／ZIP、不改变 GitHub 仓库可见性、不宣称模型或第三方图片获得 MIT 再授权。正式源码快照仍需完成密钥扫描、大文件与许可证复核、Build 919 编译安装、测试、提交和远端核对后才能判定发布 Go。
 - `OpenSourceReleasePrivacyBoundaryCheck` 已先红后绿；唯一入口 `./native/build_and_log.sh` 已生成、覆盖安装并打开 2.0.58 (Build 919)，构建流水累计 #414，安装版版本、深层签名、designated requirement 和运行进程通过。公开快照的密钥、个人路径、大文件、许可证和远端树核对仍在隔离分支继续，不把本次安装成功提前写成 GitHub 发布成功。
