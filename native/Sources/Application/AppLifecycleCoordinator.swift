@@ -15,6 +15,7 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
     var onSystemDidWake: (() -> Void)?
     var onSystemWillPowerOff: (() -> Void)?
     var onMainInterfaceOpened: (() -> Void)?
+    var onMainWindowShown: (() -> Void)?
     // 尺寸唯一真值在 MainViewController；窗口实际高度由其必需约束决定，这里跟随它即可。
     private let windowSize = MainViewController.windowContentSize
 
@@ -23,6 +24,9 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
     }
 
     func setup() {
+        controller.onRequestFullAppExit = { [weak self] in
+            self?.requestFullTermination()
+        }
         LaunchDiagnostics.mark("observeSystemPowerOff begin")
         observeSystemPowerOff()
         LaunchDiagnostics.mark("setupMainMenu begin")
@@ -153,14 +157,14 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
         let rect = NSRect(x: 0, y: 0, width: 22, height: 14)
         let path = NSBezierPath(roundedRect: rect, xRadius: 4, yRadius: 4)
         NSGradient(colors: [
-            NSColor(calibratedRed: 1.0, green: 0.86, blue: 0.32, alpha: 1),
-            NSColor(calibratedRed: 1.0, green: 0.71, blue: 0.08, alpha: 1),
+            NSColor(calibratedRed: 0.08, green: 0.15, blue: 0.21, alpha: 1),
+            NSColor(calibratedRed: 0.02, green: 0.04, blue: 0.07, alpha: 1),
         ])?.draw(in: path, angle: 90)
-        NSColor(calibratedRed: 0.90, green: 0.60, blue: 0.02, alpha: 0.35).setStroke()
+        NSColor(calibratedRed: 0.56, green: 0.68, blue: 0.70, alpha: 0.55).setStroke()
         path.lineWidth = 0.8
         path.stroke()
 
-        let markColor = NSColor(calibratedRed: 0.43, green: 0.31, blue: 0.03, alpha: 1)
+        let markColor = NSColor(calibratedRed: 0.84, green: 0.89, blue: 0.88, alpha: 0.95)
         markColor.setStroke()
         let wave = NSBezierPath()
         wave.lineWidth = 1.25
@@ -180,9 +184,31 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
         wave.stroke()
         markColor.setFill()
         NSBezierPath(ovalIn: NSRect(x: 14.8, y: 8.9, width: 2.2, height: 2.2)).fill()
+        if AppBrand.isTemporaryTTSNativeProfile {
+            drawTemporaryProfileStatusBadge(in: rect)
+        }
 
         image.isTemplate = false
         return image
+    }
+
+    private func drawTemporaryProfileStatusBadge(in rect: NSRect) {
+        let badgeRect = NSRect(x: rect.maxX - 8.4, y: rect.minY + 1.2, width: 7.2, height: 7.2)
+        let badge = NSBezierPath(ovalIn: badgeRect)
+        NSColor(calibratedRed: 1.0, green: 0.72, blue: 0.18, alpha: 1.0).setFill()
+        badge.fill()
+        NSColor(calibratedRed: 0.12, green: 0.08, blue: 0.02, alpha: 0.92).setStroke()
+        badge.lineWidth = 0.5
+        badge.stroke()
+
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 5.2, weight: .black),
+            .foregroundColor: NSColor(calibratedRed: 0.12, green: 0.08, blue: 0.02, alpha: 1),
+            .paragraphStyle: paragraph,
+        ]
+        NSString(string: "T").draw(in: badgeRect.insetBy(dx: 0, dy: 0.2), withAttributes: attributes)
     }
 
     func menuWillOpen(_ menu: NSMenu) {
@@ -193,7 +219,10 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
     }
 
     private func updateMemoryStatusItem() {
-        let megabytes = MemoryMonitor.currentFootprintMB
+        let worker = ManagedLLMRuntimeService.shared.workerMemorySnapshot
+        let megabytes = MemoryMonitor.combinedFootprintMB(
+            additionalProcessID: worker.processID
+        )
         memoryStatusItem.title = "内存 \(megabytes) MB"
         switch MemoryMonitor.level(forMB: megabytes) {
         case .normal:
@@ -265,6 +294,10 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
     }
 
     @objc private func quitFromStatusItem() {
+        requestFullTermination()
+    }
+
+    private func requestFullTermination() {
         allowsTermination = true
         NSApp.terminate(nil)
     }
@@ -304,12 +337,14 @@ final class AppLifecycleCoordinator: NSObject, NSMenuDelegate {
 
     func showMainWindow() {
         guard let window else { return }
+        controller.prepareForMainPanelPresentation()
         if window.isMiniaturized {
             window.deminiaturize(nil)
         }
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         onMainInterfaceOpened?()
+        onMainWindowShown?()
     }
 
     func suppressNextReopen(reason: String, duration: TimeInterval) {

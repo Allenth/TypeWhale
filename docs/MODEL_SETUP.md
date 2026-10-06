@@ -1,3 +1,5 @@
+> 文档迁移（2026-09-05）：[现行文档](current/ARCHITECTURE.md)。下方是历史模型准备方式，不是当前模型清单；现行模型管理与运行时见新文档，构建统一使用 build_and_log.sh。
+
 # Model Setup
 
 This repository does not include ASR or VAD model files.

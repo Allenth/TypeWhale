@@ -1,0 +1,108 @@
+{
+  "entries": [
+    {
+      "bytes": 165740544,
+      "disposition": "retire",
+      "path": "$HOME/Library/Application Support/TypeWhale Pro/Models/tts/.staging/kokoro-fp32",
+      "reason": "incomplete-staging"
+    },
+    {
+      "bytes": 11433440,
+      "disposition": "retire",
+      "path": "$HOME/Library/Application Support/TypeWhale Pro/Models/tts/.staging/qwen3-tokenizer",
+      "reason": "incomplete-staging"
+    },
+    {
+      "bytes": 9747537577,
+      "disposition": "retire",
+      "path": "$HOME/Library/Application Support/TypeWhale Pro/Models/tts/fun-cosyvoice3-0.5b-2512",
+      "reason": "retired-tts-model"
+    },
+    {
+      "bytes": 215377415,
+      "disposition": "retire",
+      "path": "$HOME/Library/Application Support/TypeWhale Pro/Models/tts/kokoro-int8-multi-lang-v1_1",
+      "reason": "retired-tts-model"
+    },
+    {
+      "bytes": 17615138845,
+      "disposition": "retire",
+      "path": "$HOME/Library/Application Support/TypeWhale Pro/Models/tts/moss-tts-local-transformer-v1.5",
+      "reason": "retired-tts-model"
+    },
+    {
+      "bytes": 1183204642,
+      "disposition": "retire",
+      "path": "$HOME/Library/Application Support/TypeWhale Pro/Models/tts/qwen3-tts-06b-coreml",
+      "reason": "retired-tts-model"
+    },
+    {
+      "bytes": 2498387968,
+      "disposition": "retire",
+      "path": "$HOME/Library/Application Support/TypeWhale Pro/Models/tts/qwen3-tts-06b-customvoice",
+      "reason": "retired-tts-model"
+    },
+    {
+      "bytes": 2342656372,
+      "disposition": "retire",
+      "path": "$HOME/Library/Application Support/TypeWhale Pro/Models/tts/qwen3-tts-17b-coreml",
+      "reason": "retired-tts-model"
+    },
+    {
+      "bytes": 4520218527,
+      "disposition": "retire",
+      "path": "$HOME/Library/Application Support/TypeWhale Pro/Models/tts/qwen3-tts-17b-customvoice",
+      "reason": "retired-tts-model"
+    },
+    {
+      "bytes": 198089760,
+      "disposition": "retire",
+      "path": "$HOME/Library/Application Support/TypeWhale Pro/Models/tts/sherpa-vits-melo-tts-zh_en",
+      "reason": "retired-tts-model"
+    },
+    {
+      "bytes": 4960747502,
+      "disposition": "retire",
+      "path": "$HOME/Library/Application Support/TypeWhale Pro/Models/tts/voxcpm2",
+      "reason": "retired-tts-model"
+    },
+    {
+      "bytes": 207277431,
+      "disposition": "retain",
+      "path": "$HOME/Library/Application Support/TypeWhale Pro/Models/tts/zipvoice-distill-int8-zh-en-emilia",
+      "reason": "sole-qualified-model"
+    },
+    {
+      "bytes": 1441860391,
+      "disposition": "retire",
+      "path": "$HOME/Library/Application Support/TypeWhale Pro/Runtimes/tts/cosyvoice3-main-py310",
+      "reason": "retired-model-exclusive-runtime"
+    },
+    {
+      "bytes": 18224157,
+      "disposition": "retire",
+      "path": "$HOME/Library/Application Support/TypeWhale Pro/Runtimes/tts/moss-python-mps-system-v1",
+      "reason": "retired-model-exclusive-runtime"
+    },
+    {
+      "bytes": 1342891472,
+      "disposition": "retire",
+      "path": "$HOME/Library/Application Support/TypeWhale Pro/Runtimes/tts/voxcpm2-2.0.3-py312",
+      "reason": "retired-model-exclusive-runtime"
+    }
+  ],
+  "modelsRoot": "$HOME/Library/Application Support/TypeWhale Pro/Models/tts",
+  "protectedRoots": [
+    "$HOME/Library/Application Support/Reader Demo"
+  ],
+  "reclaimableBytes": 46261508612,
+  "retainedModelID": "zipvoice-distill-int8-zh-en-emilia",
+  "retainedVoiceIDs": [
+    "zipvoice-default",
+    "zipvoice-serena",
+    "zipvoice-cosy",
+    "zipvoice-video-reference"
+  ],
+  "runtimesRoot": "$HOME/Library/Application Support/TypeWhale Pro/Runtimes/tts",
+  "schemaVersion": 1
+}

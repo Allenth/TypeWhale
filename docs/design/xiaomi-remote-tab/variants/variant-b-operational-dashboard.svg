@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="650" height="720" viewBox="0 0 650 720">
+  <rect width="650" height="720" rx="16" fill="#061020"/>
+  <g font-family="-apple-system, BlinkMacSystemFont, sans-serif">
+    <rect x="18" y="18" width="614" height="132" rx="12" fill="#1E2B35" stroke="#C6D1CF" stroke-opacity=".18"/>
+    <circle cx="46" cy="49" r="6" fill="#E6C776"/><text x="62" y="54" fill="#F5F7F2" font-size="17" font-weight="650">等待遥控器</text>
+    <text x="34" y="82" fill="#A1AEAC" font-size="12">按住 Home + Menu 后开始扫描</text>
+    <rect x="474" y="31" width="124" height="34" rx="8" fill="#6F9EAD"/><text x="500" y="52" fill="#061020" font-size="12" font-weight="700">扫描遥控器</text>
+    <line x1="34" y1="105" x2="598" y2="105" stroke="#C6D1CF" stroke-opacity=".10"/>
+    <text x="34" y="130" fill="#8F9C9A" font-size="11">本机处理 · 不使用虚拟麦克风</text>
+    <rect x="18" y="164" width="614" height="122" rx="10" fill="#12202E" stroke="#C6D1CF" stroke-opacity=".14"/>
+    <text x="34" y="190" fill="#9EAAA8" font-size="11" font-weight="650">设备</text><text x="34" y="221" fill="#E8ECE8" font-size="13">尚未配对</text>
+    <text x="34" y="248" fill="#899694" font-size="11">型号 —   电量 —   信号 —</text>
+    <rect x="18" y="300" width="614" height="146" rx="10" fill="#12202E" stroke="#C6D1CF" stroke-opacity=".14"/>
+    <text x="34" y="326" fill="#9EAAA8" font-size="11" font-weight="650">语音链路</text>
+    <g font-size="11"><text x="34" y="363" fill="#E8ECE8">蓝牙</text><text x="144" y="363" fill="#899694">控制通道</text><text x="270" y="363" fill="#899694">音频包</text><text x="378" y="363" fill="#899694">PCM</text><text x="471" y="363" fill="#899694">TypeWhale</text></g>
+    <line x1="52" y1="386" x2="548" y2="386" stroke="#5B6E75" stroke-width="2"/>
+    <g fill="#334650"><circle cx="52" cy="386" r="6"/><circle cx="174" cy="386" r="6"/><circle cx="296" cy="386" r="6"/><circle cx="418" cy="386" r="6"/><circle cx="548" cy="386" r="6"/></g>
+    <rect x="18" y="460" width="614" height="112" rx="10" fill="#12202E" stroke="#C6D1CF" stroke-opacity=".14"/>
+    <text x="34" y="486" fill="#9EAAA8" font-size="11" font-weight="650">按键映射</text><text x="34" y="520" fill="#E8ECE8" font-size="12">语音键  按住说话</text><text x="262" y="520" fill="#E8ECE8" font-size="12">确定键  系统</text><text x="458" y="520" fill="#E8ECE8" font-size="12">返回键  系统</text>
+    <text x="34" y="550" fill="#899694" font-size="11">更多按键与权限在同一页面继续向下滚动</text>
+    <rect x="18" y="586" width="614" height="98" rx="10" fill="#12202E" stroke="#C6D1CF" stroke-opacity=".14"/>
+    <text x="34" y="612" fill="#9EAAA8" font-size="11" font-weight="650">权限与使用</text><text x="34" y="643" fill="#E8ECE8" font-size="12">蓝牙：等待授权   输入监控：用于按键映射</text><text x="34" y="665" fill="#899694" font-size="11">连接、诊断、日常使用与恢复集中在一个滚动页。</text>
+  </g>
+</svg>

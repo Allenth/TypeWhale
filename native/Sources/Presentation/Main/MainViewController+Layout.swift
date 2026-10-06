@@ -175,8 +175,11 @@ extension MainViewController {
 
     /// 刷新左栏内存读数，并按阈值变色；升级到更高档位时给一次提醒。
     func updateMemoryReadout() {
-        let megabytes = MemoryMonitor.currentFootprintMB
-        memoryLabel.stringValue = "内存 \(megabytes) MB · 峰值 \(MemoryMonitor.peakFootprintMB) MB"
+        let worker = ManagedLLMRuntimeService.shared.workerMemorySnapshot
+        let megabytes = MemoryMonitor.combinedFootprintMB(
+            additionalProcessID: worker.processID
+        )
+        memoryLabel.stringValue = "内存 \(megabytes) MB · 峰值 \(MemoryMonitor.peakCombinedFootprintMB) MB"
         let level = MemoryMonitor.level(forMB: megabytes)
         switch level {
         case .normal: memoryLabel.textColor = .secondaryLabelColor
@@ -192,7 +195,11 @@ extension MainViewController {
 
     /// 当前内存是否处于预警/高档位，供胶囊在录音时同步状态色与提示。
     var isMemoryElevated: Bool {
-        MemoryMonitor.level(forMB: MemoryMonitor.currentFootprintMB) != .normal
+        let worker = ManagedLLMRuntimeService.shared.workerMemorySnapshot
+        let megabytes = MemoryMonitor.combinedFootprintMB(
+            additionalProcessID: worker.processID
+        )
+        return MemoryMonitor.level(forMB: megabytes) != .normal
     }
 
     /// 更新实时文本区，并滚动到末尾：始终显示最新内容，最旧的被挤到上方滚出可视区。
@@ -228,7 +235,18 @@ extension MainViewController {
         statusRow.alignment = .centerY
         statusRow.spacing = 5
 
-        let textStack = NSStackView(views: [caption, nameRow, statusRow])
+        asrBackendMode.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        asrSwitchProgress.isIndeterminate = false
+        asrSwitchProgress.minValue = 0
+        asrSwitchProgress.maxValue = 1
+        asrSwitchProgress.doubleValue = 0
+        asrSwitchProgress.controlSize = .small
+        asrSwitchProgress.style = .bar
+        asrSwitchProgress.isHidden = true
+        asrSwitchProgressLabel.textColor = .secondaryLabelColor
+        asrSwitchProgressLabel.isHidden = true
+
+        let textStack = NSStackView(views: [caption, nameRow, statusRow, asrBackendMode, asrSwitchProgress, asrSwitchProgressLabel])
         textStack.orientation = .vertical
         textStack.alignment = .leading
         textStack.spacing = 3
@@ -238,9 +256,11 @@ extension MainViewController {
             modelEntryDot.widthAnchor.constraint(equalToConstant: 6),
             modelEntryDot.heightAnchor.constraint(equalToConstant: 6),
             nameRow.widthAnchor.constraint(equalTo: textStack.widthAnchor),
+            asrBackendMode.widthAnchor.constraint(equalTo: textStack.widthAnchor),
+            asrSwitchProgress.widthAnchor.constraint(equalTo: textStack.widthAnchor),
         ])
         let click = NSClickGestureRecognizer(target: self, action: #selector(showModelDetail(_:)))
-        box.addGestureRecognizer(click)
+        nameRow.addGestureRecognizer(click)
         return box
     }
 

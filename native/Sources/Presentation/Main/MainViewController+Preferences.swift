@@ -17,12 +17,20 @@ extension MainViewController {
     func shortcutRow(
         title: String,
         captureButton: NSButton,
-        fallbackButton: NSButton
+        fallbackButton: NSButton,
+        mousePresetPicker: NSPopUpButton?
     ) -> NSView {
         let titleLabel = controlRowLabel(title)
         titleLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        captureButton.translatesAutoresizingMaskIntoConstraints = false
+        fallbackButton.translatesAutoresizingMaskIntoConstraints = false
+        let rowViews: [NSView] = {
+            guard let popup = mousePresetPicker else { return [titleLabel, flexSpacer(), captureButton, fallbackButton] }
+            popup.translatesAutoresizingMaskIntoConstraints = false
+            return [titleLabel, popup, captureButton, fallbackButton]
+        }()
 
-        let row = NSStackView(views: [titleLabel, flexSpacer(), captureButton, fallbackButton])
+        let row = NSStackView(views: rowViews)
         row.orientation = .horizontal
         row.alignment = .centerY
         row.spacing = 8
@@ -32,11 +40,12 @@ extension MainViewController {
         return row
     }
 
-    func optionRow(_ title: String, _ control: NSView) -> NSView {
+    func optionRow(_ title: String, _ control: NSView, showsLeader: Bool = false) -> NSView {
         let titleLabel = controlRowLabel(title)
         control.translatesAutoresizingMaskIntoConstraints = false
         control.setAccessibilityLabel(title)
-        let row = NSStackView(views: [titleLabel, flexSpacer(), control])
+        let middle = showsLeader ? dottedLeaderView() : flexSpacer()
+        let row = NSStackView(views: [titleLabel, middle, control])
         row.orientation = .horizontal
         row.alignment = .centerY
         row.spacing = 10

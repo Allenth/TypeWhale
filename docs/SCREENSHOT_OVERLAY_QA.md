@@ -1,3 +1,5 @@
+> 文档迁移（2026-09-05）：[现行文档](current/RELEASE_QA.md)。下方为历史专项验收矩阵，不代表当前版本已通过；真实安装版路径为 /Applications/TypeWhale Pro.app。
+
 # Screenshot Overlay QA Checklist
 
 This checklist is the Version B real-overlay verification gate. Run it against the installed app in `/Applications/TypeWhale.app`, not only against source code.
@@ -88,10 +90,11 @@ If any ordinary selected-region button is visually disabled or unclickable, trea
    - Main status shows screenshot archive processing, then success or a useful failure.
    - A top toast shows `归档整理中` while OCR and summary are running, then is replaced by the completion toast.
    - Clipboard is not modified.
-   - A Markdown file appears in `/Users/waykingah/Movies/github/Obsidian/0.1 backlog需求池/归档（未处理）/yyyy-MM-dd/`.
+   - A Markdown file appears in `$HOME/Movies/github/Obsidian/0.1 backlog需求池/归档（未处理）/yyyy-MM-dd/`.
+   - A same-name PNG screenshot attachment appears in the date folder's `附件/` subfolder.
    - The file name starts with `归档-yyMMdd-HHmm-` and ends with the summarized topic.
    - The Markdown front matter includes `type: knowledge_archive`, `target_app: "知识点"`, and `mode` matching the selected archive mode; default is `mode: "极致归纳"`.
-   - The body contains both `## 知识点` and `## OCR 原文`.
+   - The body contains `## 知识点`, `## OCR 原文`, `## 截图`, and a Markdown image reference like `附件/归档-....png`.
 
 ## Screenshot Translation
 

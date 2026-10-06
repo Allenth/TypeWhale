@@ -2,9 +2,11 @@ import AppKit
 import QuartzCore
 
 final class RecordingPanel: NSPanel, PreviewPresenting {
+    var presentationFrame: CGRect? { frame }
+    private let panelShell = MainCapsulePanelShell()
+    private let contentRoot = NSView()
     private let visualBackground = NSVisualEffectView()
     private let capsule = RecordingCapsuleView()
-    private let healthBorderOverlay = HealthBorderOverlayView()
     private let infoBar = NSStackView()
     private let appIconView = NSImageView()
     private let appNameLabel = NSTextField(labelWithString: "")
@@ -14,25 +16,25 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
     private let translationBadge = NSTextField(labelWithString: "自动翻译")
     private let statusDotLabel = NSTextField(labelWithString: "·")
     private let statusBadge = NSTextField(labelWithString: "")
-    private let levelDotLabel = NSTextField(labelWithString: "·")
-    private let levelLabel = NSTextField(labelWithString: "")
     private let infoBarHeight: CGFloat = 22
     private var hasContext = false
     private let fadeDuration: TimeInterval = 0.25
     private let resizeDuration: TimeInterval = 0.18
     private var visibilityGeneration = 0
     private var currentStatusBorderColor: NSColor?
-    private var ollamaHealthy = false
     private var accent: PreviewAccent = .normal
     private var modeTitleText = "自动"
     private var modeEmphasis: PreviewModeEmphasis = .normal
+    private var modeButtonWidthConstraint: NSLayoutConstraint?
+    private var contextState = MainCapsuleContext.empty
 
     /// 点击胶囊上的模式标签时回调，用于手动切换整理模式。
     var onCycleMode: (() -> Void)?
 
     init() {
+        let initialFrame = NSRect(origin: .zero, size: MainCapsulePanelShell.initialContentSize)
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 164, height: 44),
+            contentRect: initialFrame,
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -45,8 +47,13 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
         hidesOnDeactivate = false
         becomesKeyOnlyIfNeeded = true
 
-        visualBackground.frame = NSRect(x: 0, y: 0, width: 164, height: 44)
-        visualBackground.autoresizingMask = [.width, .height]
+        contentRoot.frame = initialFrame
+        contentRoot.autoresizingMask = [.width, .height]
+        contentRoot.wantsLayer = true
+        contentRoot.layer?.backgroundColor = NSColor.clear.cgColor
+
+        visualBackground.frame = initialFrame
+        visualBackground.autoresizingMask = []
         visualBackground.material = .hudWindow
         visualBackground.blendingMode = .behindWindow
         visualBackground.state = .active
@@ -54,19 +61,15 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
         visualBackground.wantsLayer = true
         visualBackground.layer?.cornerRadius = UITheme.capsuleCornerRadius
         visualBackground.layer?.masksToBounds = true
+        contentRoot.addSubview(visualBackground)
 
-        capsule.frame = visualBackground.bounds
-        capsule.autoresizingMask = [.width, .height]
-        visualBackground.addSubview(capsule)
+        capsule.frame = contentRoot.bounds
+        capsule.autoresizingMask = []
+        contentRoot.addSubview(capsule)
 
         configureInfoBar()
 
-        // 健康呼吸绿环置于最上层（信息条之后添加），确保绿边渲染在毛玻璃与文字之前。
-        healthBorderOverlay.frame = visualBackground.bounds
-        healthBorderOverlay.autoresizingMask = [.width, .height]
-        visualBackground.addSubview(healthBorderOverlay)
-
-        contentView = visualBackground
+        contentView = contentRoot
     }
 
     override var canBecomeKey: Bool { false }
@@ -79,66 +82,73 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
         appIconView.heightAnchor.constraint(equalToConstant: 14).isActive = true
 
         appNameLabel.font = .systemFont(ofSize: 11, weight: .medium)
-        appNameLabel.textColor = NSColor(calibratedWhite: 1, alpha: 0.82)
+        appNameLabel.textColor = UITheme.waterInkMuted
         appNameLabel.lineBreakMode = .byTruncatingTail
         appNameLabel.maximumNumberOfLines = 1
+        appNameLabel.cell?.wraps = false
+        appNameLabel.cell?.isScrollable = true
         appNameLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         dotLabel.font = .systemFont(ofSize: 11, weight: .bold)
-        dotLabel.textColor = NSColor(calibratedWhite: 1, alpha: 0.5)
+        dotLabel.textColor = UITheme.waterInkFaint
 
         modeButton.isBordered = false
         modeButton.setButtonType(.momentaryChange)
         modeButton.target = self
         modeButton.action = #selector(modeTapped)
         modeButton.toolTip = "点击切换整理模式"
+        modeButton.lineBreakMode = .byTruncatingTail
+        modeButton.cell?.wraps = false
+        modeButton.cell?.isScrollable = true
+        modeButton.translatesAutoresizingMaskIntoConstraints = false
+        modeButton.setContentCompressionResistancePriority(.required, for: .horizontal)
         setModeTitle("自动")
 
         translationDotLabel.font = .systemFont(ofSize: 11, weight: .bold)
-        translationDotLabel.textColor = NSColor(calibratedWhite: 1, alpha: 0.5)
+        translationDotLabel.textColor = UITheme.waterInkFaint
         translationDotLabel.isHidden = true
 
         translationBadge.font = .systemFont(ofSize: 11, weight: .semibold)
-        translationBadge.textColor = NSColor(calibratedRed: 1.0, green: 0.82, blue: 0.36, alpha: 0.98)
+        translationBadge.textColor = UITheme.waterInkWarning.withAlphaComponent(0.98)
         translationBadge.lineBreakMode = .byTruncatingTail
         translationBadge.maximumNumberOfLines = 1
+        translationBadge.cell?.wraps = false
+        translationBadge.cell?.isScrollable = true
         translationBadge.toolTip = "自动翻译已开启"
         translationBadge.isHidden = true
 
         statusDotLabel.font = .systemFont(ofSize: 11, weight: .bold)
-        statusDotLabel.textColor = NSColor(calibratedWhite: 1, alpha: 0.5)
+        statusDotLabel.textColor = UITheme.waterInkFaint
         statusDotLabel.isHidden = true
 
         statusBadge.font = .systemFont(ofSize: 11, weight: .semibold)
-        statusBadge.textColor = NSColor(calibratedWhite: 1, alpha: 0.96)
+        statusBadge.textColor = UITheme.waterInkText
         statusBadge.lineBreakMode = .byTruncatingTail
         statusBadge.maximumNumberOfLines = 1
+        statusBadge.cell?.wraps = false
+        statusBadge.cell?.isScrollable = true
         statusBadge.isHidden = true
 
-        levelDotLabel.font = .systemFont(ofSize: 11, weight: .bold)
-        levelDotLabel.textColor = NSColor(calibratedWhite: 1, alpha: 0.5)
-        levelDotLabel.isHidden = true
-
-        // 实时输入电平（dBFS），等宽数字 + 固定宽度避免数值变化时胶囊抖动；用于肉眼分辨近场/远场强弱。
-        levelLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
-        levelLabel.textColor = UITheme.brandGreen.withAlphaComponent(0.98)
-        levelLabel.maximumNumberOfLines = 1
-        levelLabel.alignment = .right
-        levelLabel.toolTip = "实时输入电平（dBFS），越接近 0 越响"
-        levelLabel.isHidden = true
-        levelLabel.translatesAutoresizingMaskIntoConstraints = false
-        levelLabel.widthAnchor.constraint(equalToConstant: 50).isActive = true
+        [
+            appNameLabel,
+            dotLabel,
+            translationDotLabel,
+            translationBadge,
+            statusDotLabel,
+            statusBadge,
+        ].forEach(configureSingleLineLabel)
 
         infoBar.orientation = .horizontal
         infoBar.alignment = .centerY
         infoBar.spacing = 5
         infoBar.translatesAutoresizingMaskIntoConstraints = false
+        infoBar.distribution = .gravityAreas
         infoBar.setViews(
-            [appIconView, appNameLabel, dotLabel, modeButton, translationDotLabel, translationBadge, statusDotLabel, statusBadge, levelDotLabel, levelLabel],
+            [appIconView, appNameLabel, dotLabel, modeButton, translationDotLabel, translationBadge, statusDotLabel, statusBadge],
             in: .leading
         )
         infoBar.isHidden = true
-        visualBackground.addSubview(infoBar)
+        contentRoot.addSubview(infoBar)
 
         NSLayoutConstraint.activate([
             infoBar.topAnchor.constraint(equalTo: visualBackground.topAnchor, constant: 6),
@@ -146,6 +156,13 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
             infoBar.leadingAnchor.constraint(greaterThanOrEqualTo: visualBackground.leadingAnchor, constant: 14),
             infoBar.trailingAnchor.constraint(lessThanOrEqualTo: visualBackground.trailingAnchor, constant: -14),
         ])
+    }
+
+    private func configureSingleLineLabel(_ label: NSTextField) {
+        label.maximumNumberOfLines = 1
+        label.lineBreakMode = .byTruncatingTail
+        label.cell?.wraps = false
+        label.cell?.isScrollable = true
     }
 
     private func setModeTitle(_ text: String) {
@@ -157,14 +174,38 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
         let color: NSColor
         switch modeEmphasis {
         case .normal:
-            color = NSColor(calibratedWhite: 1, alpha: 0.96)
+            color = UITheme.waterInkText
         case .automaticResolved:
-            color = NSColor(calibratedRed: 1.0, green: 0.82, blue: 0.36, alpha: 0.98)
+            color = UITheme.waterInkWarning.withAlphaComponent(0.98)
         }
         modeButton.attributedTitle = NSAttributedString(string: modeTitleText, attributes: [
-            .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
+            .font: modeTitleFont(for: modeTitleText),
             .foregroundColor: color,
         ])
+        updateModeButtonWidth()
+    }
+
+    private func updateModeButtonWidth() {
+        let requiredWidth = ceil(modeButton.attributedTitle.size().width) + 8
+        if let modeButtonWidthConstraint {
+            modeButtonWidthConstraint.constant = requiredWidth
+        } else {
+            let constraint = modeButton.widthAnchor.constraint(greaterThanOrEqualToConstant: requiredWidth)
+            constraint.priority = .required
+            constraint.isActive = true
+            modeButtonWidthConstraint = constraint
+        }
+    }
+
+    private func modeTitleFont(for text: String) -> NSFont {
+        switch text.count {
+        case 0...6:
+            return .systemFont(ofSize: 11, weight: .semibold)
+        case 7...9:
+            return .systemFont(ofSize: 10, weight: .semibold)
+        default:
+            return .systemFont(ofSize: 9, weight: .semibold)
+        }
     }
 
     @objc private func modeTapped() {
@@ -173,9 +214,12 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
 
     /// 设置胶囊顶部的「App 图标 · 模式」信息条。
     func setContext(appIcon: NSImage?, appName: String?, modeName: String, autoTranslateEnabled: Bool) {
-        updateTargetApp(appIcon: appIcon, appName: appName, shouldResize: false)
-        setModeTitle(modeName)
-        setTranslationBadgeVisible(autoTranslateEnabled)
+        contextState = MainCapsuleContext(
+            targetAppName: appName,
+            modeName: modeName,
+            autoTranslateEnabled: autoTranslateEnabled
+        )
+        applyContextPresentation(appIcon: appIcon)
         hasContext = true
         infoBar.isHidden = false
         capsule.contextTopInset = infoBarHeight
@@ -189,7 +233,12 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
 
     /// 仅更新模式标签（手动切换后调用），不改动 App 信息。
     func updateModeName(_ modeName: String) {
-        setModeTitle(modeName)
+        contextState.modeName = modeName
+        let presentation = MainCapsuleContextPresentation(
+            context: contextState,
+            hasAppIcon: !appIconView.isHidden
+        )
+        setModeTitle(presentation.modeNameText)
         if hasContext { resizeAndPosition() }
     }
 
@@ -199,7 +248,12 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
     }
 
     func updateAutoTranslateEnabled(_ enabled: Bool) {
-        setTranslationBadgeVisible(enabled)
+        contextState.autoTranslateEnabled = enabled
+        let presentation = MainCapsuleContextPresentation(
+            context: contextState,
+            hasAppIcon: !appIconView.isHidden
+        )
+        setTranslationBadgeVisible(!presentation.translationBadgeHidden)
         if hasContext { resizeAndPosition() }
     }
 
@@ -207,7 +261,7 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
     /// remainingSeconds 为 nil 表示非录音；memoryHigh 表示内存达到预警档位。
     func updateRecordingStatus(remainingSeconds: Int?, memoryHigh: Bool) {
         var badgeText: String?
-        var badgeColor = NSColor(calibratedWhite: 1, alpha: 0.78)
+        var badgeColor = UITheme.waterInkMuted
         var borderColor: NSColor?
 
         if let remainingSeconds {
@@ -236,9 +290,8 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
         if hasContext { resizeAndPosition() }
     }
 
-    func updateOllamaHealth(isHealthy: Bool) {
-        ollamaHealthy = isHealthy
-        applyBorderState()
+    func updateOpenClawConnectionStatus(_ status: OpenClawConnectionStatus) {
+        capsule.openClawConnectionStatus = status
     }
 
     func updateAccent(_ accent: PreviewAccent) {
@@ -251,23 +304,42 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
         switch accent {
         case .normal:
             accentBorderColor = nil
+            capsule.innerGlow = .none
         case .ideaPill:
-            accentBorderColor = NSColor(calibratedRed: 0.48, green: 0.38, blue: 1.0, alpha: 0.98)
+            accentBorderColor = RecordingCapsuleView.ideaPillBorderColor
+            capsule.innerGlow = .ideaPill
+        case .openClaw:
+            accentBorderColor = RecordingCapsuleView.openClawBorderColor
+            capsule.innerGlow = .openClaw
         }
         capsule.statusBorderColor = currentStatusBorderColor ?? accentBorderColor
-        // 紧急状态边框（倒计时/内存）由胶囊绘制并优先；否则由置顶绿环显示健康呼吸。
-        let healthActive = ollamaHealthy && currentStatusBorderColor == nil && accent == .normal
-        healthBorderOverlay.isActive = healthActive
-        // 绿环激活时隐藏胶囊默认白边，避免白边+绿环的双层边框。
-        capsule.defaultBorderHidden = healthActive || accentBorderColor != nil
+        capsule.defaultBorderHidden = accentBorderColor != nil
     }
 
     private func updateTargetApp(appIcon: NSImage?, appName: String?, shouldResize: Bool) {
-        let rawName = (appName?.isEmpty == false) ? appName! : "未知应用"
-        appNameLabel.stringValue = String(rawName.prefix(16))
-        appIconView.image = appIcon
-        appIconView.isHidden = (appIcon == nil)
+        contextState.targetAppName = appName
+        applyContextPresentation(appIcon: appIcon, updateMode: false, updateTranslation: false)
         if shouldResize, hasContext { resizeAndPosition() }
+    }
+
+    private func applyContextPresentation(
+        appIcon: NSImage?,
+        updateMode: Bool = true,
+        updateTranslation: Bool = true
+    ) {
+        let presentation = MainCapsuleContextPresentation(
+            context: contextState,
+            hasAppIcon: appIcon != nil
+        )
+        appNameLabel.stringValue = presentation.appNameText
+        appIconView.image = appIcon
+        appIconView.isHidden = presentation.appIconHidden
+        if updateMode {
+            setModeTitle(presentation.modeNameText)
+        }
+        if updateTranslation {
+            setTranslationBadgeVisible(!presentation.translationBadgeHidden)
+        }
     }
 
     private func setTranslationBadgeVisible(_ visible: Bool) {
@@ -278,9 +350,6 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
     func show(state: String, draft: String? = nil) {
         visibilityGeneration += 1
         let shouldFadeIn = !isVisible
-        // 新一帧胶囊先清掉上一次的电平读数，避免显示陈旧数值。录音中会被实时更新重新点亮。
-        levelLabel.isHidden = true
-        levelDotLabel.isHidden = true
         capsule.update(state: state, draft: draft)
         resizeAndPosition()
         if shouldFadeIn {
@@ -296,6 +365,9 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
         } else {
             alphaValue = 1
         }
+        LaunchDiagnostics.mark(
+            "capsule_show_result theme=classic visible=\(isVisible) alpha=\(String(format: "%.2f", alphaValue)) fade_in=\(shouldFadeIn) frame=\(Int(frame.minX)),\(Int(frame.minY)),\(Int(frame.width))x\(Int(frame.height))"
+        )
     }
 
     func updateDraft(_ draft: String) {
@@ -303,11 +375,14 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
         resizeAndPosition()
     }
 
+    func updateDraft(_ snapshot: PreviewDisplaySnapshot) {
+        capsule.update(snapshot: snapshot)
+        resizeAndPosition()
+    }
+
     func hideAnimated() {
         guard isVisible else { return }
         visibilityGeneration += 1
-        updateAccent(.normal)
-        updateOllamaHealth(isHealthy: false)
         let generation = visibilityGeneration
         NSAnimationContext.runAnimationGroup { context in
             context.duration = fadeDuration
@@ -317,26 +392,35 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
             guard let self, generation == self.visibilityGeneration else { return }
             self.orderOut(nil)
             self.alphaValue = 1
+            // OpenClaw 的外置徽章会扩大窗口；淡出期间必须保留原强调态，
+            // 否则普通边框会在旧尺寸上重画，短暂露出一圈灰色外框。
+            self.updateAccent(.normal)
+            self.updateOpenClawConnectionStatus(.checking)
         }
     }
 
     private func resizeAndPosition() {
         let bodySize = capsule.preferredSize
-        var width = bodySize.width
-        if hasContext {
-            infoBar.layoutSubtreeIfNeeded()
-            width = max(width, min(320, ceil(infoBar.fittingSize.width) + 30))
-        }
-        let size = NSSize(width: width, height: bodySize.height)
         guard let screen = NSScreen.main else { return }
         let frame = screen.visibleFrame
-        let anchorCenter = NSPoint(x: frame.midX, y: frame.minY + 68)
-        let targetFrame = NSRect(
-            x: anchorCenter.x - size.width / 2,
-            y: anchorCenter.y - size.height / 2,
-            width: size.width,
-            height: size.height
+        let materialFrame = capsule.materialFrame(for: bodySize)
+        let rightOverhang = max(0, bodySize.width - materialFrame.width)
+        let requiredTopInfoBarWidth: CGFloat?
+        if hasContext {
+            infoBar.layoutSubtreeIfNeeded()
+            requiredTopInfoBarWidth = requiredWidthForTopInfoBar()
+        } else {
+            requiredTopInfoBarWidth = nil
+        }
+        let size = panelShell.panelSize(
+            bodySize: bodySize,
+            requiredTopInfoBarWidth: requiredTopInfoBarWidth,
+            minimumBodyWidth: RecordingCapsuleView.minimumBodyWidth,
+            rightOverhang: rightOverhang,
+            screenVisibleFrame: frame
         )
+        layoutContentSubviews(for: size)
+        let targetFrame = panelShell.targetFrame(panelSize: size, screenVisibleFrame: frame)
         guard isVisible else {
             setFrame(targetFrame, display: true)
             return
@@ -354,26 +438,56 @@ final class RecordingPanel: NSPanel, PreviewPresenting {
         }
     }
 
+    private func requiredWidthForTopInfoBar() -> CGFloat {
+        ceil(infoBar.fittingSize.width)
+    }
+
+    private func layoutContentSubviews(for size: NSSize) {
+        let frames = panelShell.layoutFrames(
+            panelSize: size,
+            materialFrame: capsule.materialFrame(for: size)
+        )
+        contentRoot.frame = frames.contentRoot
+        capsule.frame = frames.capsule
+        visualBackground.frame = frames.visualBackground
+    }
+
+    /// 主题选择页使用的静态快照：直接渲染当前生产胶囊，不创建第二套视觉。
+    /// 只设置演示状态并离屏缓存，不显示窗口、不启动录音、不写入设置。
+    func makeThemePreviewSnapshot(
+        accent: PreviewAccent,
+        modeName: String,
+        state: String = "录音中"
+    ) -> NSImage? {
+        let appIcon = NSImage(
+            systemSymbolName: "message.fill",
+            accessibilityDescription: "目标应用"
+        )
+        setContext(
+            appIcon: appIcon,
+            appName: "ChatGPT",
+            modeName: modeName,
+            autoTranslateEnabled: false
+        )
+        updateAccent(accent)
+        updateOpenClawConnectionStatus(accent == .openClaw ? .connected : .checking)
+        updateRecordingStatus(remainingSeconds: 118, memoryHigh: false)
+        capsule.update(
+            state: state,
+            bands: [0.18, 0.48, 0.26, 0.72, 0.32, 0.58, 0.22]
+        )
+        resizeAndPosition()
+        contentRoot.layoutSubtreeIfNeeded()
+        contentRoot.displayIfNeeded()
+        return contentRoot.typeWhaleSnapshotImage()
+    }
+
     func updateBands(_ bands: [Float]) {
         capsule.update(bands: bands)
     }
 
-    /// 更新胶囊上的实时输入电平读数（dBFS）；db 为 nil 表示清除（非录音时）。
-    /// 固定宽度标签，仅在显隐切换时才重新布局，数值变化不触发胶囊抖动。
+    /// 接收实时输入电平供调用链保持兼容；水墨 UI 不再在胶囊上暴露工程读数。
     func updateInputLevel(db: Float?) {
-        guard hasContext else { return }
-        if let db {
-            let shown = max(-80, min(0, Int(db.rounded())))
-            levelLabel.stringValue = "\(shown) dB"
-            let wasHidden = levelLabel.isHidden
-            levelLabel.isHidden = false
-            levelDotLabel.isHidden = false
-            if wasHidden { resizeAndPosition() }
-        } else {
-            let wasShown = !levelLabel.isHidden
-            levelLabel.isHidden = true
-            levelDotLabel.isHidden = true
-            if wasShown { resizeAndPosition() }
-        }
+        _ = db
     }
 }

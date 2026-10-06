@@ -26,64 +26,57 @@ private final class ProbeScreenshotTranslationEngine: ScreenshotTranslationEngin
 @main
 struct SelectedScreenshotTranslationEngineCheck {
     static func main() async throws {
-        let deepSeek = ProbeScreenshotTranslationEngine(displayName: "DeepSeek Screenshot Probe")
-        let ollama35B = ProbeScreenshotTranslationEngine(displayName: "Ollama Screenshot 35B Probe")
+        let deepSeek = ProbeScreenshotTranslationEngine(
+            displayName: "DeepSeek Screenshot Probe"
+        )
+        let qwen = ProbeScreenshotTranslationEngine(
+            displayName: "Qwen Screenshot Probe"
+        )
+        let context = SmartInputContext(
+            targetAppName: "截图翻译",
+            targetBundleIdentifier: "TypeWhale.ScreenshotTranslation"
+        )
 
-        let remoteEngine = SelectedScreenshotTranslationEngine(
+        let remote = SelectedScreenshotTranslationEngine(
             deepSeek: deepSeek,
-            ollama: { model in
-                switch model {
-                case .ollamaQwen35B: return ollama35B
-                case .deepSeekV4Flash: return deepSeek
-                }
+            managed: { model in
+                precondition(model == .qwen3_4BInstruct2507_4bit)
+                return qwen
             },
             modelProvider: { .deepSeekV4Flash }
         )
-        let context = SmartInputContext(targetAppName: "截图翻译", targetBundleIdentifier: "TypeWhale.ScreenshotTranslation")
-        let remoteOutput = try await remoteEngine.translateScreenshotOCR(
+        let remoteOutput = try await remote.translateScreenshotOCR(
             rawText: "[[TW_LINE_1]] Settings",
             context: context
         )
-        precondition(remoteEngine.displayName == "DeepSeek Screenshot Probe")
-        precondition(remoteOutput.translatedText == "DeepSeek Screenshot Probe:[[TW_LINE_1]] Settings")
-        precondition(remoteOutput.direction == .englishToChinese)
+        precondition(remote.displayName == "DeepSeek Screenshot Probe")
+        precondition(
+            remoteOutput.translatedText
+                == "DeepSeek Screenshot Probe:[[TW_LINE_1]] Settings"
+        )
         precondition(deepSeek.translateCalls == 1)
 
-        let localEngine = SelectedScreenshotTranslationEngine(
+        var managedFactoryCalls = 0
+        let local = SelectedScreenshotTranslationEngine(
             deepSeek: deepSeek,
-            ollama: { model in
-                switch model {
-                case .ollamaQwen35B: return ollama35B
-                case .deepSeekV4Flash: return deepSeek
-                }
+            managed: { model in
+                managedFactoryCalls += 1
+                precondition(model == .qwen3_4BInstruct2507_4bit)
+                return qwen
             },
-            modelProvider: { .ollamaQwen35B }
+            modelProvider: { .typeWhaleQwen3_4BInstruct }
         )
-        let localOutput = try await localEngine.translateScreenshotOCR(
+        let localOutput = try await local.translateScreenshotOCR(
             rawText: "[[TW_LINE_1]] Submit",
             context: context
         )
-        precondition(localEngine.displayName == "Ollama Screenshot 35B Probe")
-        precondition(localOutput.translatedText == "Ollama Screenshot 35B Probe:[[TW_LINE_1]] Submit")
-        precondition(ollama35B.translateCalls == 1)
-
-        let highQualityLocalEngine = SelectedScreenshotTranslationEngine(
-            deepSeek: deepSeek,
-            ollama: { model in
-                switch model {
-                case .ollamaQwen35B: return ollama35B
-                case .deepSeekV4Flash: return deepSeek
-                }
-            },
-            modelProvider: { .ollamaQwen35B }
+        precondition(local.displayName == "Qwen Screenshot Probe")
+        precondition(managedFactoryCalls == 2)
+        precondition(
+            localOutput.translatedText
+                == "Qwen Screenshot Probe:[[TW_LINE_1]] Submit"
         )
-        let fastLocalOutput = try await highQualityLocalEngine.translateScreenshotOCR(
-            rawText: "[[TW_LINE_1]] Continue",
-            context: context
-        )
-        precondition(highQualityLocalEngine.displayName == "Ollama Screenshot 35B Probe")
-        precondition(fastLocalOutput.translatedText == "Ollama Screenshot 35B Probe:[[TW_LINE_1]] Continue")
-        precondition(ollama35B.translateCalls == 2)
+        precondition(qwen.translateCalls == 1)
 
         print("SelectedScreenshotTranslationEngineCheck passed")
     }

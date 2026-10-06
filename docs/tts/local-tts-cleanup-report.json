@@ -1,0 +1,26 @@
+{
+  "executed": true,
+  "totalBytes": 205150124,
+  "entries": [
+    {
+      "modelID": "zipvoice-distill-int8-zh-en-emilia",
+      "source": "$HOME/Library/Application Support/LocalTTSLab/models/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia",
+      "target": "$HOME/Library/Application Support/TypeWhale Pro/Models/tts/zipvoice-distill-int8-zh-en-emilia",
+      "bytes": 150992715,
+      "files": 363,
+      "recoverability": "macOS Trash",
+      "trashPath": "$HOME/.Trash/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia",
+      "state": "moved-to-trash"
+    },
+    {
+      "modelID": "zipvoice-distill-int8-zh-en-emilia",
+      "source": "$HOME/Library/Application Support/LocalTTSLab/models/vocos_24khz.onnx",
+      "target": "$HOME/Library/Application Support/TypeWhale Pro/Models/tts/zipvoice-distill-int8-zh-en-emilia/vocos_24khz.onnx",
+      "bytes": 54157409,
+      "files": 1,
+      "recoverability": "macOS Trash",
+      "trashPath": "$HOME/.Trash/vocos_24khz.onnx",
+      "state": "moved-to-trash"
+    }
+  ]
+}

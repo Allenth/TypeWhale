@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="650" height="720" viewBox="0 0 650 720">
+  <rect width="650" height="720" rx="16" fill="#061020"/>
+  <g font-family="-apple-system, BlinkMacSystemFont, sans-serif">
+    <text x="26" y="42" fill="#F5F7F2" font-size="18" font-weight="650">遥控器按键</text><text x="26" y="66" fill="#9AA7A5" font-size="12">点击按键调整 TypeWhale 动作</text>
+    <rect x="225" y="94" width="200" height="540" rx="90" fill="#142431" stroke="#C6D1CF" stroke-opacity=".22"/>
+    <circle cx="325" cy="147" r="26" fill="#6F9EAD"/><text x="306" y="152" fill="#061020" font-size="11" font-weight="700">语音</text>
+    <circle cx="325" cy="251" r="66" fill="#203643" stroke="#7798A2" stroke-opacity=".55"/>
+    <circle cx="325" cy="251" r="25" fill="#304B57"/><text x="311" y="256" fill="#E8ECE8" font-size="11">确定</text>
+    <rect x="259" y="345" width="56" height="36" rx="18" fill="#273E49"/><rect x="335" y="345" width="56" height="36" rx="18" fill="#273E49"/>
+    <text x="266" y="368" fill="#DDE4E0" font-size="11">返回</text><text x="344" y="368" fill="#DDE4E0" font-size="11">主页</text>
+    <circle cx="290" cy="438" r="23" fill="#273E49"/><circle cx="360" cy="438" r="23" fill="#273E49"/>
+    <text x="279" y="443" fill="#DDE4E0" font-size="10">音量</text><text x="349" y="443" fill="#DDE4E0" font-size="10">菜单</text>
+    <line x1="225" y1="147" x2="106" y2="147" stroke="#76919A"/><text x="28" y="143" fill="#E8ECE8" font-size="12">按住说话</text>
+    <line x1="425" y1="251" x2="548" y2="251" stroke="#76919A"/><text x="558" y="247" fill="#E8ECE8" font-size="12">发送</text>
+    <line x1="225" y1="363" x2="106" y2="363" stroke="#76919A"/><text x="28" y="359" fill="#E8ECE8" font-size="12">撤销</text>
+    <text x="26" y="676" fill="#9AA7A5" font-size="12">问题：图形挤占状态空间，连接与语音诊断被移出首屏。</text>
+  </g>
+</svg>

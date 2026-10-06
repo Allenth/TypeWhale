@@ -1,0 +1,29 @@
+{
+  "build": "865",
+  "checks": {
+    "automatedTests": true,
+    "installedPlayback": true,
+    "openClawBoundary": true,
+    "packageResidueFree": true,
+    "signatureValid": true
+  },
+  "cleanupAuthorized": true,
+  "installedAppPath": "/Applications/TypeWhale Pro.app",
+  "modelID": "zipvoice-distill-int8-zh-en-emilia",
+  "modelInventorySHA256": "f26c7de2a3221bf34997c717f4ec63f3229b264c1ee250af798614ec50dea298",
+  "modelPath": "$HOME/Library/Application Support/TypeWhale Pro/Models/tts/zipvoice-distill-int8-zh-en-emilia",
+  "protectedInventorySHA256": {
+    "$HOME/Library/Application Support/Reader Demo": "9bbf7c1a67dddf9d259f0062914c97c2b454fa3f94cac7e9eb4b1821bbbf23ee"
+  },
+  "qualificationPath": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/VoiceQualifications/zipvoice-distill-int8-zh-en-emilia.json",
+  "schemaVersion": 1,
+  "sourceWorkerPath": "$HOME/Pictures/macOSwinOSCoding/TypeSpeaker/native/Resources/tts_benchmark_worker.py",
+  "version": "2.0.58",
+  "voiceIDs": [
+    "zipvoice-default",
+    "zipvoice-serena",
+    "zipvoice-cosy",
+    "zipvoice-video-reference"
+  ],
+  "workerSHA256": "de7d75cc25707a646497b2a5cf98f0971908a4d3f4a7f490935cd1468e004be3"
+}

@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "tested_at": "2026-07-16T21:55:00+08:00",
+  "sample": "recording_20260716_213901_531823C6.wav",
+  "candidates": [
+    {"candidate_id":"sensevoice-int8","admitted":true,"engine":"sherpa","hotword_strategy":"unsupported","nonempty":true,"text":"实际测试效果。","load_sec":null,"inference_sec":0.375},
+    {"candidate_id":"parakeet-tdt-0.6b-v2-sherpa-int8","admitted":true,"engine":"sherpa","hotword_strategy":"unsupported","nonempty":true,"text":"Shijito Shishoko","load_sec":0.8192,"inference_sec":0.1171},
+    {"candidate_id":"fun-asr-nano-2512","admitted":true,"engine":"funASR","hotword_strategy":"native_list","nonempty":true,"text":"实际测试效果","load_sec":15.4376,"inference_sec":0.7713},
+    {"candidate_id":"qwen3-asr-0.6b-mlx-8bit","admitted":true,"engine":"mlx","hotword_strategy":"unsupported","nonempty":true,"text":"实际测试效果。","load_sec":2.9085,"inference_sec":0.0612},
+    {"candidate_id":"qwen3-asr-1.7b-mlx-8bit","admitted":true,"engine":"mlx","hotword_strategy":"unsupported","nonempty":true,"text":"实际测试效果。","load_sec":2.1021,"inference_sec":0.0885}
+  ]
+}

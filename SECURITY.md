@@ -1,3 +1,5 @@
+> 文档迁移（2026-09-05）：[现行文档](docs/current/ARCHITECTURE.md)。本专项文件继续保留；下方关于外发仅属未来功能的措辞是旧快照，现有 DeepSeek／OpenClaw 数据流与工程边界见新架构，发布前需专项复核。
+
 # Security Policy
 
 TypeWhale handles sensitive local data:

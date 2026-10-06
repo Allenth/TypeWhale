@@ -1,17 +1,27 @@
 import Foundation
 
-final class NativeSenseVoiceBridge {
+struct NativeStructuredRecognitionResult: Sendable {
+    let text: String
+    let tokens: [String]
+    let tokenTimestamps: [Float]?
+
+    var validatedTokenTimestamps: [Float]? {
+        guard let tokenTimestamps,
+              tokenTimestamps.count == tokens.count,
+              tokenTimestamps.allSatisfy({ $0.isFinite && $0 >= 0 }) else { return nil }
+        for index in tokenTimestamps.indices.dropFirst() where tokenTimestamps[index] < tokenTimestamps[index - 1] {
+            return nil
+        }
+        return tokenTimestamps
+    }
+}
+
+final class NativeSenseVoiceBridge: @unchecked Sendable {
     private enum Engine: Equatable {
         case senseVoice(URL)
-        case qwen3ASR(URL)
 
         var label: String {
-            switch self {
-            case .senseVoice:
-                return "sensevoice-small/sherpa-native"
-            case .qwen3ASR:
-                return "qwen3-asr-0.6b-int8/sherpa-native"
-            }
+            "sensevoice-small/sherpa-native"
         }
     }
 
@@ -149,6 +159,115 @@ final class NativeSenseVoiceBridge {
         }
     }
 
+    func transcribe(
+        samples: [Float],
+        sampleRate: Int,
+        configuration: ASRConfiguration,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            let startedAt = Date()
+            do {
+                let recognizer = try self.loadRecognizer(for: configuration)
+                guard !samples.isEmpty, sampleRate > 0 else {
+                    throw self.nativeError("原生语音识别 samples 无效")
+                }
+                var errorPointer: UnsafeMutablePointer<CChar>?
+                let language = configuration.languageMode.senseVoiceLanguage
+                let textPointer = samples.withUnsafeBufferPointer { buffer in
+                    language.withCString { languageCString in
+                        TypeSpeakerNativeRecognizerTranscribeSamples(
+                            recognizer,
+                            buffer.baseAddress,
+                            Int32(buffer.count),
+                            Int32(sampleRate),
+                            languageCString,
+                            &errorPointer
+                        )
+                    }
+                }
+                defer {
+                    if let textPointer { TypeSpeakerNativeStringFree(textPointer) }
+                    if let errorPointer { TypeSpeakerNativeStringFree(errorPointer) }
+                }
+                if let errorPointer {
+                    throw self.nativeError(String(cString: errorPointer))
+                }
+                guard let textPointer else {
+                    throw self.nativeError("原生语音识别模型未返回识别结果")
+                }
+                completion(.success([
+                    "text": String(cString: textPointer),
+                    "duration_sec": Date().timeIntervalSince(startedAt),
+                    "engine": self.loadedEngineLabel ?? "sherpa-native",
+                    "language_mode": configuration.languageMode.rawValue,
+                    "audio_source": "memory_pcm",
+                    "sample_rate": sampleRate,
+                    "sample_count": samples.count,
+                ]))
+            } catch {
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func transcribeDetailed(
+        audio: URL,
+        configuration: ASRConfiguration,
+        completion: @escaping (Result<NativeStructuredRecognitionResult, Error>) -> Void
+    ) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            do {
+                let recognizer = try self.loadRecognizer(for: configuration)
+                var errorPointer: UnsafeMutablePointer<CChar>?
+                let language = configuration.languageMode.senseVoiceLanguage
+                let pointer = audio.path.withCString { audioCString in
+                    language.withCString { languageCString in
+                        TypeSpeakerNativeRecognizerTranscribeDetailed(
+                            recognizer,
+                            audioCString,
+                            languageCString,
+                            &errorPointer
+                        )
+                    }
+                }
+                defer {
+                    if let pointer { TypeSpeakerNativeRecognitionResultFree(pointer) }
+                    if let errorPointer { TypeSpeakerNativeStringFree(errorPointer) }
+                }
+                if let errorPointer {
+                    throw self.nativeError(String(cString: errorPointer))
+                }
+                guard let pointer else {
+                    throw self.nativeError("原生语音识别模型未返回结构化结果")
+                }
+                let native = pointer.pointee
+                let count = max(0, Int(native.count))
+                let tokens: [String] = (0..<count).map { index in
+                    guard let token = native.tokens?[index] else { return "" }
+                    return String(cString: token)
+                }
+                let timestamps: [Float]? = native.timestamps.map { values in
+                    (0..<count).map { values[$0] }
+                }
+                let result = NativeStructuredRecognitionResult(
+                    text: native.text.map { String(cString: $0) } ?? "",
+                    tokens: tokens,
+                    tokenTimestamps: timestamps
+                )
+                completion(.success(NativeStructuredRecognitionResult(
+                    text: result.text,
+                    tokens: result.tokens,
+                    tokenTimestamps: result.validatedTokenTimestamps
+                )))
+            } catch {
+                completion(.failure(error))
+            }
+        }
+    }
+
     func warmUp(configuration: ASRConfiguration = .current()) {
         queue.async { [weak self] in
             guard let self else { return }
@@ -213,12 +332,6 @@ final class NativeSenseVoiceBridge {
                     }
                 }
             }
-        case .qwen3ASR(let directory):
-            created = directory.path.withCString { directoryCString in
-                "".withCString { hotwordsCString in
-                    TypeSpeakerNativeQwen3RecognizerCreate(directoryCString, hotwordsCString, &errorPointer)
-                }
-            }
         }
         defer {
             if let errorPointer { TypeSpeakerNativeStringFree(errorPointer) }
@@ -236,27 +349,8 @@ final class NativeSenseVoiceBridge {
     }
 
     private func preferredEngine(for configuration: ASRConfiguration? = nil) -> Engine? {
-        switch (configuration?.backend ?? .load()).resolvedBackend {
-        case .qwen3ASR:
-            if let qwenDirectory = Qwen3ASRModelManifest.preferredModelDirectory {
-                return .qwen3ASR(qwenDirectory)
-            }
-            if let senseDirectory = SenseVoiceModelManifest.preferredModelDirectory {
-                return .senseVoice(senseDirectory)
-            }
-        case .senseVoice:
-            if let senseDirectory = SenseVoiceModelManifest.preferredModelDirectory {
-                return .senseVoice(senseDirectory)
-            }
-        case .automatic:
-            if let qwenDirectory = Qwen3ASRModelManifest.preferredModelDirectory {
-                return .qwen3ASR(qwenDirectory)
-            }
-            if let senseDirectory = SenseVoiceModelManifest.preferredModelDirectory {
-                return .senseVoice(senseDirectory)
-            }
-        }
-        return nil
+        guard let senseDirectory = SenseVoiceModelManifest.preferredModelDirectory else { return nil }
+        return .senseVoice(senseDirectory)
     }
 
     private func nativeError(_ message: String) -> NSError {
@@ -287,6 +381,28 @@ final class SenseVoiceRouter {
     ) {
         if native.isAvailable {
             native.transcribe(audio: audio, configuration: configuration, completion: completion)
+        } else {
+            completion(.failure(NSError(
+                domain: "com.waykingah.typespeaker.asr",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "请先安装可用的本地 ASR 模型"]
+            )))
+        }
+    }
+
+    func transcribe(
+        samples: [Float],
+        sampleRate: Int,
+        configuration: ASRConfiguration = .current(),
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        if native.isAvailable {
+            native.transcribe(
+                samples: samples,
+                sampleRate: sampleRate,
+                configuration: configuration,
+                completion: completion
+            )
         } else {
             completion(.failure(NSError(
                 domain: "com.waykingah.typespeaker.asr",

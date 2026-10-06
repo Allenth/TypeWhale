@@ -3,7 +3,7 @@ import Foundation
 enum SmartTranslationPromptStore {
     private static let keyPrefix = "smartTranslationPromptTemplate."
 
-    /// 社交变体目前只对中译英开放；其余方向传 `social: true` 也回退到常规模板。
+    /// 社交变体目前只对常规中译英开放；手动多表情模式使用自己的独立模板。
     static func supportsSocialVariant(_ direction: SmartTranslationDirection) -> Bool {
         direction == .chineseToEnglish
     }
@@ -42,7 +42,7 @@ enum SmartTranslationPromptStore {
 
     static func defaultTemplate(for direction: SmartTranslationDirection, social: Bool = false) -> String {
         if social && supportsSocialVariant(direction) {
-            return socialChineseToEnglishTemplate
+            return emojiChatChineseToEnglishTemplate
         }
         switch direction {
         case .chineseToEnglish:
@@ -83,15 +83,17 @@ enum SmartTranslationPromptStore {
             - 用自然、清楚、适合直接发送的中文。
             - 保留原文语气，不要过度润色或加入原文没有的情绪。
             """
+        case .chineseToEnglishEmojiChat:
+            return emojiChatChineseToEnglishTemplate
         }
     }
 
-    /// 社交中译英默认模板：像微信 / iMessage / Slack 私聊里真实会发出来的英文聊天风格。
-    private static let socialChineseToEnglishTemplate = """
-    你是一个中译英聊天翻译助手，负责把中文翻译成非常自然、真实、轻松的英文聊天表达。
+    /// 多表情聊天中译英默认模板：像真实聊天里用语义表情辅助扫读和表达情绪。
+    private static let emojiChatChineseToEnglishTemplate = """
+    你是一个中译英多表情聊天翻译助手，负责把中文翻译成非常自然、真实、轻松、带 semantic emoji 的英文聊天表达。
 
     目标风格：
-    把中文翻译成像微信 / iMessage / WhatsApp / Slack 私聊里真实会发出来的英文，不要像正式翻译、技术文档、商务邮件或 AI 翻译。
+    把中文翻译成像微信 / iMessage / WhatsApp / Slack 私聊里真实会发出来的英文。必要时把 emoji 放在语义词附近或自然句尾，让对方扫读时更快感到场景、情绪和重点；不要像正式翻译、技术文档、商务邮件或 AI 翻译。
 
     整体语气：
     - 像和熟悉的朋友自然聊天。
@@ -108,7 +110,13 @@ enum SmartTranslationPromptStore {
     - 可以使用真实聊天里的缩写和口语表达。
     - 可以使用小写英文。
     - 可以中英混用，尤其是地名、地点名、品牌名、人名。
-    - 可以使用轻微 emoji，但只有在中文原文语气轻松时才加，不要乱加。
+    - 普通短聊天可以用 1-4 个 semantic emoji，但这不是所有场景的上限。
+    - 枚举/清单类句子、营销式场景堆叠、生活事件列表或像参考图那样的多场景文案，可以更密集：每个重要场景词附近尽量放 1 个 emoji，整体可以用 5-10 个。
+    - emoji 要贴合具体语义，例如生日、见面、时间、地点、开心、感谢、包裹、航班、账单、钱、工作等；不要随机撒表情。
+    - 每个 emoji 必须尽量贴近它对应的名词、动作或情绪词，例如 car 🚗、trip ✈️、skydiving 🪂、birthday 🎉、bills 🧾、money 💵。
+    - 不要把 emoji 集中堆在句尾；句尾最多只能放 1 个总结语气的 emoji，且不能把多个语义 emoji 全部挪到最后。
+    - emoji 可以出现在对应语义词前后，也可以在句尾补一个整体语气，但不能替代文字信息。
+    - 严肃、正式工作、客户沟通、技术排查、争议、隐私、医疗、法律、财务或坏消息内容默认不加 emoji。
     - 不要把句子写得太工整。
     - 不要用复杂从句。
     - 不要把中文逐字直译。
@@ -132,19 +140,27 @@ enum SmartTranslationPromptStore {
     - 中文：罗湖对我来说更方便，我周一到周四都可以。
       英文：luohu works better for me, i can do mon-thur 😁
     - 中文：深圳上城可以，我明天见你。
-      英文：深圳上城 works for me, see ya tmr
+      英文：深圳上城 works for me, see ya tmr 👋
     - 中文：你什么时候方便见面？
-      英文：when do u wanna meet?
+      英文：when do u wanna meet? 📅
     - 中文：没问题，明天见。
-      英文：yea sure, see ya tmr
+      英文：yea sure, see ya tmr 😊
     - 中文：我大概五点二十左右可以过去。
-      英文：i should be able to pop by 520ish
+      英文：i should be able to pop by 520ish ⏰
+    - 中文：生日派对太好玩了，我今天真的很开心。
+      英文：the birthday party 🎉 was so fun, i'm really happy today 😄
+    - 中文：像汽车、哭一次、旅行、跳伞、飞行、坦克等等。
+      错误：like a car, crying once, a trip, skydiving, flying, tanks etc. 🚗😢✈️🪂
+      正确：like a car 🚗, crying once 😢, a trip ✈️, skydiving 🪂, flying 🛫, tanks 🪖, etc.
+    - 中文：你的生活都在邮件里，航班、包裹、工作、生日派对、学校通知、账单和工作机会。
+      英文：your life runs through email — flights ✈️, packages 📦, work 📅, birthday parties 🎉, school updates 🏫, bills 🧾, and job offers 💼
 
     注意事项：
     - 如果原文是正式工作、客户沟通、技术问题或商务场景，不要使用太多缩写，保持自然但清楚。
     - 如果原文是朋友聊天、约时间、日常沟通，可以使用更随意的 texting English。
     - 不要每句话都强行加 u / tmr / gotta，避免显得刻意。
-    - 重点是像真人聊天，不是堆砌俚语。
+    - 重点是像真人聊天，不是堆砌俚语或堆砌 emoji。
+    - 如果不确定 emoji 是否合适，宁可少加。
     - 保留原文意思，不要随意扩写。
     - 不要省略关键时间、地点、人物和动作。
 

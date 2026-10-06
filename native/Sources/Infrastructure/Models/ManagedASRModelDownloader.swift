@@ -77,7 +77,8 @@ final class ManagedASRModelDownloader {
         let rootDirectory = self.rootDirectory
         let destination = model.directory(in: rootDirectory)
         let staging = stagingDirectory(for: model)
-        let backup = rootDirectory.appendingPathComponent(".\(model.relativeDirectoryName)-backup", isDirectory: true)
+        let modelParentDirectory = destination.deletingLastPathComponent()
+        let backup = modelParentDirectory.appendingPathComponent(".\(destination.lastPathComponent)-backup", isDirectory: true)
         let fileManager = self.fileManager
 
         activeDownloads.insert(model.id)
@@ -98,7 +99,7 @@ final class ManagedASRModelDownloader {
                     return
                 }
 
-                try fileManager.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
+                try fileManager.createDirectory(at: modelParentDirectory, withIntermediateDirectories: true)
                 try? fileManager.removeItem(at: staging)
                 try fileManager.createDirectory(at: staging, withIntermediateDirectories: true)
 
@@ -183,6 +184,13 @@ final class ManagedASRModelDownloader {
                 }
                 do {
                     try fileManager.moveItem(at: staging, to: destination)
+                    guard model.isInstalled(in: rootDirectory, fileManager: fileManager) else {
+                        throw NSError(
+                            domain: "com.waykingah.typewhale.managed-model-download",
+                            code: 4,
+                            userInfo: [NSLocalizedDescriptionKey: "下载内容不完整，请等待模型制品发布或重新下载"]
+                        )
+                    }
                     try? fileManager.removeItem(at: backup)
                 } catch {
                     if fileManager.fileExists(atPath: backup.path) {
@@ -253,7 +261,10 @@ final class ManagedASRModelDownloader {
     }
 
     private func stagingDirectory(for model: ManagedASRModel) -> URL {
-        rootDirectory.appendingPathComponent(".\(model.relativeDirectoryName)-downloading", isDirectory: true)
+        let destination = model.directory(in: rootDirectory)
+        return destination
+            .deletingLastPathComponent()
+            .appendingPathComponent(".\(destination.lastPathComponent)-downloading", isDirectory: true)
     }
 
     private func startDownloadHealthCheck(_ model: ManagedASRModel, staging: URL) {
@@ -299,7 +310,15 @@ final class ManagedASRModelDownloader {
                 if hasTrackedProcess || hasExternalProcess {
                     missingProcessTicks = 0
                     if downloadedBytes == 0, elapsedSeconds >= 20 {
-                        Self.terminateModelScopeDownload(localDirectory: staging)
+                        let trackedProcess = await MainActor.run {
+                            self.activeProcesses[model.id]
+                        }
+                        if let trackedProcess {
+                            Self.terminate(process: trackedProcess)
+                        }
+                        if hasExternalProcess {
+                            Self.terminateModelScopeDownload(localDirectory: staging)
+                        }
                         try? fileManager.removeItem(at: staging)
                         await MainActor.run {
                             guard self.activeDownloads.contains(model.id) else { return }
@@ -314,7 +333,15 @@ final class ManagedASRModelDownloader {
                         return
                     }
                     if downloadedBytes > 0, secondsWithoutGrowth >= 120 {
-                        Self.terminateModelScopeDownload(localDirectory: staging)
+                        let trackedProcess = await MainActor.run {
+                            self.activeProcesses[model.id]
+                        }
+                        if let trackedProcess {
+                            Self.terminate(process: trackedProcess)
+                        }
+                        if hasExternalProcess {
+                            Self.terminateModelScopeDownload(localDirectory: staging)
+                        }
                         await MainActor.run {
                             guard self.activeDownloads.contains(model.id) else { return }
                             self.activeProcesses.removeValue(forKey: model.id)
@@ -373,7 +400,10 @@ final class ManagedASRModelDownloader {
         let rootDirectory = self.rootDirectory
         let fileManager = self.fileManager
         let snapshots = ManagedASRModelCatalog.models.compactMap { model -> (ManagedASRModel, URL)? in
-            let staging = rootDirectory.appendingPathComponent(".\(model.relativeDirectoryName)-downloading", isDirectory: true)
+            let destination = model.directory(in: rootDirectory)
+            let staging = destination
+                .deletingLastPathComponent()
+                .appendingPathComponent(".\(destination.lastPathComponent)-downloading", isDirectory: true)
             guard fileManager.fileExists(atPath: staging.path) else { return nil }
             return (model, staging)
         }

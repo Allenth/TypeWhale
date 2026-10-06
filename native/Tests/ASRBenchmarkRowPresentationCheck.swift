@@ -1,0 +1,2 @@
+import Foundation
+@main struct ASRBenchmarkRowPresentationCheck { static func main(){let d=ASRModelDescriptor(id:.qwen3MLX06B,displayName:"Qwen3-ASR 0.6B · MLX 8-bit",engine:.mlx,modelDirectory:URL(fileURLWithPath:"/tmp"),requiredRelativePaths:[],hotwordStrategy:.unsupported,readiness:.ready,productionReady:true);let p=ASRBenchmarkRowPresentation(descriptor:d,result:nil,isRunning:false);precondition(p.title.contains("MLX 8-bit") && p.readinessText=="可测试" && p.hotwordBadge=="不支持热词" && p.canRun);print("ASRBenchmarkRowPresentationCheck passed")}}

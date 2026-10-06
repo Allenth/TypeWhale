@@ -127,6 +127,10 @@ final class DeveloperTermNormalizer {
         var ranges: [Range<String.Index>] = []
         var startOffset = 0
         while startOffset < characters.count {
+            guard isComparableContent(text[characters[startOffset]]) else {
+                startOffset += 1
+                continue
+            }
             var normalized = ""
             var endOffset = startOffset
             while endOffset < characters.count && normalized.count <= target.count + 4 {
@@ -153,6 +157,10 @@ final class DeveloperTermNormalizer {
             startOffset += 1
         }
         return ranges
+    }
+
+    private func isComparableContent(_ character: Character) -> Bool {
+        character.isLetter || character.isNumber || isChinese(character)
     }
 
     private func comparable(_ value: String, caseSensitive: Bool) -> String {

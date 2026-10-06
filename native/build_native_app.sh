@@ -14,10 +14,25 @@ NATIVE_ASR_LIB="$NATIVE_ASR/lib"
 BUILD_TEMP_DIR="$(mktemp -d /tmp/typewhale-native-build.XXXXXX)"
 NATIVE_ASR_OBJECT="$BUILD_TEMP_DIR/TypeSpeakerNativeASR.o"
 LAUNCH_PROBE_OBJECT="$BUILD_TEMP_DIR/LaunchProbe.o"
+MEDIA_REMOTE_BRIDGE_OBJECT="$BUILD_TEMP_DIR/SystemMediaRemoteBridge.o"
 BUNDLED_MODELS="$CONTENTS/Resources/Models"
 BUNDLED_SENSEVOICE="$BUNDLED_MODELS/sensevoice-native"
 BUNDLED_VAD="$BUNDLED_MODELS/vad"
 THIRD_PARTY_NOTICES="$ROOT/THIRD_PARTY_NOTICES.md"
+MANAGED_MLX_LLM_WORKER="$ROOT/native/Resources/managed_mlx_llm_worker.py"
+TTS_LAB_WORKER="$ROOT/native/Resources/tts_benchmark_worker.py"
+TTS_LAB_CATALOG="$ROOT/native/Resources/tts_model_catalog.json"
+
+[[ -f "$MANAGED_MLX_LLM_WORKER" ]] || {
+  echo "Missing managed MLX LLM worker" >&2
+  exit 1
+}
+for tts_lab_resource in "$TTS_LAB_WORKER" "$TTS_LAB_CATALOG"; do
+  [[ -f "$tts_lab_resource" ]] || {
+    echo "Missing TTS Reading Lab resource: $tts_lab_resource" >&2
+    exit 1
+  }
+done
 
 if [[ -n "${TYPESPEAKER_MODEL_SOURCE:-}" ]]; then
   MODEL_SOURCE="$TYPESPEAKER_MODEL_SOURCE"
@@ -48,12 +63,15 @@ trap '[[ -n "${MODEL_SOURCE_TEMP:-}" ]] && rm -rf "$MODEL_SOURCE_TEMP"; [[ -n "$
 
 rm -rf "$APP"
 mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources"
-find "$CONTENTS/Resources" -name __pycache__ -type d -prune -exec rm -rf {} +
 if [[ ! -f "$THIRD_PARTY_NOTICES" ]]; then
   echo "Missing third-party notices: $THIRD_PARTY_NOTICES" >&2
   exit 1
 fi
 cp "$THIRD_PARTY_NOTICES" "$CONTENTS/Resources/THIRD_PARTY_NOTICES.md"
+if [[ -d "$ROOT/native/Resources" ]]; then
+  ditto "$ROOT/native/Resources" "$CONTENTS/Resources"
+fi
+find "$CONTENTS/Resources" -name __pycache__ -type d -prune -exec rm -rf {} +
 
 if [[ ! -f "$SHERPA_ROOT/include/sherpa-onnx/c-api/c-api.h" ]]; then
   echo "Missing sherpa-onnx C API header: $SHERPA_ROOT/include/sherpa-onnx/c-api/c-api.h" >&2
@@ -93,7 +111,7 @@ cp "$MODEL_SOURCE/tokens.txt" "$BUNDLED_SENSEVOICE/tokens.txt"
 mkdir -p "$BUNDLED_VAD"
 cp "$VAD_SOURCE" "$BUNDLED_VAD/silero_vad.onnx"
 
-ICON_SOURCE="$ROOT/assets/TypeSpeakerIcon.png"
+ICON_SOURCE="$ROOT/assets/TypeWhaleAppIcon-yellow-pro.png"
 ICONSET="$CONTENTS/Resources/TypeWhale.iconset"
 if [[ -f "$ICON_SOURCE" ]]; then
   rm -rf "$ICONSET"
@@ -142,6 +160,14 @@ xcrun clang \
   -c "$ROOT/native/LaunchProbe.c" \
   -o "$LAUNCH_PROBE_OBJECT"
 
+xcrun clang \
+  -O2 \
+  -fobjc-arc \
+  -fblocks \
+  -target arm64-apple-macosx14.0 \
+  -c "$ROOT/native/SystemMediaRemoteBridge.m" \
+  -o "$MEDIA_REMOTE_BRIDGE_OBJECT"
+
 swift_sources=("$ROOT/native/TypeSpeakerApp.swift")
 if [[ -d "$ROOT/native/Sources" ]]; then
   while IFS= read -r source_file; do
@@ -155,20 +181,39 @@ xcrun swiftc \
   -import-objc-header "$ROOT/native/TypeSpeakerNativeASR.h" \
   -framework AppKit \
   -framework AVFAudio \
+  -framework AVFoundation \
   -framework ApplicationServices \
+  -framework CoreBluetooth \
   -framework CryptoKit \
+  -framework CoreImage \
+  -framework IOKit \
   -framework QuartzCore \
   -framework Security \
   -framework ServiceManagement \
   "${swift_sources[@]}" \
   "$NATIVE_ASR_OBJECT" \
   "$LAUNCH_PROBE_OBJECT" \
+  "$MEDIA_REMOTE_BRIDGE_OBJECT" \
   -L "$NATIVE_ASR_LIB" \
   -l sherpa-onnx-c-api \
   -Xlinker -rpath \
   -Xlinker @executable_path/../Resources/NativeASR/lib \
   -o "$CONTENTS/MacOS/$APP_EXECUTABLE"
-rm -f "$NATIVE_ASR_OBJECT" "$LAUNCH_PROBE_OBJECT"
+
+xcrun swiftc \
+  -O \
+  -parse-as-library \
+  -target arm64-apple-macosx14.0 \
+  -import-objc-header "$ROOT/native/TypeSpeakerNativeASR.h" \
+  "$ROOT/native/Helpers/TypeWhaleSherpaASR.swift" \
+  "$NATIVE_ASR_OBJECT" \
+  -L "$NATIVE_ASR_LIB" \
+  -l sherpa-onnx-c-api \
+  -Xlinker -rpath \
+  -Xlinker @executable_path/NativeASR/lib \
+  -o "$CONTENTS/Resources/TypeWhaleSherpaASR"
+chmod +x "$CONTENTS/Resources/TypeWhaleSherpaASR"
+rm -f "$NATIVE_ASR_OBJECT" "$LAUNCH_PROBE_OBJECT" "$MEDIA_REMOTE_BRIDGE_OBJECT"
 
 xcrun swiftc \
   -O \
@@ -191,10 +236,11 @@ cat > "$CONTENTS/Info.plist" <<'PLIST'
 <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
 <key>CFBundleName</key><string>TypeWhale Pro</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>1.9.7</string>
-<key>CFBundleVersion</key><string>552</string>
+<key>CFBundleShortVersionString</key><string>2.0.58</string>
+<key>CFBundleVersion</key><string>919</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSHighResolutionCapable</key><true/>
+<key>NSBluetoothAlwaysUsageDescription</key><string>TypeWhale Pro 使用蓝牙连接小米遥控器并接收语音输入。</string>
 <key>NSMicrophoneUsageDescription</key><string>TypeWhale Pro 需要使用麦克风进行本地语音转文字。</string>
 </dict></plist>
 PLIST

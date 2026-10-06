@@ -112,7 +112,7 @@ enum DeveloperLexiconStore {
             uniqueKeysWithValues: defaultTerms.map { ($0.canonical.lowercased(), clean($0)) }
         )
         var merged = stored.map { storedTerm in
-            let cleaned = clean(storedTerm)
+            let cleaned = removingRetiredAliases(from: clean(storedTerm))
             guard let defaultTerm = defaultsByCanonical[cleaned.canonical.lowercased()] else {
                 return cleaned
             }
@@ -131,11 +131,28 @@ enum DeveloperLexiconStore {
         return merged
     }
 
+    private static func removingRetiredAliases(from term: DeveloperTerm) -> DeveloperTerm {
+        guard term.canonical.caseInsensitiveCompare("ChatGPT") == .orderedSame else {
+            return term
+        }
+        return DeveloperTerm(
+            id: term.id,
+            canonical: term.canonical,
+            aliases: term.aliases.filter {
+                $0.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .caseInsensitiveCompare("GPT") != .orderedSame
+            },
+            category: term.category,
+            caseSensitive: term.caseSensitive,
+            allowsFuzzy: term.allowsFuzzy
+        )
+    }
+
     static let defaultTerms: [DeveloperTerm] = [
         DeveloperTerm(canonical: "Codex", aliases: ["code x", "codex", "扣德克斯", "寇德克斯", "Cordex"], category: .tool),
         DeveloperTerm(canonical: "Claude Code", aliases: ["claude code", "克劳德 code", "克劳德扣的", "Claude Coder"], category: .tool),
         DeveloperTerm(canonical: "Cursor", aliases: ["cursor", "柯索", "光标编辑器"], category: .tool),
-        DeveloperTerm(canonical: "ChatGPT", aliases: ["chat gpt", "chatgpt", "GPT", "gpt"], category: .tool),
+        DeveloperTerm(canonical: "ChatGPT", aliases: ["chat gpt", "chatgpt", "chatGTP"], category: .tool),
         DeveloperTerm(canonical: "GitHub", aliases: ["github", "git hub"], category: .tool),
         DeveloperTerm(canonical: "Git", aliases: ["git"], category: .tool),
         DeveloperTerm(canonical: "Obsidian", aliases: ["obsidian", "obsidian 笔记", "obsidian note", "oseing", "oosing", "oing", "osing", "oppoingpo", "obpoing", "obpoingpo", "oppoing", "欧布西迪安", "欧布西迪安笔记", "黑曜石", "黑曜石笔记"], category: .tool),
@@ -145,7 +162,7 @@ enum DeveloperLexiconStore {
         DeveloperTerm(canonical: "MiniMax", aliases: ["minimax", "mini max", "迷你麦克斯", "迷你 max"], category: .model),
         DeveloperTerm(canonical: "MiniMax M2", aliases: ["minimax m2", "mini max m2", "迷你麦克斯 m2", "迷你 max m2"], category: .model),
         DeveloperTerm(canonical: "Qwen", aliases: ["qwen", "千问", "通义千问"], category: .model),
-        DeveloperTerm(canonical: "Qwen3-ASR", aliases: ["qwen3 asr", "qwen asr", "q wen asr", "千问 asr", "Qwen ASR", "Qwen3 ASR"], category: .model),
+        DeveloperTerm(canonical: "Qwen3-ASR", aliases: ["qwen3 asr", "qwen asr", "q wen asr", "千问 asr", "千问3 asr", "千问三 asr", "Qwen ASR", "Qwen3 ASR"], category: .model),
         DeveloperTerm(canonical: "Qwen3.6", aliases: ["qwen3.6", "qwen 3.6", "q wen 3.6", "qwen 三点六", "q wen 三点六", "千问 3.6", "千问三点六"], category: .model),
         DeveloperTerm(canonical: "Qwen3.6 35B", aliases: ["qwen3.6 35b", "qwen 3.6 35b", "q wen 3.6 35b", "qwen 3.635b", "q wen 3.635b", "qwen 三点六 35b", "q wen 三点六 三十五 b", "千问三点六 35b", "纤问 3.635b", "纤温 3.635b", "千问 3.635b"], category: .model),
         DeveloperTerm(canonical: "SenseVoice", aliases: ["sense voice", "sensevoice", "森斯 voice"], category: .model),

@@ -14,7 +14,6 @@ Primary terms for the first round:
 - `SpeechInputCoordinator`
 - `sherpa-onnx`
 - `FunASR`
-- `Paraformer Contextual`
 - `ModelScope`
 
 ## Files
@@ -35,11 +34,13 @@ Primary terms for the first round:
 bash native/Tests/ProASREvalManifestCheck.sh
 ```
 
-6. Compare at least these providers:
-   - current TypeWhale ASR baseline
-   - Paraformer Contextual with hotword file
+6. Compare the retained providers:
+   - SenseVoice int8 baseline
    - Fun-ASR-Nano-2512 with hotwords
-   - Paraformer zh as non-contextual comparison
+   - Parakeet TDT 0.6B v2 for English comparison
+   - Qwen3-ASR 0.6B / 1.7B MLX for local final-recognition comparison
+
+Paraformer Contextual, Paraformer zh, SeACo Paraformer, Whisper Small MLX, Qwen3 Sherpa and Zipformer are retired because they do not fit TypeWhale's current product target. Historical results may still mention them, but new product evaluation must not route through them.
 
 ## Scoring
 

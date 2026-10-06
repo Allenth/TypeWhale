@@ -1,0 +1,38 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="tile" x1="512" y1="152" x2="512" y2="858" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFD84D"/>
+      <stop offset="1" stop-color="#FFB615"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(340 260) rotate(52) scale(500 430)">
+      <stop offset="0" stop-color="#FFF39A" stop-opacity="0.50"/>
+      <stop offset="0.55" stop-color="#FFE36A" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#FFB615" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <g transform="translate(512 507) scale(1.13812155) translate(-512 -507)">
+    <rect x="150" y="145" width="724" height="724" rx="136" fill="url(#tile)"/>
+    <rect x="150" y="145" width="724" height="724" rx="136" fill="url(#glow)"/>
+    <rect x="151.5" y="146.5" width="721" height="721" rx="134.5" stroke="#E7A80B" stroke-opacity="0.28" stroke-width="3"/>
+
+    <path d="M398 524C417 506 437 546 457 524C477 502 497 546 520 524C538 508 559 514 577 524"
+          stroke="#6F4E08"
+          stroke-width="38"
+          stroke-linecap="round"
+          stroke-linejoin="round"/>
+    <circle cx="644" cy="447" r="24" fill="#6F4E08"/>
+
+    <g aria-label="TypeWhale Pro badge">
+      <rect x="584" y="682" width="236" height="112" rx="46" fill="#6F4E08"/>
+      <rect x="586" y="684" width="232" height="108" rx="44" stroke="#FFE36A" stroke-opacity="0.34" stroke-width="4"/>
+      <text x="702" y="758"
+            fill="#FFD84D"
+            font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif"
+            font-size="62"
+            font-weight="900"
+            letter-spacing="1"
+            text-anchor="middle">PRO</text>
+    </g>
+  </g>
+</svg>

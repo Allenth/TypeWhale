@@ -1,8 +1,12 @@
 # TypeWhale Pro 中英混合与热词 ASR 改造策略
 
-最后更新：2026-07-05
+最后更新：2026-07-26
 适用分支：`codex/typewhale-pro-asr-hotwords`
-状态：产品与技术决策记录，尚未代表已实现功能。
+状态：历史调研与当前产品决策记录。
+
+## 当前产品决策（2026-07-26）
+
+当前只保留 SenseVoice int8、Parakeet TDT 0.6B v2、Fun-ASR Nano 与 Qwen3-ASR 0.6B/1.7B MLX 8-bit。Paraformer Contextual、Paraformer zh、SeACo Paraformer、Whisper Small MLX、Qwen3 Sherpa 与 Zipformer 不适合 TypeWhale 当前的准确性、速度、资源效率或产品化目标，已从界面、下载、运行链路和准入表移除。下文相关内容仅作为历史调研证据保留；FSMN-VAD 继续作为分段依赖。
 
 ## 1. 背景
 
@@ -85,7 +89,7 @@ FunASR runtime 支持 online/offline/2pass 服务模式，适合作为中文 ASR
 下载位置统一使用 Pro 用户级模型目录，避免把未验证模型放进 App bundle 或仓库：
 
 ```text
-/Users/waykingah/Library/Application Support/TypeWhale Pro/Models/funasr/
+$HOME/Library/Application Support/TypeWhale Pro/Models/funasr/
   fun-asr-nano-2512/
   paraformer-hotword-contextual/
   paraformer-zh/
@@ -107,7 +111,7 @@ FunASR runtime 支持 online/offline/2pass 服务模式，适合作为中文 ASR
 
 推荐顺序：
 
-1. 用户级模型目录 + 本地 ASR sidecar worker：模型放在 `/Users/waykingah/Library/Application Support/TypeWhale Pro/Models/funasr/`，App 通过本机进程、stdin/stdout、HTTP 或 WebSocket 调用。音频不出本机，便于实验热词、日志、崩溃隔离和替换模型。
+1. 用户级模型目录 + 本地 ASR sidecar worker：模型放在 `$HOME/Library/Application Support/TypeWhale Pro/Models/funasr/`，App 通过本机进程、stdin/stdout、HTTP 或 WebSocket 调用。音频不出本机，便于实验热词、日志、崩溃隔离和替换模型。
 2. App 管理下载和完整性校验：下载后记录模型 ID、revision、文件大小、hash、license note；主 App 只负责选择 provider、传入音频和 hotwords、接收结果。
 3. 稳定后再评估内置资源：如果选定的是 ONNX / GGUF / 可签名的轻量 runtime，可以像当前 SenseVoice / VAD 一样打进 `Contents/Resources/Models`；如果仍依赖 PyTorch / Python / vLLM，则不建议作为普通 macOS App 的默认内置形态。
 

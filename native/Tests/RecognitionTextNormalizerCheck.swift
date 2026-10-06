@@ -32,6 +32,8 @@ struct RecognitionTextNormalizerCheck {
         precondition(isMeaningfulRealtimePreviewText("我想修改这个功能", previousPreview: ""))
         precondition(isMeaningfulRealtimePreviewText("我想修改这个功能的按钮", previousPreview: "我想修改这个功能"))
         precondition(!isMeaningfulRealtimePreviewText("我", previousPreview: "我想修改这个功能"))
+        precondition(!isMeaningfulRealtimePreviewText("我想。", previousPreview: ""))
+        precondition(!isMeaningfulRealtimePreviewText("I.", previousPreview: ""))
         precondition(!isMeaningfulRealtimePreviewText("词。。", previousPreview: "我想修改这个功能"))
         precondition(!isMeaningfulRealtimePreviewText("出来很多。", previousPreview: "候蹦出来很多单个的字"))
         precondition(!isMeaningfulRealtimePreviewText("我想修改这个功能。。。。", previousPreview: "我想修改这个功能"))

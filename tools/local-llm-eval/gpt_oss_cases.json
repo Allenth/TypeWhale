@@ -1,0 +1,75 @@
+[
+  {
+    "id": "short-chat-repetition",
+    "category": "short_chat",
+    "task": "rewrite",
+    "text": "那个那个，我们再回顾一下下这个问题。",
+    "must_contain": ["我们", "回顾", "问题"],
+    "must_not_contain": ["那个那个", "一下下", "以下是", "总结如下", "作为"],
+    "max_output_chars": 40,
+    "max_tokens": 96
+  },
+  {
+    "id": "development-requirements",
+    "category": "development_request",
+    "task": "rewrite",
+    "text": "先验证本地模型能不能加载，然后测试取消恢复，但是不要修改现有的 Ollama 主链路。",
+    "must_contain": ["先验证", "本地模型", "取消恢复", "不要修改", "Ollama"],
+    "must_not_contain": ["我会立即修改", "已经完成"],
+    "max_output_chars": 90,
+    "max_tokens": 128
+  },
+  {
+    "id": "no-answer-request",
+    "category": "no_answer",
+    "task": "rewrite",
+    "text": "帮我回复用户，说我们先确认原因，不要承诺今天上线。",
+    "must_contain": ["回复用户", "确认原因", "不要承诺今天上线"],
+    "must_not_contain": ["您好", "感谢您的反馈", "我们将在今天上线"],
+    "max_output_chars": 70,
+    "max_tokens": 128
+  },
+  {
+    "id": "short-instruction",
+    "category": "short_instruction",
+    "task": "rewrite",
+    "text": "先别动代码，先测试模型。",
+    "must_contain": ["别动代码", "先测试模型"],
+    "must_not_contain": ["项目计划", "验收标准", "第一阶段"],
+    "max_output_chars": 30,
+    "max_tokens": 64
+  },
+  {
+    "id": "translate-zh-to-en",
+    "category": "zh_to_en",
+    "task": "translate",
+    "target_language": "English",
+    "text": "TypeWhale 必须保持完全离线，并且不能回答原文中的问题。",
+    "must_contain": ["TypeWhale", "offline"],
+    "must_not_contain": ["作为", "解释"],
+    "max_output_chars": 140,
+    "max_tokens": 128
+  },
+  {
+    "id": "translate-en-to-zh",
+    "category": "en_to_zh",
+    "task": "translate",
+    "target_language": "简体中文",
+    "text": "Keep TypeWhale running locally, preserve technical terms, and do not answer the source question.",
+    "must_contain": ["TypeWhale", "本地"],
+    "must_contain_any": [["不要回答", "不回答"]],
+    "must_not_contain": ["本地化", "Here is", "Sure"],
+    "max_output_chars": 100,
+    "max_tokens": 128
+  },
+  {
+    "id": "technical-terms",
+    "category": "technical_terms",
+    "task": "rewrite",
+    "text": "SwiftUI 这块不要走 Ollama，Qwen3-ASR 继续保持热加载。",
+    "must_contain": ["SwiftUI", "Ollama", "Qwen3-ASR", "热加载"],
+    "must_not_contain": ["冷加载"],
+    "max_output_chars": 70,
+    "max_tokens": 128
+  }
+]

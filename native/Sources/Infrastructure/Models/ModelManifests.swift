@@ -146,16 +146,14 @@ enum VoiceActivityModelManifest {
     }
 }
 
-enum Qwen3ASRModelManifest {
-    static let directoryName = "qwen3-asr-0.6b-int8"
-    static let nestedDirectoryName = "sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25"
+enum ParakeetTDTModelManifest {
+    static let directoryName = "parakeet-tdt-0.6b-v2-int8"
+    static let nestedDirectoryName = "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8"
     static let requiredFiles = [
-        "conv_frontend.onnx",
         "encoder.int8.onnx",
         "decoder.int8.onnx",
-        "tokenizer/vocab.json",
-        "tokenizer/merges.txt",
-        "tokenizer/tokenizer_config.json",
+        "joiner.int8.onnx",
+        "tokens.txt",
     ]
 
     static var modelDirectory: URL {
@@ -172,11 +170,6 @@ enum Qwen3ASRModelManifest {
     }
 
     static var preferredModelDirectory: URL? {
-        if let override = ProcessInfo.processInfo.environment["TYPEWHALE_QWEN3_ASR_MODEL_DIR"],
-           !override.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            let url = URL(fileURLWithPath: override, isDirectory: true)
-            if isInstalled(at: url) { return url }
-        }
         if isInstalled(at: bundledModelDirectory) {
             return bundledModelDirectory
         }

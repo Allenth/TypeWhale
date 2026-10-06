@@ -274,7 +274,11 @@ final class DeepSeekRewriteEngine: SmartAITextEngine, ScreenshotTranslationEngin
         }
         let rawContent = decoded.choices.first?.message.content
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let content = rawContent.map(SmartRewriteOutputSanitizer.clean)
+        let content = rawContent.map {
+            triggeredBy.contains("translation")
+                ? SmartRewriteOutputSanitizer.cleanTranslation($0)
+                : SmartRewriteOutputSanitizer.clean($0)
+        }
         guard let content, !content.isEmpty else {
             throw DeepSeekRewriteError.emptyContent
         }

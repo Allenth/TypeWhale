@@ -61,7 +61,37 @@ struct SmartRewriteAutoRule: Codable, Equatable {
 
 struct SmartRewriteAutoConfiguration: Codable, Equatable {
     var rules: [SmartRewriteAutoRule]
+    var appModesByBundleID: [String: RewriteMode]
     var fallbackMode: RewriteMode
+
+    init(
+        rules: [SmartRewriteAutoRule],
+        appModesByBundleID: [String: RewriteMode] = [:],
+        fallbackMode: RewriteMode
+    ) {
+        self.rules = rules
+        self.appModesByBundleID = appModesByBundleID
+        self.fallbackMode = fallbackMode
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case rules
+        case appModesByBundleID
+        case fallbackMode
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        rules = try container.decode([SmartRewriteAutoRule].self, forKey: .rules)
+        appModesByBundleID = try container.decodeIfPresent(
+            [String: RewriteMode].self,
+            forKey: .appModesByBundleID
+        ) ?? [:]
+        fallbackMode = try container.decode(
+            RewriteMode.self,
+            forKey: .fallbackMode
+        )
+    }
 }
 
 enum SmartRewriteAutoRuleStore {
@@ -70,6 +100,7 @@ enum SmartRewriteAutoRuleStore {
 
     static let selectableModes: [RewriteMode] = [
         .polish,
+        .chat,
         .developerRequirement,
         .developerStatement,
         .codeCommit,
@@ -88,6 +119,18 @@ enum SmartRewriteAutoRuleStore {
                     isEnabled: true,
                     matchTarget: false,
                     matchContent: true
+                ),
+                SmartRewriteAutoRule(
+                    id: "social-chat",
+                    title: "社交聊天窗口",
+                    keywords: [
+                        "微信", "wechat", "weixin", "com.tencent.xinwechat",
+                        "messages", "imessage", "com.apple.messages",
+                        "slack", "discord", "telegram", "whatsapp", "line", "signal",
+                        "threads", "x.com", "twitter", "instagram", "小红书", "rednote"
+                    ],
+                    mode: .chat,
+                    isEnabled: true
                 ),
                 SmartRewriteAutoRule(
                     id: "ai-dev",
@@ -121,6 +164,9 @@ enum SmartRewriteAutoRuleStore {
             rules: configuration.rules
                 .filter { !retiredDefaultRuleIDs.contains($0.id) }
                 .map(normalizedRule),
+            appModesByBundleID: normalizedAppModes(
+                configuration.appModesByBundleID
+            ),
             fallbackMode: selectableModes.contains(configuration.fallbackMode) ? configuration.fallbackMode : .polish
         )
         if let data = try? JSONEncoder().encode(normalized) {
@@ -150,6 +196,10 @@ enum SmartRewriteAutoRuleStore {
                 return rule.mode
             }
         }
+        if let bundleID = context.targetBundleIdentifier,
+           let appMode = configuration.appModesByBundleID[bundleID] {
+            return appMode
+        }
         return configuration.fallbackMode
     }
 
@@ -167,8 +217,25 @@ enum SmartRewriteAutoRuleStore {
         }
         return SmartRewriteAutoConfiguration(
             rules: orderedRules + customRules,
+            appModesByBundleID: normalizedAppModes(
+                configuration.appModesByBundleID
+            ),
             fallbackMode: selectableModes.contains(configuration.fallbackMode) ? configuration.fallbackMode : .polish
         )
+    }
+
+    private static func normalizedAppModes(
+        _ appModesByBundleID: [String: RewriteMode]
+    ) -> [String: RewriteMode] {
+        appModesByBundleID.reduce(into: [:]) { result, pair in
+            let bundleID = pair.key.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            )
+            guard !bundleID.isEmpty, selectableModes.contains(pair.value) else {
+                return
+            }
+            result[bundleID] = pair.value
+        }
     }
 
     private static func normalizedRule(_ rule: SmartRewriteAutoRule) -> SmartRewriteAutoRule {

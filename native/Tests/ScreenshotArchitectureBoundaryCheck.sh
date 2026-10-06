@@ -66,6 +66,16 @@ if [ -z "$ocr_status_line" ] || [ -z "$ocr_token_line" ] || [ "$ocr_status_line"
   exit 1
 fi
 
+if ! grep -q 'showTransientStatus("已复制"' <<<"$ocr_block"; then
+  echo "Successful screenshot OCR copy toast must be titled 已复制" >&2
+  exit 1
+fi
+
+if grep -q 'showTransientStatus("内容已复制"' <<<"$ocr_block"; then
+  echo "Successful screenshot OCR copy toast must not use the old title 内容已复制" >&2
+  exit 1
+fi
+
 archive_block="$(
   awk '
     /private func archiveKnowledge\(in image: NSImage\)/ { in_block=1 }
@@ -120,8 +130,29 @@ if ! grep -q "ScreenshotCoordinator()" "$SPEECH"; then
   exit 1
 fi
 
-if ! grep -q 'optionRow("归档整理", screenshotArchiveMode)' "$MAIN_PANEL"; then
-  echo "Screenshot settings must expose the archive rewrite mode picker" >&2
+smart_panel_block="$(
+  awk '
+    /private func buildSmartRewritePanelContent\(\)/ { in_block=1 }
+    in_block { print }
+    in_block && /private func buildHotkeysPanelContent/ { exit }
+  ' "$MAIN_PANEL"
+)"
+
+if ! grep -q 'optionRow("归档整理", screenshotArchiveMode)' <<<"$smart_panel_block"; then
+  echo "Intelligence settings must expose the screenshot archive rewrite mode picker" >&2
+  exit 1
+fi
+
+screenshot_panel_block="$(
+  awk '
+    /private func buildScreenshotSettingsContent\(\)/ { in_block=1 }
+    in_block { print }
+    in_block && /private func buildSystemSettingsContent/ { exit }
+  ' "$MAIN_PANEL"
+)"
+
+if grep -q 'optionRow("归档整理", screenshotArchiveMode)' <<<"$screenshot_panel_block"; then
+  echo "Common screenshot settings must not expose the archive rewrite mode picker; it belongs in Intelligence" >&2
   exit 1
 fi
 
@@ -159,5 +190,15 @@ for forbidden in \
     exit 1
   fi
 done
+
+if grep -q 'guard activeSession == nil, !recorder.isRecording' <<<"$entry_block"; then
+  echo "Screenshot hotkey entry must remain available during an active voice input session" >&2
+  exit 1
+fi
+
+if ! grep -q 'if activeSession == nil, !recorder.isRecording' <<<"$entry_block"; then
+  echo "Screenshot hotkey entry must only clear pending speech-hotkey startup state before recording begins" >&2
+  exit 1
+fi
 
 echo "ScreenshotArchitectureBoundaryCheck passed"

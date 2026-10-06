@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="650" height="1080" viewBox="0 0 650 1080">
+  <rect width="650" height="1080" fill="#061020"/>
+  <g font-family="-apple-system, BlinkMacSystemFont, sans-serif">
+    <rect x="18" y="18" width="614" height="138" rx="10" fill="#1E2B35" stroke="#C6D1CF" stroke-opacity=".18"/>
+    <circle cx="38" cy="43" r="6" fill="#E6C776"/>
+    <text x="54" y="49" fill="#F5F7F2" font-size="17" font-weight="650">等待遥控器</text>
+    <text x="34" y="78" fill="#A1AEAC" font-size="12">按住 Home + Menu 进入配对模式，然后开始扫描</text>
+    <rect x="494" y="31" width="104" height="32" rx="8" fill="#6F9EAD"/>
+    <text x="518" y="51" fill="#061020" font-size="12" font-weight="700">开始扫描</text>
+    <text x="34" y="117" fill="#8F9C9A" font-size="11">遥控器输入</text>
+    <rect x="542" y="97" width="42" height="24" rx="12" fill="#3E5C66"/>
+    <circle cx="572" cy="109" r="9" fill="#DCE8E4"/>
+    <text x="34" y="141" fill="#8F9C9A" font-size="10">语音在 TypeWhale 中直接处理，不使用虚拟麦克风</text>
+
+    <rect x="18" y="170" width="614" height="148" rx="8" fill="#12202E" stroke="#C6D1CF" stroke-opacity=".14"/>
+    <text x="32" y="193" fill="#9EAAA8" font-size="11" font-weight="650">设备</text>
+    <text x="32" y="224" fill="#E8ECE8" font-size="13" font-weight="600">尚未发现小米遥控器</text>
+    <text x="32" y="248" fill="#899694" font-size="11">型号 —</text><text x="216" y="248" fill="#899694" font-size="11">电量 —</text><text x="382" y="248" fill="#899694" font-size="11">信号 —</text>
+    <line x1="32" y1="264" x2="598" y2="264" stroke="#C6D1CF" stroke-opacity=".09"/>
+    <text x="32" y="287" fill="#A8B3B1" font-size="11">同时按住遥控器的 Home + Menu，看到指示灯闪烁后点击扫描。</text>
+    <text x="32" y="306" fill="#788684" font-size="10">TypeWhale 会自动连接已配对且支持语音的设备。</text>
+
+    <rect x="18" y="332" width="614" height="165" rx="8" fill="#12202E" stroke="#C6D1CF" stroke-opacity=".14"/>
+    <text x="32" y="355" fill="#9EAAA8" font-size="11" font-weight="650">语音链路</text>
+    <g font-size="10" text-anchor="middle">
+      <text x="64" y="388" fill="#E8ECE8">蓝牙</text><text x="183" y="388" fill="#899694">控制通道</text><text x="302" y="388" fill="#899694">音频包</text><text x="421" y="388" fill="#899694">PCM</text><text x="556" y="388" fill="#899694">TypeWhale</text>
+    </g>
+    <line x1="64" y1="411" x2="556" y2="411" stroke="#53676E" stroke-width="2"/>
+    <g fill="#334650"><circle cx="64" cy="411" r="6"/><circle cx="183" cy="411" r="6"/><circle cx="302" cy="411" r="6"/><circle cx="421" cy="411" r="6"/><circle cx="556" cy="411" r="6"/></g>
+    <text x="32" y="452" fill="#A8B3B1" font-size="11">连接后，这里会逐步显示协议协商、音频包和识别会话。</text>
+    <text x="32" y="475" fill="#788684" font-size="10">按住语音键开始 · 松开后结束并写入当前输入位置</text>
+
+    <rect x="18" y="511" width="614" height="250" rx="8" fill="#12202E" stroke="#C6D1CF" stroke-opacity=".14"/>
+    <text x="32" y="534" fill="#9EAAA8" font-size="11" font-weight="650">按键映射</text>
+    <text x="546" y="534" fill="#8BB3C0" font-size="11">恢复默认</text>
+    <g font-size="11">
+      <text x="32" y="571" fill="#E8ECE8">语音键</text><text x="226" y="571" fill="#A8B3B1">按住说话</text>
+      <text x="32" y="607" fill="#E8ECE8">确定键</text><text x="226" y="607" fill="#A8B3B1">交给系统</text>
+      <text x="32" y="643" fill="#E8ECE8">返回键</text><text x="226" y="643" fill="#A8B3B1">交给系统</text>
+      <text x="32" y="679" fill="#E8ECE8">主页键</text><text x="226" y="679" fill="#A8B3B1">显示 / 隐藏主窗口</text>
+      <text x="32" y="715" fill="#E8ECE8">菜单键</text><text x="226" y="715" fill="#A8B3B1">无操作</text>
+    </g>
+    <g fill="#223540" stroke="#C6D1CF" stroke-opacity=".12"><rect x="452" y="550" width="146" height="27" rx="6"/><rect x="452" y="586" width="146" height="27" rx="6"/><rect x="452" y="622" width="146" height="27" rx="6"/><rect x="452" y="658" width="146" height="27" rx="6"/><rect x="452" y="694" width="146" height="27" rx="6"/></g>
+    <g fill="#A8B3B1" font-size="10"><text x="466" y="568">固定</text><text x="466" y="604">系统</text><text x="466" y="640">系统</text><text x="466" y="676">主窗口</text><text x="466" y="712">无操作</text></g>
+    <text x="32" y="744" fill="#788684" font-size="10">所有按键默认保留 macOS 原动作；自定义动作会在系统动作之外附加执行。</text>
+
+    <rect x="18" y="775" width="614" height="125" rx="8" fill="#12202E" stroke="#C6D1CF" stroke-opacity=".14"/>
+    <text x="32" y="798" fill="#9EAAA8" font-size="11" font-weight="650">权限与隐私</text>
+    <circle cx="38" cy="829" r="5" fill="#E6C776"/><text x="52" y="833" fill="#E8ECE8" font-size="11">蓝牙</text><text x="154" y="833" fill="#A8B3B1" font-size="11">等待系统授权</text>
+    <circle cx="38" cy="858" r="5" fill="#53676E"/><text x="52" y="862" fill="#E8ECE8" font-size="11">输入监控</text><text x="154" y="862" fill="#A8B3B1" font-size="11">仅用于自定义按键</text>
+    <rect x="492" y="814" width="106" height="30" rx="7" fill="#223944"/><text x="511" y="833" fill="#C9D8D5" font-size="11">打开系统设置</text>
+    <text x="32" y="886" fill="#788684" font-size="10">不保存原始语音，不记录蓝牙地址；识别隐私取决于你选择的 TypeWhale 模型。</text>
+
+    <rect x="18" y="914" width="614" height="148" rx="8" fill="#12202E" stroke="#C6D1CF" stroke-opacity=".14"/>
+    <text x="32" y="937" fill="#9EAAA8" font-size="11" font-weight="650">使用与排障</text>
+    <circle cx="40" cy="967" r="10" fill="#2D4853"/><text x="37" y="971" fill="#E4EFEB" font-size="10" font-weight="700">1</text><text x="58" y="971" fill="#E8ECE8" font-size="11">Home + Menu 进入配对，点击“开始扫描”</text>
+    <circle cx="40" cy="997" r="10" fill="#2D4853"/><text x="37" y="1001" fill="#E4EFEB" font-size="10" font-weight="700">2</text><text x="58" y="1001" fill="#E8ECE8" font-size="11">显示“可以说话”后，按住语音键讲话</text>
+    <circle cx="40" cy="1027" r="10" fill="#2D4853"/><text x="37" y="1031" fill="#E4EFEB" font-size="10" font-weight="700">3</text><text x="58" y="1031" fill="#E8ECE8" font-size="11">松开语音键，TypeWhale 完成识别和写入</text>
+    <text x="410" y="1048" fill="#8BB3C0" font-size="10">断连或无声？重试并查看语音链路</text>
+  </g>
+</svg>

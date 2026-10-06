@@ -1,0 +1,628 @@
+{
+  "generatedAtUnix": 1785157996.274071,
+  "results": [
+    {
+      "modelID": "kokoro-int8-multi-lang-v1_1",
+      "corpusID": "short-zh",
+      "run": 1,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 0.7199161250027828
+      },
+      "metrics": {
+        "firstAudioSeconds": 0.8865233749966137,
+        "synthesisSeconds": 2.466683832986746,
+        "audioSeconds": 3.4245833333333335,
+        "rtf": 0.720287285456648,
+        "peakRSSBytes": 577306624
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/kokoro-int8-multi-lang-v1_1/short-zh-1.wav",
+      "error": null
+    },
+    {
+      "modelID": "kokoro-int8-multi-lang-v1_1",
+      "corpusID": "mixed-technical",
+      "run": 1,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 0.7199161250027828
+      },
+      "metrics": {
+        "firstAudioSeconds": 1.0059984590043314,
+        "synthesisSeconds": 3.7806751250172965,
+        "audioSeconds": 6.117125,
+        "rtf": 0.6180477144111485,
+        "peakRSSBytes": 588972032
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/kokoro-int8-multi-lang-v1_1/mixed-technical-1.wav",
+      "error": null
+    },
+    {
+      "modelID": "kokoro-int8-multi-lang-v1_1",
+      "corpusID": "numbers-symbols",
+      "run": 1,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 0.7199161250027828
+      },
+      "metrics": {
+        "firstAudioSeconds": 0.7323572500026785,
+        "synthesisSeconds": 5.87213133397745,
+        "audioSeconds": 9.511541666666666,
+        "rtf": 0.6173690385604279,
+        "peakRSSBytes": 636338176
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/kokoro-int8-multi-lang-v1_1/numbers-symbols-1.wav",
+      "error": null
+    },
+    {
+      "modelID": "kokoro-int8-multi-lang-v1_1",
+      "corpusID": "long-zh",
+      "run": 1,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 0.7199161250027828
+      },
+      "metrics": {
+        "firstAudioSeconds": 1.0034324580046814,
+        "synthesisSeconds": 9.76227945802384,
+        "audioSeconds": 18.138333333333332,
+        "rtf": 0.5382125953151066,
+        "peakRSSBytes": 725581824
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/kokoro-int8-multi-lang-v1_1/long-zh-1.wav",
+      "error": null
+    },
+    {
+      "modelID": "kokoro-int8-multi-lang-v1_1",
+      "corpusID": "short-zh",
+      "run": 2,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 0.7199161250027828
+      },
+      "metrics": {
+        "firstAudioSeconds": 0.8190196669893339,
+        "synthesisSeconds": 2.3118251669802703,
+        "audioSeconds": 3.42875,
+        "rtf": 0.6742472233263639,
+        "peakRSSBytes": 725581824
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/kokoro-int8-multi-lang-v1_1/short-zh-2.wav",
+      "error": null
+    },
+    {
+      "modelID": "kokoro-int8-multi-lang-v1_1",
+      "corpusID": "mixed-technical",
+      "run": 2,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 0.7199161250027828
+      },
+      "metrics": {
+        "firstAudioSeconds": 0.9652790000254754,
+        "synthesisSeconds": 3.8360145420010667,
+        "audioSeconds": 6.119041666666667,
+        "rtf": 0.6268979279709214,
+        "peakRSSBytes": 725581824
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/kokoro-int8-multi-lang-v1_1/mixed-technical-2.wav",
+      "error": null
+    },
+    {
+      "modelID": "kokoro-int8-multi-lang-v1_1",
+      "corpusID": "numbers-symbols",
+      "run": 2,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 0.7199161250027828
+      },
+      "metrics": {
+        "firstAudioSeconds": 0.7483992500056047,
+        "synthesisSeconds": 5.557659124984639,
+        "audioSeconds": 9.508,
+        "rtf": 0.5845245188246361,
+        "peakRSSBytes": 763478016
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/kokoro-int8-multi-lang-v1_1/numbers-symbols-2.wav",
+      "error": null
+    },
+    {
+      "modelID": "kokoro-int8-multi-lang-v1_1",
+      "corpusID": "long-zh",
+      "run": 2,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 0.7199161250027828
+      },
+      "metrics": {
+        "firstAudioSeconds": 1.0835917499789502,
+        "synthesisSeconds": 9.7539919159899,
+        "audioSeconds": 18.133458333333333,
+        "rtf": 0.5379002580031792,
+        "peakRSSBytes": 809385984
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/kokoro-int8-multi-lang-v1_1/long-zh-2.wav",
+      "error": null
+    },
+    {
+      "modelID": "kokoro-int8-multi-lang-v1_1",
+      "corpusID": "short-zh",
+      "run": 3,
+      "status": "failed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 0.7199161250027828
+      },
+      "metrics": {
+        "peakRSSBytes": 809385984
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/kokoro-int8-multi-lang-v1_1/short-zh-3.wav",
+      "error": "cannot convert float NaN to integer"
+    },
+    {
+      "modelID": "sherpa-vits-melo-tts-zh_en",
+      "corpusID": "short-zh",
+      "run": 1,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 1.2085954580106772
+      },
+      "metrics": {
+        "firstAudioSeconds": 0.13294704200234264,
+        "synthesisSeconds": 0.7424730000202544,
+        "audioSeconds": 3.8746938775510205,
+        "rtf": 0.1916210734277492,
+        "peakRSSBytes": 619970560
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/sherpa-vits-melo-tts-zh_en/short-zh-1.wav",
+      "error": null
+    },
+    {
+      "modelID": "sherpa-vits-melo-tts-zh_en",
+      "corpusID": "mixed-technical",
+      "run": 1,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 1.2085954580106772
+      },
+      "metrics": {
+        "firstAudioSeconds": 1.1799664580030367,
+        "synthesisSeconds": 1.220713082992006,
+        "audioSeconds": 6.722176870748299,
+        "rtf": 0.1815949068974912,
+        "peakRSSBytes": 820019200
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/sherpa-vits-melo-tts-zh_en/mixed-technical-1.wav",
+      "error": null
+    },
+    {
+      "modelID": "sherpa-vits-melo-tts-zh_en",
+      "corpusID": "numbers-symbols",
+      "run": 1,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 1.2085954580106772
+      },
+      "metrics": {
+        "firstAudioSeconds": 0.4968319580075331,
+        "synthesisSeconds": 1.5033024580043275,
+        "audioSeconds": 7.851814058956916,
+        "rtf": 0.1914592534561415,
+        "peakRSSBytes": 836763648
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/sherpa-vits-melo-tts-zh_en/numbers-symbols-1.wav",
+      "error": null
+    },
+    {
+      "modelID": "sherpa-vits-melo-tts-zh_en",
+      "corpusID": "long-zh",
+      "run": 1,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 1.2085954580106772
+      },
+      "metrics": {
+        "firstAudioSeconds": 0.215269582986366,
+        "synthesisSeconds": 2.764637666987255,
+        "audioSeconds": 15.74312925170068,
+        "rtf": 0.17560915767039137,
+        "peakRSSBytes": 863764480
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/sherpa-vits-melo-tts-zh_en/long-zh-1.wav",
+      "error": null
+    },
+    {
+      "modelID": "sherpa-vits-melo-tts-zh_en",
+      "corpusID": "short-zh",
+      "run": 2,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 1.2085954580106772
+      },
+      "metrics": {
+        "firstAudioSeconds": 0.10202479100553319,
+        "synthesisSeconds": 0.7130910000123549,
+        "audioSeconds": 4.051882086167801,
+        "rtf": 0.17599006704728268,
+        "peakRSSBytes": 863764480
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/sherpa-vits-melo-tts-zh_en/short-zh-2.wav",
+      "error": null
+    },
+    {
+      "modelID": "sherpa-vits-melo-tts-zh_en",
+      "corpusID": "mixed-technical",
+      "run": 2,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 1.2085954580106772
+      },
+      "metrics": {
+        "firstAudioSeconds": 1.1600705000164453,
+        "synthesisSeconds": 1.200549208006123,
+        "audioSeconds": 6.722176870748299,
+        "rtf": 0.17859530195201193,
+        "peakRSSBytes": 863764480
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/sherpa-vits-melo-tts-zh_en/mixed-technical-2.wav",
+      "error": null
+    },
+    {
+      "modelID": "sherpa-vits-melo-tts-zh_en",
+      "corpusID": "numbers-symbols",
+      "run": 2,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 1.2085954580106772
+      },
+      "metrics": {
+        "firstAudioSeconds": 0.49532237500534393,
+        "synthesisSeconds": 1.5006671249866486,
+        "audioSeconds": 7.682426303854875,
+        "rtf": 0.19533765318824423,
+        "peakRSSBytes": 874283008
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/sherpa-vits-melo-tts-zh_en/numbers-symbols-2.wav",
+      "error": null
+    },
+    {
+      "modelID": "sherpa-vits-melo-tts-zh_en",
+      "corpusID": "long-zh",
+      "run": 2,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 1.2085954580106772
+      },
+      "metrics": {
+        "firstAudioSeconds": 0.21243579100701027,
+        "synthesisSeconds": 2.7895732909964863,
+        "audioSeconds": 15.74312925170068,
+        "rtf": 0.17719306285280848,
+        "peakRSSBytes": 902381568
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/sherpa-vits-melo-tts-zh_en/long-zh-2.wav",
+      "error": null
+    },
+    {
+      "modelID": "sherpa-vits-melo-tts-zh_en",
+      "corpusID": "short-zh",
+      "run": 3,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 1.2085954580106772
+      },
+      "metrics": {
+        "firstAudioSeconds": 0.1012148339941632,
+        "synthesisSeconds": 0.7090480419865344,
+        "audioSeconds": 3.8894331065759635,
+        "rtf": 0.1823011278398718,
+        "peakRSSBytes": 902381568
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/sherpa-vits-melo-tts-zh_en/short-zh-3.wav",
+      "error": null
+    },
+    {
+      "modelID": "sherpa-vits-melo-tts-zh_en",
+      "corpusID": "mixed-technical",
+      "run": 3,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 1.2085954580106772
+      },
+      "metrics": {
+        "firstAudioSeconds": 1.1517134169989731,
+        "synthesisSeconds": 1.1947905419801828,
+        "audioSeconds": 6.722176870748299,
+        "rtf": 0.1777386351107987,
+        "peakRSSBytes": 902381568
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/sherpa-vits-melo-tts-zh_en/mixed-technical-3.wav",
+      "error": null
+    },
+    {
+      "modelID": "sherpa-vits-melo-tts-zh_en",
+      "corpusID": "numbers-symbols",
+      "run": 3,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 1.2085954580106772
+      },
+      "metrics": {
+        "firstAudioSeconds": 0.4978295830078423,
+        "synthesisSeconds": 1.512810417014407,
+        "audioSeconds": 7.688321995464853,
+        "rtf": 0.19676730734050624,
+        "peakRSSBytes": 903348224
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/sherpa-vits-melo-tts-zh_en/numbers-symbols-3.wav",
+      "error": null
+    },
+    {
+      "modelID": "sherpa-vits-melo-tts-zh_en",
+      "corpusID": "long-zh",
+      "run": 3,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 1.2085954580106772
+      },
+      "metrics": {
+        "firstAudioSeconds": 0.2136800409934949,
+        "synthesisSeconds": 2.830361125001218,
+        "audioSeconds": 15.74312925170068,
+        "rtf": 0.17978389681933554,
+        "peakRSSBytes": 927973376
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/sherpa-vits-melo-tts-zh_en/long-zh-3.wav",
+      "error": null
+    },
+    {
+      "modelID": "zipvoice-distill-int8-zh-en-emilia",
+      "corpusID": "short-zh",
+      "run": 1,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 0.7523634170065634
+      },
+      "metrics": {
+        "firstAudioSeconds": 1.070438082999317,
+        "synthesisSeconds": 1.084564415999921,
+        "audioSeconds": 4.017083333333333,
+        "rtf": 0.2699880301213371,
+        "peakRSSBytes": 737148928
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/zipvoice-distill-int8-zh-en-emilia/short-zh-1.wav",
+      "error": null
+    },
+    {
+      "modelID": "zipvoice-distill-int8-zh-en-emilia",
+      "corpusID": "mixed-technical",
+      "run": 1,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 0.7523634170065634
+      },
+      "metrics": {
+        "firstAudioSeconds": 1.8314574160031043,
+        "synthesisSeconds": 1.859610249986872,
+        "audioSeconds": 8.085,
+        "rtf": 0.23000745207011403,
+        "peakRSSBytes": 1266384896
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/zipvoice-distill-int8-zh-en-emilia/mixed-technical-1.wav",
+      "error": null
+    },
+    {
+      "modelID": "zipvoice-distill-int8-zh-en-emilia",
+      "corpusID": "numbers-symbols",
+      "run": 1,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 0.7523634170065634
+      },
+      "metrics": {
+        "firstAudioSeconds": 2.2547070420114323,
+        "synthesisSeconds": 3.2851911670004483,
+        "audioSeconds": 14.012208333333334,
+        "rtf": 0.2344520641464757,
+        "peakRSSBytes": 1532985344
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/zipvoice-distill-int8-zh-en-emilia/numbers-symbols-1.wav",
+      "error": null
+    },
+    {
+      "modelID": "zipvoice-distill-int8-zh-en-emilia",
+      "corpusID": "long-zh",
+      "run": 1,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 0.7523634170065634
+      },
+      "metrics": {
+        "firstAudioSeconds": 1.8910177079960704,
+        "synthesisSeconds": 3.758731957990676,
+        "audioSeconds": 23.529625,
+        "rtf": 0.1597446605286177,
+        "peakRSSBytes": 1565835264
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/zipvoice-distill-int8-zh-en-emilia/long-zh-1.wav",
+      "error": null
+    },
+    {
+      "modelID": "zipvoice-distill-int8-zh-en-emilia",
+      "corpusID": "short-zh",
+      "run": 2,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 0.7523634170065634
+      },
+      "metrics": {
+        "firstAudioSeconds": 0.9988179159990977,
+        "synthesisSeconds": 1.0129940829938278,
+        "audioSeconds": 3.8420833333333335,
+        "rtf": 0.26365749909827424,
+        "peakRSSBytes": 1565835264
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/zipvoice-distill-int8-zh-en-emilia/short-zh-2.wav",
+      "error": null
+    },
+    {
+      "modelID": "zipvoice-distill-int8-zh-en-emilia",
+      "corpusID": "mixed-technical",
+      "run": 2,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 0.7523634170065634
+      },
+      "metrics": {
+        "firstAudioSeconds": 1.7783034580061212,
+        "synthesisSeconds": 1.8059640419960488,
+        "audioSeconds": 7.856958333333333,
+        "rtf": 0.22985536709978507,
+        "peakRSSBytes": 1565835264
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/zipvoice-distill-int8-zh-en-emilia/mixed-technical-2.wav",
+      "error": null
+    },
+    {
+      "modelID": "zipvoice-distill-int8-zh-en-emilia",
+      "corpusID": "numbers-symbols",
+      "run": 2,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 0.7523634170065634
+      },
+      "metrics": {
+        "firstAudioSeconds": 2.2812925829784945,
+        "synthesisSeconds": 3.2809571669786237,
+        "audioSeconds": 14.265291666666666,
+        "rtf": 0.2299957998507069,
+        "peakRSSBytes": 1585479680
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/zipvoice-distill-int8-zh-en-emilia/numbers-symbols-2.wav",
+      "error": null
+    },
+    {
+      "modelID": "zipvoice-distill-int8-zh-en-emilia",
+      "corpusID": "long-zh",
+      "run": 2,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 0.7523634170065634
+      },
+      "metrics": {
+        "firstAudioSeconds": 1.9418277499789838,
+        "synthesisSeconds": 3.797810791991651,
+        "audioSeconds": 23.470583333333334,
+        "rtf": 0.16181152117331202,
+        "peakRSSBytes": 1608826880
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/zipvoice-distill-int8-zh-en-emilia/long-zh-2.wav",
+      "error": null
+    },
+    {
+      "modelID": "zipvoice-distill-int8-zh-en-emilia",
+      "corpusID": "short-zh",
+      "run": 3,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 0.7523634170065634
+      },
+      "metrics": {
+        "firstAudioSeconds": 1.0033417089725845,
+        "synthesisSeconds": 1.0244268339884002,
+        "audioSeconds": 4.209208333333334,
+        "rtf": 0.2433775553174251,
+        "peakRSSBytes": 1608826880
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/zipvoice-distill-int8-zh-en-emilia/short-zh-3.wav",
+      "error": null
+    },
+    {
+      "modelID": "zipvoice-distill-int8-zh-en-emilia",
+      "corpusID": "mixed-technical",
+      "run": 3,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 0.7523634170065634
+      },
+      "metrics": {
+        "firstAudioSeconds": 1.8960392500157468,
+        "synthesisSeconds": 1.927438999991864,
+        "audioSeconds": 8.6065,
+        "rtf": 0.22395154824747154,
+        "peakRSSBytes": 1608826880
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/zipvoice-distill-int8-zh-en-emilia/mixed-technical-3.wav",
+      "error": null
+    },
+    {
+      "modelID": "zipvoice-distill-int8-zh-en-emilia",
+      "corpusID": "numbers-symbols",
+      "run": 3,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 0.7523634170065634
+      },
+      "metrics": {
+        "firstAudioSeconds": 2.3571847080020234,
+        "synthesisSeconds": 3.3814128749945667,
+        "audioSeconds": 14.132541666666667,
+        "rtf": 0.23926431315394908,
+        "peakRSSBytes": 1614299136
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/zipvoice-distill-int8-zh-en-emilia/numbers-symbols-3.wav",
+      "error": null
+    },
+    {
+      "modelID": "zipvoice-distill-int8-zh-en-emilia",
+      "corpusID": "long-zh",
+      "run": 3,
+      "status": "passed",
+      "prepare": {
+        "cold": true,
+        "prepareSeconds": 0.7523634170065634
+      },
+      "metrics": {
+        "firstAudioSeconds": 1.9368559999857098,
+        "synthesisSeconds": 3.8605041669798084,
+        "audioSeconds": 22.737791666666666,
+        "rtf": 0.16978360183672814,
+        "peakRSSBytes": 1629536256
+      },
+      "output": "$HOME/Library/Application Support/TypeWhale Pro/TTSLab/Outputs/zipvoice-distill-int8-zh-en-emilia/long-zh-3.wav",
+      "error": null
+    }
+  ]
+}

@@ -8,9 +8,10 @@ next_full_version() {
     return 1
   fi
 
-  local major="${match[1]}"
-  local minor="${match[2]}"
-  local patch="${match[3]}"
+  local major
+  local minor
+  local patch
+  IFS=. read -r major minor patch <<< "$version"
   local patch_number=$((10#$patch))
 
   patch_number=$((patch_number + 1))

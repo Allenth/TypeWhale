@@ -1,0 +1,4 @@
+{
+  "source": "native/Resources/local-candidate-admission.json",
+  "note": "安装包内文件是正式选择器使用的机器可读准入证据；本文件保持文档索引，避免两份数据漂移。"
+}

@@ -5,7 +5,7 @@ struct ScreenshotSessionStateCheck {
     static func main() {
         let allCommands = ScreenshotToolbarCommand.allCases
         let outputCommands: [ScreenshotToolbarCommand] = [
-            .copy, .save, .ocr, .translate, .archive, .annotate, .rectangle, .arrow, .pen, .text, .undo, .done
+            .copy, .save, .ocr, .translate, .archive, .annotate, .rectangle, .arrow, .pen, .text, .mosaic, .undo, .redo, .done
         ]
 
         let idle = ScreenshotSessionState(phase: .idle, hasSelection: false)
@@ -35,7 +35,9 @@ struct ScreenshotSessionStateCheck {
             hasUsableSelection: true,
             operationGeneration: 2,
             isAnnotating: false,
-            activeAnnotationTool: .rectangle
+            activeAnnotationTool: .rectangle,
+            canUndo: true,
+            canRedo: true
         )
         precondition(ScreenshotCommandDispatcher.effect(for: .copy, in: selectedContext) == .copy)
         precondition(ScreenshotCommandDispatcher.effect(for: .save, in: selectedContext) == .save)
@@ -44,8 +46,22 @@ struct ScreenshotSessionStateCheck {
         precondition(ScreenshotCommandDispatcher.effect(for: .archive, in: selectedContext) == .archive)
         precondition(ScreenshotCommandDispatcher.effect(for: .annotate, in: selectedContext) == .startAnnotation(.rectangle))
         precondition(ScreenshotCommandDispatcher.effect(for: .pen, in: selectedContext) == .selectAnnotationTool(.pen))
+        precondition(ScreenshotCommandDispatcher.effect(for: .mosaic, in: selectedContext) == .selectAnnotationTool(.mosaic))
+        precondition(ScreenshotCommandDispatcher.effect(for: .undo, in: selectedContext) == .undo)
+        precondition(ScreenshotCommandDispatcher.effect(for: .redo, in: selectedContext) == .redo)
         precondition(ScreenshotCommandDispatcher.effect(for: .done, in: selectedContext) == .done)
         precondition(ScreenshotCommandDispatcher.effect(for: .cancel, in: selectedContext) == .cancel)
+        let selectedWithoutHistoryContext = ScreenshotCommandContext(
+            sessionState: selected,
+            hasUsableSelection: true,
+            operationGeneration: 2,
+            isAnnotating: true,
+            activeAnnotationTool: .rectangle,
+            canUndo: false,
+            canRedo: false
+        )
+        precondition(ScreenshotCommandDispatcher.effect(for: .undo, in: selectedWithoutHistoryContext) == .ignore)
+        precondition(ScreenshotCommandDispatcher.effect(for: .redo, in: selectedWithoutHistoryContext) == .ignore)
 
         let selectedWithoutSelection = ScreenshotSessionState(phase: .selected, hasSelection: false)
         precondition(selectedWithoutSelection.canPerform(.cancel))

@@ -50,29 +50,47 @@ extension MainViewController {
         icon.heightAnchor.constraint(equalToConstant: 30).isActive = true
 
         let title = label(AppBrand.displayName, size: 15, weight: .semibold)
+        title.textColor = UITheme.waterInkText
         let version = label(versionText(), size: 10, weight: .medium)
-        version.textColor = .secondaryLabelColor
+        version.textColor = UITheme.waterInkMuted
         let titleStack = NSStackView(views: [title, version])
         titleStack.orientation = .vertical
         titleStack.alignment = .leading
         titleStack.spacing = 0
 
+        let fullExitButton = NSButton(title: "完全退出", target: self, action: #selector(requestFullAppExit(_:)))
+        fullExitButton.bezelStyle = .rounded
+        fullExitButton.image = NSImage(systemSymbolName: "power", accessibilityDescription: "完全退出")
+        fullExitButton.imagePosition = .imageLeading
+        fullExitButton.font = .systemFont(ofSize: 11, weight: .semibold)
+        fullExitButton.contentTintColor = .systemRed
+        fullExitButton.toolTip = "完全退出 \(AppBrand.displayName)"
+        fullExitButton.setContentHuggingPriority(.required, for: .horizontal)
+        fullExitButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+
         let usageGuideButton = footerIconButton(title: "使用方法", symbolName: "questionmark.circle", action: #selector(showUsageGuide(_:)))
         let historyButton = footerIconButton(title: "版本历史", symbolName: "clock.arrow.circlepath", action: #selector(showVersionHistory(_:)))
         let testLogsButton = footerIconButton(title: "测试日志", symbolName: "doc.text.magnifyingglass", action: #selector(showTestLogs(_:)))
+        let mouseShortcutTestButton = footerIconButton(title: "测试鼠标键", symbolName: "mouse", action: #selector(showMouseShortcutTest(_:)))
+        // 调试：晨雾浅色 / 深色主题切换（方案 C 逐步落地）。切换后自动重启生效。
+        let themeToggleButton = footerIconButton(
+            title: AppSettingsStore.useMistLightTheme ? "切到深色（调试）" : "切到晨雾浅色（调试）",
+            symbolName: AppSettingsStore.useMistLightTheme ? "moon.stars" : "sun.max",
+            action: #selector(toggleMistThemeDebug(_:))
+        )
 
         // 左上角让开窗口红绿灯（交通灯）按钮，避免 logo/标题被遮挡。
         let trafficLightPad = NSView()
         trafficLightPad.translatesAutoresizingMaskIntoConstraints = false
         trafficLightPad.widthAnchor.constraint(equalToConstant: 52).isActive = true
 
-        let row = NSStackView(views: [trafficLightPad, icon, titleStack, flexSpacer(), memoryLabel, usageGuideButton, historyButton, testLogsButton])
+        let row = NSStackView(views: [trafficLightPad, icon, titleStack, fullExitButton, flexSpacer(), memoryLabel, themeToggleButton, usageGuideButton, historyButton, testLogsButton, mouseShortcutTestButton])
         row.orientation = .horizontal
         row.alignment = .centerY
         row.spacing = 10
         row.translatesAutoresizingMaskIntoConstraints = false
-        memoryLabel.textColor = .secondaryLabelColor
-        memoryLabel.toolTip = "\(AppBrand.displayName) 当前物理内存占用（与活动监视器“内存”一致）"
+        memoryLabel.textColor = UITheme.waterInkMuted
+        memoryLabel.toolTip = "\(AppBrand.displayName) 主进程与本地模型 Worker 的总物理内存占用"
         updateMemoryReadout()
         return row
     }
@@ -92,7 +110,7 @@ extension MainViewController {
         let box = NSView()
         box.translatesAutoresizingMaskIntoConstraints = false
         box.wantsLayer = true
-        box.layer?.backgroundColor = NSColor(calibratedWhite: 1, alpha: 0.045).cgColor
+        box.layer?.backgroundColor = UITheme.panelFill.cgColor
         box.layer?.cornerRadius = UILayout.cornerRadius
         box.layer?.borderWidth = 1
         box.layer?.borderColor = UITheme.cardBorder.cgColor
@@ -125,7 +143,6 @@ extension MainViewController {
 
     func buildInspectorTabs() -> NSView {
         applyInspectorControlSizingIfNeeded()
-        inspectorTabButtons.removeAll()
         inspectorContent.translatesAutoresizingMaskIntoConstraints = false
         inspectorContent.wantsLayer = true
 
@@ -140,32 +157,35 @@ extension MainViewController {
         inspectorScroll.verticalScrollElasticity = .allowed
         inspectorScroll.automaticallyAdjustsContentInsets = false
 
-        let tabs = MainInspectorTab.allCases.map { tab -> NSButton in
-            let button = NSButton(title: tab.title, target: self, action: #selector(handleInspectorTab(_:)))
-            button.setButtonType(.toggle)
-            button.bezelStyle = .rounded
-            button.controlSize = .small
-            button.font = .systemFont(ofSize: 12, weight: .semibold)
-            button.attributedTitle = NSAttributedString(string: tab.title, attributes: inspectorTabTitleAttributes(isSelected: false))
-            button.tag = MainInspectorTab.allCases.firstIndex(of: tab) ?? 0
-            button.setAccessibilityLabel("\(tab.title)设置")
-            button.widthAnchor.constraint(equalToConstant: 84).isActive = true
-            inspectorTabButtons[tab] = button
-            return button
+        inspectorTabControl.target = self
+        inspectorTabControl.action = #selector(handleInspectorTab(_:))
+        inspectorTabControl.segmentStyle = .rounded
+        inspectorTabControl.controlSize = .regular
+        inspectorTabControl.font = .systemFont(ofSize: 12, weight: .semibold)
+        inspectorTabControl.setAccessibilityLabel("控制面板分类")
+        inspectorTabControl.translatesAutoresizingMaskIntoConstraints = false
+        MainInspectorTab.allCases.enumerated().forEach { index, tab in
+            inspectorTabControl.setLabel(tab.title, forSegment: index)
+            inspectorTabControl.setWidth(tab == .openClaw ? 96 : 84, forSegment: index)
+            inspectorTabControl.setToolTip("\(tab.title)设置", forSegment: index)
         }
 
-        let tabRow = NSStackView(views: tabs)
-        tabRow.orientation = .horizontal
-        tabRow.alignment = .centerY
-        tabRow.spacing = 6
-        tabRow.translatesAutoresizingMaskIntoConstraints = false
+        let tabCenteringRow = NSView()
+        tabCenteringRow.translatesAutoresizingMaskIntoConstraints = false
+        tabCenteringRow.addSubview(inspectorTabControl)
 
-        let stack = NSStackView(views: [tabRow, inspectorScroll])
+        NSLayoutConstraint.activate([
+            inspectorTabControl.centerXAnchor.constraint(equalTo: tabCenteringRow.centerXAnchor),
+            inspectorTabControl.topAnchor.constraint(equalTo: tabCenteringRow.topAnchor),
+            inspectorTabControl.bottomAnchor.constraint(equalTo: tabCenteringRow.bottomAnchor),
+        ])
+
+        let stack = NSStackView(views: [tabCenteringRow, inspectorScroll])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 10
         stack.translatesAutoresizingMaskIntoConstraints = false
-        tabRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        tabCenteringRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         inspectorScroll.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         inspectorScroll.setContentHuggingPriority(.defaultLow, for: .vertical)
         inspectorScroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 460).isActive = true
@@ -180,13 +200,27 @@ extension MainViewController {
         didApplyInspectorControlSizing = true
 
         smartRewriteMode.widthAnchor.constraint(equalToConstant: 96).isActive = true
-        translationDirectionMode.widthAnchor.constraint(equalToConstant: 88).isActive = true
+        ideaPillRewriteMode.widthAnchor.constraint(equalToConstant: 120).isActive = true
+        translationDirectionMode.widthAnchor.constraint(equalToConstant: 142).isActive = true
         screenshotSaveLocationButton.widthAnchor.constraint(equalToConstant: 120).isActive = true
         screenshotArchiveMode.widthAnchor.constraint(equalToConstant: 120).isActive = true
         audioInputDeviceMode.widthAnchor.constraint(equalToConstant: 142).isActive = true
         audioInputRefreshButton.widthAnchor.constraint(equalToConstant: 30).isActive = true
         audioInputRefreshButton.heightAnchor.constraint(equalToConstant: 24).isActive = true
-        smartAIModelMode.widthAnchor.constraint(equalToConstant: 132).isActive = true
+        smartAIModelMode.widthAnchor.constraint(equalToConstant: 240).isActive = true
+        modelTabSmartAIModelMode.widthAnchor.constraint(equalToConstant: 240).isActive = true
+        openClawGatewayField.widthAnchor.constraint(equalToConstant: 250).isActive = true
+        openClawAgentField.widthAnchor.constraint(equalToConstant: 250).isActive = true
+        openClawSessionField.widthAnchor.constraint(equalToConstant: 250).isActive = true
+        openClawCLIPathField.widthAnchor.constraint(equalToConstant: 250).isActive = true
+        openClawCheckButton.widthAnchor.constraint(equalToConstant: 92).isActive = true
+        openClawVoiceMode.widthAnchor.constraint(equalToConstant: 180).isActive = true
+        openClawVoicePlaybackMode.widthAnchor.constraint(equalToConstant: 180).isActive = true
+        openClawVoiceInterruptMode.widthAnchor.constraint(equalToConstant: 180).isActive = true
+        openClawVoiceVolumeSlider.widthAnchor.constraint(equalToConstant: 150).isActive = true
+        openClawVoiceVolumeValue.widthAnchor.constraint(equalToConstant: 44).isActive = true
+        openClawVoiceRateSlider.widthAnchor.constraint(equalToConstant: 150).isActive = true
+        openClawVoiceRateValue.widthAnchor.constraint(equalToConstant: 44).isActive = true
 
         [autoScopeButton, promptSettingsButton, developerTermsButton, translationPromptButton, socialScopeButton,
          deepSeekKeyButton, deepSeekBalanceButton].forEach {
@@ -194,22 +228,20 @@ extension MainViewController {
         }
     }
 
-    @objc func handleInspectorTab(_ sender: NSButton) {
+    @objc func handleInspectorTab(_ sender: NSSegmentedControl) {
         let tabs = MainInspectorTab.allCases
-        guard sender.tag >= 0, sender.tag < tabs.count else { return }
-        selectInspectorTab(tabs[sender.tag])
+        guard sender.selectedSegment >= 0, sender.selectedSegment < tabs.count else { return }
+        selectInspectorTab(tabs[sender.selectedSegment])
     }
 
     func selectInspectorTab(_ tab: MainInspectorTab) {
+        if isCapturingHotkey {
+            endHotkeyCapture()
+            refreshHotkeyLabels()
+        }
         selectedInspectorTab = tab
-        inspectorTabButtons.forEach { key, button in
-            let isSelected = key == tab
-            button.state = isSelected ? .on : .off
-            button.contentTintColor = isSelected ? UITheme.brandYellow : .secondaryLabelColor
-            button.attributedTitle = NSAttributedString(
-                string: key.title,
-                attributes: inspectorTabTitleAttributes(isSelected: isSelected)
-            )
+        if let index = MainInspectorTab.allCases.firstIndex(of: tab) {
+            inspectorTabControl.selectedSegment = index
         }
         inspectorContent.subviews.forEach { $0.removeFromSuperview() }
         let page = buildInspectorPage(tab)
@@ -229,29 +261,54 @@ extension MainViewController {
         switch tab {
         case .common:
             return inspectorPage([
-                inspectorGroup("预览主题", buildPreviewThemeContent(), prominence: .lead),
-                inspectorGroup("快捷设置", buildQuickSettingsCardContent()),
+                inspectorGroup("状态", buildStatusPanelContent()),
+                inspectorGroup("录音与预览", buildRecordingPreviewSettingsContent()),
+                inspectorGroup("粘贴与发送", buildPasteAndSendSettingsContent()),
                 inspectorGroup("截图", buildScreenshotSettingsContent()),
                 inspectorGroup("系统", buildSystemSettingsContent()),
+                inspectorGroup("预览主题", buildPreviewThemeContent(), prominence: .lead),
             ])
         case .intelligence:
             return inspectorPage([
                 inspectorGroup("智能整理", buildSmartRewritePanelContent()),
             ])
+        case .models:
+            return inspectorPage([
+                inspectorGroup("ASR 模型", buildManagedModelContent()),
+                inspectorGroup("整理模型", buildModelTabSmartAIModelContent()),
+            ])
+        case .openClaw:
+            return inspectorPage([
+                inspectorGroup("OpenClaw", buildOpenClawPanelContent(), prominence: .lead),
+            ])
+        case .voice:
+            return inspectorPage([
+                inspectorGroup("麦克风", buildPrimaryMicrophoneContent()),
+                inspectorGroup("麦克风策略", buildBluetoothMicPreferenceContent()),
+                inspectorGroup("小龙虾声音", buildOpenClawVoicePanelContent(), prominence: .lead),
+                inspectorGroup("朗读测试", buildTTSReadingLabContent(), prominence: .lead),
+            ])
+        case .remote:
+            return buildRemoteInspectorPage()
         case .hotkeys:
             return inspectorPage([
                 inspectorGroup("快捷键", buildHotkeysPanelContent()),
-            ])
-        case .status:
-            return inspectorPage([
-                inspectorGroup("模型", buildManagedModelContent()),
-                inspectorGroup("状态", buildStatusPanelContent()),
             ])
         }
     }
 
     private func buildManagedModelContent() -> NSView {
-        managedASRModelListView
+        asrBenchmarkButton.target = self
+        asrBenchmarkButton.action = #selector(showASRBenchmark)
+        asrBenchmarkButton.bezelStyle = .rounded
+        asrBenchmarkButton.toolTip = "用同一段录音逐个比较本机 ASR 模型速度、结果与热词命中"
+        let stack = NSStackView(views: [asrBenchmarkButton, managedASRModelListView])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 10
+        asrBenchmarkButton.setContentHuggingPriority(.required, for: .horizontal)
+        managedASRModelListView.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        return stack
     }
 
     private func inspectorPage(_ groups: [NSView]) -> NSView {
@@ -276,19 +333,23 @@ extension MainViewController {
         return inspectorGroupBox(stack, prominence: prominence)
     }
 
-    // 第二列：预览主题。两张程序绘制的迷你预览并排显示，点击切换主题。
+    // 外观偏好：三张截图式主题预览并排显示，点击切换胶囊主题。
     private func buildPreviewThemeContent() -> NSView {
         let classicTile = ThemePreviewTile(kind: .classic, title: "默认胶囊")
         let notchTile = ThemePreviewTile(kind: .notch, title: "刘海主题")
+        let minimalBlackTile = ThemePreviewTile(kind: .minimalBlack, title: "简洁黑色")
         previewThemeClassicTile = classicTile
         previewThemeNotchTile = notchTile
+        previewThemeMinimalBlackTile = minimalBlackTile
         classicTile.onSelect = { [weak self] in self?.selectPreviewTheme(.classic) }
         notchTile.onSelect = { [weak self] in self?.selectPreviewTheme(.notch) }
+        minimalBlackTile.onSelect = { [weak self] in self?.selectPreviewTheme(.minimalBlack) }
         let current = AppSettingsStore.loadMainViewSettings().previewTheme
         classicTile.isSelected = current == .classic
         notchTile.isSelected = current == .notch
+        minimalBlackTile.isSelected = current == .minimalBlack
 
-        let stack = NSStackView(views: [classicTile, notchTile])
+        let stack = NSStackView(views: [classicTile, notchTile, minimalBlackTile])
         stack.orientation = .horizontal
         stack.alignment = .top
         stack.distribution = .fillEqually
@@ -308,6 +369,7 @@ extension MainViewController {
         let current = previewTheme
         previewThemeClassicTile?.isSelected = current == .classic
         previewThemeNotchTile?.isSelected = current == .notch
+        previewThemeMinimalBlackTile?.isSelected = current == .minimalBlack
     }
 
     // 子分区：在一列里用小标题 + 分隔线划清边界。
@@ -344,23 +406,84 @@ extension MainViewController {
 
     private func buildScreenshotSettingsContent() -> NSView {
         return rowStack([
-            optionRow("归档整理", screenshotArchiveMode),
             optionRow("保存位置", screenshotSaveLocationButton),
         ])
     }
 
+    private func buildPasteAndSendSettingsContent() -> NSView {
+        let note = label(
+            "仅普通听写成功粘贴后生效；翻译、闪念和 OpenClaw 不执行。",
+            size: 11
+        )
+        note.textColor = UITheme.waterInkMuted
+        note.maximumNumberOfLines = 0
+        note.lineBreakMode = .byWordWrapping
+        return rowStack([
+            optionRow("粘贴后自动发送", autoSendAfterPaste),
+            optionRow("发送倒计时", autoSendCountdownControl),
+            optionRow("应用范围", autoSendApplicationScopeButton),
+            note,
+        ])
+    }
+
     private func buildSystemSettingsContent() -> NSView {
+        return rowStack([
+            optionRow("开机自动启动", launchAtLogin),
+            optionRow("启动动画", replayLaunchAnimationButton),
+        ])
+    }
+
+    private func buildRecordingPreviewSettingsContent() -> NSView {
+        shadowPreviewExperiment.toolTip = "诊断用：在主胶囊旁显示旁路结果；不参与最终识别和粘贴。"
+        let productSettings = rowStack([
+            optionRow("胶囊实时预览", realtime),
+            optionRow("重叠矫正", correctedPreviewExperiment, showsLeader: true),
+            optionRow("停顿自动完成", autoFinish),
+            optionRow("停止后重新识别整段录音", reRecognizeWholeRecordingAfterStop),
+            optionRow("录音时降低系统音量", duckSystemAudio),
+            optionRow("录音时暂停媒体", pauseSystemMedia),
+        ])
+        let diagnostics = subSectionView("诊断工具（实验）", rowStack([
+            optionRow("旁路预览（诊断）", shadowPreviewExperiment),
+            optionRow("在线旁路（诊断）", onlineASRProviderMode),
+            optionRow("豆包 Key", doubaoASRKeyButton),
+            optionRow("MiMo Key", mimoASRKeyButton),
+            onlineASRPrivacyNote,
+        ]))
+        let divider = hairlineView()
+        let stack = NSStackView(views: [productSettings, divider, diagnostics])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = UILayout.groupSpacing
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        [productSettings, divider, diagnostics].forEach {
+            $0.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        }
+        return stack
+    }
+
+    private func buildPrimaryMicrophoneContent() -> NSView {
         let audioInputControls = NSStackView(views: [audioInputDeviceMode, audioInputRefreshButton])
         audioInputControls.orientation = .horizontal
         audioInputControls.alignment = .centerY
         audioInputControls.spacing = 4
+        audioInputStatus.textColor = UITheme.waterInkMuted
+        let stack = NSStackView(views: [optionRow("主麦克风", audioInputControls), audioInputStatus])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 5
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        return stack
+    }
+
+    private func buildBluetoothMicPreferenceContent() -> NSView {
+        let note = label("连接蓝牙耳机听声音时，若主麦克风仍是“跟随系统”，可优先用 Mac 内置麦克风收音；手动锁定的 USB / 耳机麦克风不会被覆盖。", size: 12)
+        note.textColor = UITheme.waterInkMuted
+        note.maximumNumberOfLines = 0
+        note.lineBreakMode = .byWordWrapping
         return rowStack([
-            optionRow("输入设备", audioInputControls),
-            optionRow("胶囊实时预览", realtime),
-            optionRow("停顿自动完成", autoFinish),
-            optionRow("录音时降低系统音量", duckSystemAudio),
-            optionRow("麦克风降噪（增强·略慢）", micNoiseReduction),
-            optionRow("开机自动启动", launchAtLogin),
+            optionRow("蓝牙耳机播放时使用 Mac 麦克风", preferBuiltInMicForBluetoothAudio),
+            note,
         ])
     }
 
@@ -437,8 +560,13 @@ extension MainViewController {
         smartAIUsageRow = usageRow
         refreshSmartAIUsageVisibility()
         return rowStack([
+            optionRow("整理模式", smartRewriteMode),
+            optionRow("自动翻译", autoTranslate),
+            optionRow("翻译方向", translationDirectionMode),
             optionRow("整理模型", smartAIModelMode),
-            optionRow("自动范围", autoScopeButton),
+            optionRow("闪念整理", ideaPillRewriteMode),
+            optionRow("归档整理", screenshotArchiveMode),
+            optionRow("应用范围", autoScopeButton),
             optionRow("整理提示词", promptSettingsButton),
             optionRow("开发术语", developerTermsButton),
             optionRow("翻译提示词", translationPromptButton),
@@ -448,22 +576,196 @@ extension MainViewController {
         ])
     }
 
+    private func buildModelTabSmartAIModelContent() -> NSView {
+        let note = label("与智能页的“整理模型”是同一个设置；可在本地直驱 Qwen3 4B 与云端 DeepSeek 之间切换。", size: 12)
+        note.textColor = UITheme.waterInkMuted
+        note.maximumNumberOfLines = 0
+        note.lineBreakMode = .byWordWrapping
+
+        let actions = NSStackView(views: [
+            localModelHealthCopyButton,
+            localModelHealthCheckButton,
+        ])
+        actions.orientation = .horizontal
+        actions.alignment = .centerY
+        actions.spacing = 6
+
+        let result = NSStackView(views: [
+            localModelHealthStatusLabel,
+            localModelHealthDetailLabel,
+        ])
+        result.orientation = .vertical
+        result.alignment = .leading
+        result.spacing = 2
+        result.translatesAutoresizingMaskIntoConstraints = false
+        localModelHealthStatusLabel.widthAnchor.constraint(
+            equalTo: result.widthAnchor
+        ).isActive = true
+        localModelHealthDetailLabel.widthAnchor.constraint(
+            equalTo: result.widthAnchor
+        ).isActive = true
+
+        return rowStack([
+            optionRow("整理模型", modelTabSmartAIModelMode),
+            note,
+            optionRow("本地模型检测", actions),
+            result,
+        ])
+    }
+
     private func buildHotkeysPanelContent() -> NSView {
         return rowStack([
-            shortcutRow(title: "主快捷键", captureButton: hotkeyCaptureButton, fallbackButton: hotkeyResetButton),
-            shortcutRow(title: "备用快捷键", captureButton: secondaryHotkeyCaptureButton, fallbackButton: secondaryHotkeyClearButton),
-            shortcutRow(title: "截图快捷键", captureButton: screenshotHotkeyCaptureButton, fallbackButton: screenshotHotkeyResetButton),
-            shortcutRow(title: "截图备用", captureButton: secondaryScreenshotHotkeyCaptureButton, fallbackButton: secondaryScreenshotHotkeyClearButton),
-            shortcutRow(title: "翻译截图", captureButton: screenshotTranslationHotkeyCaptureButton, fallbackButton: screenshotTranslationHotkeyResetButton),
-            shortcutRow(title: "自动翻译", captureButton: autoTranslateHotkeyCaptureButton, fallbackButton: autoTranslateHotkeyClearButton),
-            shortcutRow(title: "唤起主页", captureButton: mainWindowHotkeyCaptureButton, fallbackButton: mainWindowHotkeyResetButton),
+            shortcutRow(title: "主快捷键", captureButton: hotkeyCaptureButton, fallbackButton: hotkeyResetButton, mousePresetPicker: hotkeyMouseShortcutPicker),
+            shortcutRow(title: "备用快捷键", captureButton: secondaryHotkeyCaptureButton, fallbackButton: secondaryHotkeyClearButton, mousePresetPicker: secondaryHotkeyMouseShortcutPicker),
+            shortcutRow(title: "截图快捷键", captureButton: screenshotHotkeyCaptureButton, fallbackButton: screenshotHotkeyResetButton, mousePresetPicker: screenshotHotkeyMouseShortcutPicker),
+            shortcutRow(title: "截图备用", captureButton: secondaryScreenshotHotkeyCaptureButton, fallbackButton: secondaryScreenshotHotkeyClearButton, mousePresetPicker: secondaryScreenshotHotkeyMouseShortcutPicker),
+            shortcutRow(title: "翻译截图", captureButton: screenshotTranslationHotkeyCaptureButton, fallbackButton: screenshotTranslationHotkeyResetButton, mousePresetPicker: screenshotTranslationHotkeyMouseShortcutPicker),
+            shortcutRow(title: "自动翻译", captureButton: autoTranslateHotkeyCaptureButton, fallbackButton: autoTranslateHotkeyClearButton, mousePresetPicker: autoTranslateHotkeyMouseShortcutPicker),
+            shortcutRow(title: "唤起主页", captureButton: mainWindowHotkeyCaptureButton, fallbackButton: mainWindowHotkeyResetButton, mousePresetPicker: mainWindowHotkeyMouseShortcutPicker),
+            shortcutRow(title: "OpenClaw", captureButton: openClawHotkeyPanelCaptureButton, fallbackButton: openClawHotkeyPanelResetButton, mousePresetPicker: openClawHotkeyPanelMouseShortcutPicker),
         ])
+    }
+
+    private func buildOpenClawPanelContent() -> NSView {
+        configureOpenClawTextField(openClawGatewayField)
+        configureOpenClawTextField(openClawAgentField)
+        configureOpenClawTextField(openClawSessionField)
+        configureOpenClawTextField(openClawCLIPathField)
+        openClawStatusValue.textColor = UITheme.sectionTitle
+        openClawCheckButton.bezelStyle = .rounded
+        openClawCheckButton.controlSize = .regular
+        openClawCheckButton.font = .systemFont(ofSize: 12, weight: .medium)
+        openClawCheckButton.target = self
+        openClawCheckButton.action = #selector(checkOpenClawConnection)
+
+        let statusRow = NSStackView(views: [openClawStatusValue, openClawCheckButton])
+        statusRow.orientation = .horizontal
+        statusRow.alignment = .centerY
+        statusRow.spacing = 8
+
+        return rowStack([
+            optionRow("连接状态", statusRow),
+            shortcutRow(title: "激活键", captureButton: openClawHotkeyCaptureButton, fallbackButton: openClawHotkeyResetButton, mousePresetPicker: openClawHotkeyMouseShortcutPicker),
+            optionRow("Gateway", openClawGatewayField),
+            optionRow("Agent", openClawAgentField),
+            optionRow("Session", openClawSessionField),
+            optionRow("CLI 路径", openClawCLIPathField),
+        ])
+    }
+
+    private func buildOpenClawVoicePanelContent() -> NSView {
+        refreshOpenClawVoiceControls()
+        let volumeControls = NSStackView(views: [openClawVoiceVolumeSlider, openClawVoiceVolumeValue])
+        volumeControls.orientation = .horizontal
+        volumeControls.alignment = .centerY
+        volumeControls.spacing = 8
+        let rateControls = NSStackView(views: [openClawVoiceRateSlider, openClawVoiceRateValue])
+        rateControls.orientation = .horizontal
+        rateControls.alignment = .centerY
+        rateControls.spacing = 8
+
+        return rowStack([
+            optionRow("开启说话", openClawVoiceEnabledSwitch),
+            optionRow("音量", volumeControls),
+            optionRow("语速", rateControls),
+            optionRow("音色", openClawVoiceMode),
+            optionRow("播放内容", openClawVoicePlaybackMode),
+            optionRow("打断策略", openClawVoiceInterruptMode),
+        ])
+    }
+
+    func refreshOpenClawVoiceControls() {
+        let voices = OpenClawVoiceSettings.availableVoices
+        let availableVoiceIDs = Set(voices.map(\.id))
+        let settings = OpenClawVoiceSettingsStore.standard.load(
+            availableVoiceIDs: availableVoiceIDs
+        )
+        openClawVoiceEnabledSwitch.state = settings.enabled ? .on : .off
+        openClawVoiceEnabledSwitch.target = self
+        openClawVoiceEnabledSwitch.action = #selector(saveOpenClawVoiceSettingsFromUI)
+
+        openClawVoiceMode.removeAllItems()
+        for voice in voices {
+            openClawVoiceMode.addItem(
+                withTitle: voice.menuTitle
+            )
+            openClawVoiceMode.lastItem?.representedObject = voice.id
+        }
+        if let selectedIndex = openClawVoiceMode.itemArray.firstIndex(where: {
+            ($0.representedObject as? String) == settings.voiceID
+        }) {
+            openClawVoiceMode.selectItem(at: selectedIndex)
+        }
+        openClawVoiceMode.toolTip = "选择 OpenClaw 回复使用的 ZipVoice 音色"
+        openClawVoiceMode.target = self
+        openClawVoiceMode.action = #selector(saveOpenClawVoiceSettingsFromUI)
+        configureVoicePopup(
+            openClawVoicePlaybackMode,
+            items: OpenClawVoicePlaybackPolicy.allCases,
+            selected: settings.playbackPolicy,
+            titleKeyPath: \.displayName,
+            tooltip: "控制哪些 OpenClaw 内容会被朗读"
+        )
+        configureVoicePopup(
+            openClawVoiceInterruptMode,
+            items: OpenClawVoiceInterruptPolicy.allCases,
+            selected: settings.interruptPolicy,
+            titleKeyPath: \.displayName,
+            tooltip: "控制新回复到来时如何处理正在播放的语音"
+        )
+
+        openClawVoiceVolumeSlider.doubleValue = settings.volume
+        openClawVoiceVolumeSlider.isContinuous = true
+        openClawVoiceVolumeSlider.target = self
+        openClawVoiceVolumeSlider.action = #selector(saveOpenClawVoiceSettingsFromUI)
+        openClawVoiceVolumeValue.textColor = UITheme.sectionTitle
+        openClawVoiceVolumeValue.alignment = .right
+        openClawVoiceRateSlider.doubleValue = settings.speechRate
+        openClawVoiceRateSlider.isContinuous = true
+        openClawVoiceRateSlider.target = self
+        openClawVoiceRateSlider.action = #selector(saveOpenClawVoiceSettingsFromUI)
+        openClawVoiceRateValue.textColor = UITheme.sectionTitle
+        openClawVoiceRateValue.alignment = .right
+        refreshOpenClawVoiceVolumeLabel()
+        refreshOpenClawVoiceRateLabel()
+    }
+
+    private func configureVoicePopup<Item: RawRepresentable & Equatable>(
+        _ popup: NSPopUpButton,
+        items: [Item],
+        selected: Item,
+        titleKeyPath: KeyPath<Item, String>,
+        tooltip: String
+    ) where Item.RawValue == String {
+        popup.removeAllItems()
+        for item in items {
+            popup.addItem(withTitle: item[keyPath: titleKeyPath])
+            popup.lastItem?.representedObject = item.rawValue
+        }
+        let selectedItem = popup.itemArray.first { ($0.representedObject as? String) == selected.rawValue }
+        popup.select(selectedItem)
+        popup.bezelStyle = .rounded
+        popup.controlSize = .regular
+        popup.font = .systemFont(ofSize: 12, weight: .medium)
+        popup.toolTip = tooltip
+        popup.target = self
+        popup.action = #selector(saveOpenClawVoiceSettingsFromUI)
+    }
+
+    private func configureOpenClawTextField(_ field: NSTextField) {
+        field.bezelStyle = .roundedBezel
+        field.controlSize = .regular
+        field.font = .systemFont(ofSize: 12, weight: .medium)
+        field.lineBreakMode = .byTruncatingMiddle
+        field.target = self
+        field.action = #selector(saveOpenClawSettingsFromUI)
     }
 
     // 快捷键录入按钮的接线与样式（原在偏好弹窗里，现由「快捷键」面板复用）
     func wireHotkeyButtons() {
         [hotkeyValue, secondaryHotkeyValue, screenshotHotkeyValue, secondaryScreenshotHotkeyValue,
-         screenshotTranslationHotkeyValue, autoTranslateHotkeyValue, mainWindowHotkeyValue].forEach {
+         screenshotTranslationHotkeyValue, autoTranslateHotkeyValue, mainWindowHotkeyValue,
+         ideaPillHotkeyValue, openClawHotkeyValue].forEach {
             $0.lineBreakMode = .byTruncatingMiddle
         }
         hotkeyCaptureButton.target = self; hotkeyCaptureButton.action = #selector(beginHotkeyCapture)
@@ -480,18 +782,72 @@ extension MainViewController {
         autoTranslateHotkeyClearButton.target = self; autoTranslateHotkeyClearButton.action = #selector(clearAutoTranslateHotkey)
         mainWindowHotkeyCaptureButton.target = self; mainWindowHotkeyCaptureButton.action = #selector(beginMainWindowHotkeyCapture)
         mainWindowHotkeyResetButton.target = self; mainWindowHotkeyResetButton.action = #selector(clearMainWindowHotkey)
+        ideaPillHotkeyCaptureButton.target = self; ideaPillHotkeyCaptureButton.action = #selector(beginIdeaPillHotkeyCapture)
+        ideaPillHotkeyClearButton.target = self; ideaPillHotkeyClearButton.action = #selector(clearIdeaPillHotkey)
+        openClawHotkeyCaptureButton.target = self; openClawHotkeyCaptureButton.action = #selector(beginOpenClawHotkeyCapture(_:))
+        openClawHotkeyResetButton.target = self; openClawHotkeyResetButton.action = #selector(resetOpenClawHotkey)
+        openClawHotkeyPanelCaptureButton.target = self; openClawHotkeyPanelCaptureButton.action = #selector(beginOpenClawHotkeyCapture(_:))
+        openClawHotkeyPanelResetButton.target = self; openClawHotkeyPanelResetButton.action = #selector(resetOpenClawHotkey)
+        configureHotkeyMouseShortcutPicker(hotkeyMouseShortcutPicker, slot: .primary, preferredCaptureButton: hotkeyCaptureButton)
+        configureHotkeyMouseShortcutPicker(secondaryHotkeyMouseShortcutPicker, slot: .secondary, preferredCaptureButton: secondaryHotkeyCaptureButton)
+        configureHotkeyMouseShortcutPicker(screenshotHotkeyMouseShortcutPicker, slot: .screenshot, preferredCaptureButton: screenshotHotkeyCaptureButton)
+        configureHotkeyMouseShortcutPicker(secondaryScreenshotHotkeyMouseShortcutPicker, slot: .screenshotSecondary, preferredCaptureButton: secondaryScreenshotHotkeyCaptureButton)
+        configureHotkeyMouseShortcutPicker(screenshotTranslationHotkeyMouseShortcutPicker, slot: .screenshotTranslation, preferredCaptureButton: screenshotTranslationHotkeyCaptureButton)
+        configureHotkeyMouseShortcutPicker(autoTranslateHotkeyMouseShortcutPicker, slot: .autoTranslate, preferredCaptureButton: autoTranslateHotkeyCaptureButton)
+        configureHotkeyMouseShortcutPicker(mainWindowHotkeyMouseShortcutPicker, slot: .mainWindow, preferredCaptureButton: mainWindowHotkeyCaptureButton)
+        configureHotkeyMouseShortcutPicker(ideaPillHotkeyMouseShortcutPicker, slot: .ideaPill, preferredCaptureButton: ideaPillHotkeyCaptureButton)
+        configureHotkeyMouseShortcutPicker(openClawHotkeyMouseShortcutPicker, slot: .openClaw, preferredCaptureButton: openClawHotkeyCaptureButton)
+        configureHotkeyMouseShortcutPicker(openClawHotkeyPanelMouseShortcutPicker, slot: .openClaw, preferredCaptureButton: openClawHotkeyPanelCaptureButton)
         let captureButtons = [hotkeyCaptureButton, secondaryHotkeyCaptureButton, screenshotHotkeyCaptureButton,
                               secondaryScreenshotHotkeyCaptureButton, screenshotTranslationHotkeyCaptureButton,
-                              autoTranslateHotkeyCaptureButton, mainWindowHotkeyCaptureButton]
+                              autoTranslateHotkeyCaptureButton, mainWindowHotkeyCaptureButton,
+                              ideaPillHotkeyCaptureButton, openClawHotkeyCaptureButton,
+                              openClawHotkeyPanelCaptureButton]
+        let mouseShortcutPickers = [hotkeyMouseShortcutPicker, secondaryHotkeyMouseShortcutPicker,
+                                    screenshotHotkeyMouseShortcutPicker, secondaryScreenshotHotkeyMouseShortcutPicker,
+                                    screenshotTranslationHotkeyMouseShortcutPicker, autoTranslateHotkeyMouseShortcutPicker,
+                                    mainWindowHotkeyMouseShortcutPicker, ideaPillHotkeyMouseShortcutPicker,
+                                    openClawHotkeyMouseShortcutPicker, openClawHotkeyPanelMouseShortcutPicker]
         let trailingButtons = [hotkeyResetButton, secondaryHotkeyClearButton, screenshotHotkeyResetButton,
                                secondaryScreenshotHotkeyClearButton, screenshotTranslationHotkeyResetButton,
-                               autoTranslateHotkeyClearButton, mainWindowHotkeyResetButton]
+                               autoTranslateHotkeyClearButton, mainWindowHotkeyResetButton,
+                               ideaPillHotkeyClearButton, openClawHotkeyResetButton,
+                               openClawHotkeyPanelResetButton]
         (captureButtons + trailingButtons).forEach {
             $0.bezelStyle = .rounded
             $0.controlSize = .small
             $0.font = .systemFont(ofSize: 11, weight: .medium)
         }
+        mouseShortcutPickers.forEach {
+            $0.bezelStyle = .rounded
+            $0.controlSize = .small
+            $0.font = .systemFont(ofSize: 11, weight: .medium)
+            $0.widthAnchor.constraint(equalToConstant: 74).isActive = true
+        }
         captureButtons.forEach { $0.widthAnchor.constraint(equalToConstant: 128).isActive = true }
         trailingButtons.forEach { $0.widthAnchor.constraint(equalToConstant: 70).isActive = true }
+    }
+
+    func configureHotkeyMouseShortcutPicker(
+        _ popup: NSPopUpButton,
+        slot: HotkeySlot,
+        preferredCaptureButton: NSButton
+    ) {
+        popup.removeAllItems()
+        popup.addItem(withTitle: "自定义")
+        popup.lastItem?.tag = 0
+        popup.addItem(withTitle: "第三键")
+        popup.lastItem?.tag = 3
+        popup.addItem(withTitle: "第四键")
+        popup.lastItem?.tag = 4
+        popup.addItem(withTitle: "第五键")
+        popup.lastItem?.tag = 5
+        popup.addItem(withTitle: "第六键")
+        popup.lastItem?.tag = 6
+        popup.tag = slot.rawValue
+        popup.target = self
+        popup.action = #selector(hotkeyMouseShortcutPickerChanged(_:))
+        popup.toolTip = "选择“自定义”可录入快捷键，或直接绑定第三/四/五/六按钮"
+        popup.itemArray.first?.title = "自定义"
     }
 }

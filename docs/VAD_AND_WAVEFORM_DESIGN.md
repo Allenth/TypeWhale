@@ -8,7 +8,18 @@
 > 能量频带（`frequencyBands`）与峰值（`peakLevel`）现仅用于**波形显示**与**胶囊 dBFS 电平读数**，不再参与人声判定。
 > 下文「能量 VAD 如何工作 / 判定逻辑 / 可调参数」保留为历史设计记录。
 
-## 背景与问题
+## 当前停顿自动完成策略（1.9.36，2026-07-10）
+
+- `RecordingAutoFinishPolicy` 是纯领域状态机；实时预览开关和停顿自动完成开关彼此独立。
+- 每个实时 Silero 探测携带录音 `taskID`。异步结果返回时必须仍匹配当前活动录音，否则记录 `vad_probe_ignored reason=stale_task` 并丢弃。
+- 只在当前任务的 Silero 探测明确返回 `no_speech` 后评估结束，不再由逐音频缓冲的旧时间戳抢先结束。第一次达到阈值只进入待确认，第二次连续 `no_speech` 才完成；中间任何 `speech` 都撤销候选。
+- VAD 忙时，后续窗口进入 capacity=4 的有界 FIFO，不能用最新窗口覆盖中间的短语音。队列里仍有更新音频时，旧静音结果只能延期决定；队列满则安全停用本轮自动完成，不丢弃证据后继续冒险判断。
+- 已确认人声后，以最近一次人声探测时间和 `1.0s` 内部阈值判断停顿；叠加滚动窗口、探测节奏和二次确认后，目标用户体感约为 `2.0s`。
+- 从未确认人声时，只有录音开始至少 `8s` 后采集的 `no_speech` 结果，且没有任何有效实时预览证据，才取消空录音。阈值前采集的旧结果不能触发取消。
+- VAD 出错时停用本轮停顿自动完成，保留手动停止、五分钟无输入安全网和六分钟硬上限。
+- 待确认与自动动作分别记录 `vad_probe_no_speech_pending_confirmation`、`recording_auto_finish reason=pause` 与 `reason=initial_silence`，并带 VAD 推理及采样到决定的延迟。
+
+## 历史背景与问题（能量 VAD，已停用）
 
 旧版的「静音 / 人离」自动结束**完全依赖实时 ASR 是否吐出文字**，而不是音频本身：
 
@@ -78,7 +89,7 @@ recorder.onBands  （主线程回调，逐缓冲）
 - **映射曲线**：`emphasized = pow(activeBand, 0.9)`，接近线性。这样幅度真正随响度大小起伏、有动态层次，而不是像 `pow<1` 那样一过门限就顶满、之后大小声都长一个样。
 - **形态**：7 个采样点按 `index % 2` 交替上下偏移形成折痕，圆角连接；各点权重接近一致（`centerWeight`），让说话时整条线一起波动而非只有中间动。
 
-## 可调参数
+## 历史可调参数（能量 VAD，已停用）
 
 真机调参时，集中改下面几个常量即可（多数在 `SpeechInputCoordinator.swift` 顶部常量区）。
 
@@ -86,7 +97,7 @@ recorder.onBands  （主线程回调，逐缓冲）
 | --- | --- | --- | --- |
 | `VAD.speechBandThreshold` | `0.30` | `SpeechInputCoordinator.swift` | **核心阈值**。误判「人离」太频繁→调低（更易判有声）；环境吵、静音判不出→调高。 |
 | `Timing.autoFinishPauseSeconds` | `1.5` | `SpeechInputCoordinator.swift` | 说完到自动结束的静音时长。 |
-| `Timing.initialSilenceAutoFinishSeconds` | `3.0` | `SpeechInputCoordinator.swift` | 开场「人离」判定时长。 |
+| `Timing.initialSilenceAutoFinishSeconds` | 历史值 `3.0` | `SpeechInputCoordinator.swift` | 已由当前的 `8.0s` task-scoped Silero 策略取代。 |
 | 波形起音 / 落音 | `0.6 / 0.3` | `RecordingCapsuleView.update` | 越大越跟手、越小越平滑。 |
 | 波形死区 | `0.13` | `RecordingCapsuleView.drawWaveform` | 越小越灵敏、越易受噪声影响。 |
 | 波形映射幂次 | `0.9` | `RecordingCapsuleView.drawWaveform` | <1 更早顶满、动态层次少；接近 1 更线性、随响度起伏。 |

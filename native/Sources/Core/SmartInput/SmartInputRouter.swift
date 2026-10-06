@@ -100,7 +100,27 @@ final class SmartInputRouter {
 
         let normalization = normalizer.normalize(trimmed, context: context)
         let normalizedText = normalization.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let rewriteText = normalizedText.isEmpty ? trimmed : normalizedText
+        let normalizedOrRaw = normalizedText.isEmpty ? trimmed : normalizedText
+        let rewriteText = profile.mode == .developerRequirement
+            ? DeveloperRequirementDisfluencyCleaner.clean(normalizedOrRaw)
+            : normalizedOrRaw
+        if SmartRewriteShortUtterancePolicy.shouldBypassModel(
+            text: rewriteText,
+            mode: profile.mode,
+            preference: preference
+        ) {
+            LaunchDiagnostics.mark(
+                "smart_rewrite_short_utterance_bypass mode=\(profile.mode.displayName) chars=\(rewriteText.count)"
+            )
+            return SmartRewriteResult(
+                text: rewriteText,
+                rawText: rawText,
+                mode: profile.mode,
+                didFallback: false,
+                normalizedText: normalizedText,
+                termReplacements: normalization.replacements
+            )
+        }
         let scopedGlossary = DeveloperLexiconStore.promptGlossary(
             matching: [trimmed, rewriteText].joined(separator: "\n"),
             maxTerms: 12
@@ -144,7 +164,10 @@ final class SmartInputRouter {
                 preference: preference,
                 timeoutSeconds: profile.timeoutSeconds
             )
-            let rewritten = output.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let rewritten = SmartRewriteOutputSanitizer.finalize(
+                output.text,
+                mode: profile.mode
+            )
             // 结果为空仍按原文回退，但请求已计费——把 usage 直接记进账本，避免漏记（不污染转换记录行）。
             if rewritten.isEmpty {
                 SmartUsageLedgerStore.record(output.usage)

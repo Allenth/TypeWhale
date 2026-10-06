@@ -1,0 +1,30 @@
+[
+  {
+    "id": "zipvoice-distill-int8-zh-en-emilia",
+    "displayName": "ZipVoice Distill INT8 中英",
+    "tier": 1,
+    "runtime": "sherpa-onnx",
+    "license": "Apache-2.0",
+    "licensePath": "LICENSE",
+    "upstream": "https://github.com/k2-fsa/sherpa-onnx",
+    "acquisition": {
+      "kind": "local-copy",
+      "source": "~/Library/Application Support/LocalTTSLab/models/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia",
+      "extras": [
+        {
+          "source": "~/Library/Application Support/LocalTTSLab/models/vocos_24khz.onnx",
+          "destination": "vocos_24khz.onnx"
+        }
+      ],
+      "licenseURL": "https://raw.githubusercontent.com/k2-fsa/ZipVoice/master/LICENSE"
+    },
+    "requiredPaths": [
+      "encoder.int8.onnx",
+      "decoder.int8.onnx",
+      "vocos_24khz.onnx",
+      "tokens.txt",
+      "lexicon.txt",
+      "LICENSE"
+    ]
+  }
+]

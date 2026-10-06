@@ -2,26 +2,68 @@ import AppKit
 
 @MainActor
 enum UITheme {
-    // Logo palette: warm golden "sky" (primary) + vivid soft green (secondary accent).
-    static let brandYellow = NSColor(calibratedRed: 1.0, green: 0.753, blue: 0.18, alpha: 1)
-    static let brandTint = NSColor(calibratedRed: 1.0, green: 0.753, blue: 0.18, alpha: 0.06)
-    static let brandGreen = NSColor(calibratedRed: 0.12, green: 0.90, blue: 0.52, alpha: 1)
-    static let brandGreenTint = NSColor(calibratedRed: 0.12, green: 0.90, blue: 0.52, alpha: 0.10)
+    /// 晨雾微光浅色开关：true 时全部色 token 切到浅色版（见 docs/design/concept-c）。
+    static var isLight: Bool { AppSettingsStore.useMistLightTheme }
+    /// 按当前主题在浅/深两值间取色。深色为现状 water-ink，浅色为晨雾微光。
+    private static func themed(_ light: NSColor, _ dark: NSColor) -> NSColor { isLight ? light : dark }
+
+    // Water-ink "灰鲸" palette（深色）/ 晨雾微光（浅色）。左浅右深。
+    static var waterInkBackground: NSColor { themed(NSColor(calibratedRed: 0.922, green: 0.937, blue: 0.953, alpha: 1), NSColor(calibratedRed: 0.024, green: 0.043, blue: 0.071, alpha: 1)) }
+    static var waterInkSurface: NSColor { themed(NSColor(calibratedRed: 1, green: 1, blue: 1, alpha: 0.90), NSColor(calibratedRed: 0.075, green: 0.128, blue: 0.184, alpha: 0.72)) }
+    static var waterInkSurfaceStrong: NSColor { themed(NSColor(calibratedRed: 1, green: 1, blue: 1, alpha: 0.98), NSColor(calibratedRed: 0.12, green: 0.18, blue: 0.24, alpha: 0.82)) }
+    static var waterInkPanel: NSColor { themed(NSColor(calibratedRed: 0.961, green: 0.973, blue: 0.980, alpha: 0.94), NSColor(calibratedRed: 0.072, green: 0.105, blue: 0.145, alpha: 0.72)) }
+    static var waterInkPanelLead: NSColor { themed(NSColor(calibratedRed: 0.933, green: 0.953, blue: 0.965, alpha: 0.96), NSColor(calibratedRed: 0.12, green: 0.17, blue: 0.21, alpha: 0.78)) }
+    static var waterInkLine: NSColor { themed(NSColor(calibratedRed: 0.251, green: 0.369, blue: 0.455, alpha: 0.15), NSColor(calibratedRed: 0.86, green: 0.91, blue: 0.90, alpha: 0.15)) }
+    static var waterInkHairline: NSColor { themed(NSColor(calibratedRed: 0.251, green: 0.369, blue: 0.455, alpha: 0.09), NSColor(calibratedRed: 0.86, green: 0.91, blue: 0.90, alpha: 0.11)) }
+    static var waterInkText: NSColor { themed(NSColor(calibratedRed: 0.173, green: 0.243, blue: 0.294, alpha: 1), NSColor(calibratedRed: 0.96, green: 0.97, blue: 0.95, alpha: 0.96)) }
+    static var waterInkMuted: NSColor { themed(NSColor(calibratedRed: 0.431, green: 0.510, blue: 0.565, alpha: 1), NSColor(calibratedRed: 0.88, green: 0.91, blue: 0.90, alpha: 0.58)) }
+    static var waterInkFaint: NSColor { themed(NSColor(calibratedRed: 0.580, green: 0.651, blue: 0.698, alpha: 1), NSColor(calibratedRed: 0.88, green: 0.91, blue: 0.90, alpha: 0.36)) }
+    static var waterInkAccent: NSColor { themed(NSColor(calibratedRed: 0.278, green: 0.439, blue: 0.561, alpha: 1), NSColor(calibratedRed: 0.85, green: 0.895, blue: 0.89, alpha: 1)) }
+    static var waterInkMistBlue: NSColor { themed(NSColor(calibratedRed: 0.357, green: 0.518, blue: 0.651, alpha: 1), NSColor(calibratedRed: 0.44, green: 0.62, blue: 0.69, alpha: 1)) }
+    static var waterInkSuccess: NSColor { themed(NSColor(calibratedRed: 0.353, green: 0.647, blue: 0.533, alpha: 1), NSColor(calibratedRed: 0.55, green: 0.85, blue: 0.69, alpha: 1)) }
+    static var waterInkWarning: NSColor { themed(NSColor(calibratedRed: 0.753, green: 0.592, blue: 0.357, alpha: 1), NSColor(calibratedRed: 0.90, green: 0.78, blue: 0.46, alpha: 1)) }
+    /// 录音态 LED（晨雾赭 / 深色暖点）。新增 token。
+    static var waterInkRecording: NSColor { themed(NSColor(calibratedRed: 0.816, green: 0.541, blue: 0.447, alpha: 1), NSColor(calibratedRed: 0.88, green: 0.55, blue: 0.45, alpha: 1)) }
+    /// 浅色下用一层雾白盖住 HUD 毛玻璃；深色下是原来的深色压暗。
+    static var windowOverlay: NSColor { themed(NSColor(calibratedRed: 0.922, green: 0.937, blue: 0.953, alpha: 0.86), NSColor(calibratedRed: 0.025, green: 0.045, blue: 0.075, alpha: 0.72)) }
+    static var panelFill: NSColor { waterInkPanel }
+    static var panelLeadFill: NSColor { waterInkPanelLead }
+    static var capsuleAccent: NSColor { waterInkMistBlue }
+    static var capsuleText: NSColor { waterInkText }
+    static var waveformStroke: NSColor { themed(NSColor(calibratedRed: 0.478, green: 0.631, blue: 0.761, alpha: 1), NSColor(calibratedRed: 0.72, green: 0.90, blue: 0.94, alpha: 1)) }
+    static var waveformGlow: NSColor { themed(NSColor(calibratedRed: 0.478, green: 0.631, blue: 0.761, alpha: 0.6), NSColor(calibratedRed: 0.42, green: 0.70, blue: 0.80, alpha: 1)) }
+    nonisolated static let waveformLiveLineWidth: CGFloat = 2.6
+    nonisolated static let waveformPreviewLineWidth: CGFloat = 2.4
+
+    static func waveformStrokeColor(activity: CGFloat) -> NSColor {
+        waveformStroke.withAlphaComponent(0.82 + 0.18 * Double(activity))
+    }
+
+    static func waveformGlowColor(activity: CGFloat) -> NSColor {
+        waveformGlow.withAlphaComponent(0.26 + 0.20 * Double(activity))
+    }
+
+    // Compatibility aliases kept for existing call sites. 计算属性以随主题切换。
+    static var brandYellow: NSColor { waterInkAccent }
+    static var brandTint: NSColor { themed(NSColor(calibratedRed: 0.278, green: 0.439, blue: 0.561, alpha: 0.10), NSColor(calibratedRed: 0.85, green: 0.895, blue: 0.89, alpha: 0.09)) }
+    static var brandGreen: NSColor { waterInkSuccess }
+    static var brandGreenTint: NSColor { themed(NSColor(calibratedRed: 0.353, green: 0.647, blue: 0.533, alpha: 0.12), NSColor(calibratedRed: 0.55, green: 0.85, blue: 0.69, alpha: 0.11)) }
     /// 胶囊「本地服务健康」呼吸边框专用绿：比 brandGreen 更柔和的祖母绿/薄荷绿，
     /// 在深色 HUD 上更耐看，不刺眼。仅用于健康边框，避免影响权限点/刘海脉冲等处的品牌绿。
-    static let healthGreen = NSColor(calibratedRed: 0.34, green: 0.84, blue: 0.63, alpha: 1)
+    static var healthGreen: NSColor { waterInkSuccess }
     /// 录音胶囊毛玻璃背景的圆角半径。RecordingPanel 的圆角裁剪与健康绿环需共用同一值，避免各画各的。
-    /// nonisolated：允许在非主线程隔离的静态初始化（如 HealthBorderOverlayView.Metrics）中直接引用。
+    /// nonisolated：允许在非主线程隔离的静态初始化中直接引用。
     nonisolated static let capsuleCornerRadius: CGFloat = 21
-    static let brandTeal = brandGreen
-    static let brandTealTint = brandGreenTint
-    static let cardFill = NSColor(calibratedWhite: 1, alpha: 0.082)
-    static let cardBorder = NSColor(calibratedWhite: 1, alpha: 0.24)
-    static let hairline = NSColor(calibratedWhite: 1, alpha: 0.17)
-    static let sectionTitle = NSColor(calibratedWhite: 1, alpha: 0.68)
-    static let keycapFill = NSColor(calibratedWhite: 1, alpha: 0.13)
-    static let keycapBorder = NSColor(calibratedWhite: 1, alpha: 0.24)
-    static let iconTint = NSColor(calibratedWhite: 1, alpha: 0.5)
+    static var brandTeal: NSColor { brandGreen }
+    static var brandTealTint: NSColor { brandGreenTint }
+    static var cardFill: NSColor { waterInkPanel }
+    static var cardBorder: NSColor { waterInkLine }
+    static var hairline: NSColor { waterInkHairline }
+    static var sectionTitle: NSColor { waterInkMuted }
+    static var keycapFill: NSColor { themed(NSColor(calibratedRed: 0.251, green: 0.369, blue: 0.455, alpha: 0.06), NSColor(calibratedRed: 0.87, green: 0.91, blue: 0.90, alpha: 0.10)) }
+    static var keycapBorder: NSColor { themed(NSColor(calibratedRed: 0.251, green: 0.369, blue: 0.455, alpha: 0.16), NSColor(calibratedRed: 0.86, green: 0.91, blue: 0.90, alpha: 0.18)) }
+    static var iconTint: NSColor { waterInkMuted }
+    static var controlOnFill: NSColor { themed(NSColor(calibratedRed: 0.357, green: 0.518, blue: 0.651, alpha: 0.90), NSColor(calibratedRed: 0.43, green: 0.62, blue: 0.69, alpha: 0.86)) }
 }
 
 /// Shared layout scale so cards, rows and gaps stay on one consistent grid.
@@ -89,7 +131,7 @@ func controlCaptionLabel(_ text: String) -> NSTextField {
 func inspectorTabTitleAttributes(isSelected: Bool) -> [NSAttributedString.Key: Any] {
     [
         .font: NSFont.systemFont(ofSize: 12, weight: .semibold),
-        .foregroundColor: isSelected ? UITheme.brandYellow : NSColor.secondaryLabelColor,
+        .foregroundColor: isSelected ? UITheme.waterInkAccent : UITheme.waterInkMuted,
     ]
 }
 
@@ -115,14 +157,14 @@ enum InspectorGroupProminence {
 
     var fillColor: NSColor {
         switch self {
-        case .lead: return NSColor(calibratedWhite: 1, alpha: 0.088)
+        case .lead: return UITheme.panelLeadFill
         case .standard: return UITheme.cardFill
         }
     }
 
     var borderColor: NSColor {
         switch self {
-        case .lead: return NSColor(calibratedWhite: 1, alpha: 0.28)
+        case .lead: return UITheme.cardBorder.withAlphaComponent(0.82)
         case .standard: return UITheme.cardBorder
         }
     }
@@ -144,6 +186,49 @@ func hairlineView() -> NSView {
     view.wantsLayer = true
     view.layer?.backgroundColor = UITheme.hairline.cgColor
     view.heightAnchor.constraint(equalToConstant: 0.5).isActive = true
+    return view
+}
+
+@MainActor
+private final class DottedLeaderLineView: NSView {
+    private let lineLayer = CAShapeLayer()
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        lineLayer.fillColor = nil
+        lineLayer.strokeColor = UITheme.hairline.withAlphaComponent(0.72).cgColor
+        lineLayer.lineWidth = 1
+        lineLayer.lineDashPattern = [1, 3]
+        lineLayer.lineCap = .round
+        layer?.addSublayer(lineLayer)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let path = CGMutablePath()
+        path.move(to: CGPoint(x: 0, y: bounds.midY))
+        path.addLine(to: CGPoint(x: bounds.maxX, y: bounds.midY))
+        lineLayer.path = path
+        lineLayer.frame = bounds
+        CATransaction.commit()
+    }
+}
+
+@MainActor
+func dottedLeaderView() -> NSView {
+    let view = DottedLeaderLineView()
+    view.translatesAutoresizingMaskIntoConstraints = false
+    view.setContentHuggingPriority(.defaultLow, for: .horizontal)
+    view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+    view.heightAnchor.constraint(equalToConstant: 1).isActive = true
+    view.widthAnchor.constraint(greaterThanOrEqualToConstant: 16).isActive = true
     return view
 }
 
@@ -263,7 +348,7 @@ final class BrandSwitch: NSButton {
         )
         let radius = trackHeight / 2
         let track = NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius)
-        (state == .on ? UITheme.brandYellow : NSColor(calibratedWhite: 1, alpha: 0.16)).setFill()
+        (state == .on ? UITheme.controlOnFill : NSColor(calibratedRed: 0.86, green: 0.91, blue: 0.90, alpha: 0.16)).setFill()
         track.fill()
 
         let inset: CGFloat = 2
@@ -303,8 +388,11 @@ struct WaveformBands {
 
 /// 1.4 验证过的折线机制：一条水平折线，静音（振幅低于门限）时保持平直，
 /// 有人声时整条线一起按声纹强度上下波动。直线段连接，两端钉在中线。
-/// 用振幅门限（0.16）区分安静/出声，不依赖 Silero VAD，避免 VAD 门控带来的不可用感。
+/// 用振幅门限区分安静/出声，不依赖 Silero VAD，避免 VAD 门控带来的不可用感。
 enum WaveformRenderer {
+    static let activityFloor: CGFloat = 0.095
+    static let activityRange: CGFloat = 1 - activityFloor
+
     /// 把频段映射成折线路径，并返回峰值活跃度（0...1）供调用方调节颜色。
     static func makePath(bands: [Float], in rect: NSRect) -> (path: NSBezierPath, activity: CGFloat) {
         let count = bands.count
@@ -319,7 +407,7 @@ enum WaveformRenderer {
             let centerDistance = abs(CGFloat(index) - half) / half
             // 各点权重接近一致，说话时整条线一起波动；门限保证安静时是一条平直线。
             let centerWeight = 0.86 + (1 - centerDistance) * 0.22
-            let activeBand = max(0, (CGFloat(band) - 0.16) / 0.84)
+            let activeBand = max(0, (CGFloat(band) - Self.activityFloor) / Self.activityRange)
             peakActivity = max(peakActivity, activeBand)
             let emphasized = activeBand <= 0 ? 0 : pow(activeBand, 0.62)
             let direction: CGFloat = index % 2 == 0 ? 1 : -1
@@ -354,10 +442,13 @@ final class MiniWaveformView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         // 与录音胶囊统一：静音平直、出声时整条线上下波动（详见 WaveformRenderer，1.4 折线机制）。
         let (path, activity) = WaveformRenderer.makePath(bands: bands.values, in: bounds)
-        path.lineWidth = 2
         path.lineCapStyle = .round
         path.lineJoinStyle = .round
-        UITheme.brandGreen.withAlphaComponent(0.5 + 0.5 * Double(activity)).setStroke()
+        path.lineWidth = UITheme.waveformLiveLineWidth + 2.6
+        UITheme.waveformGlowColor(activity: activity).setStroke()
+        path.stroke()
+        path.lineWidth = UITheme.waveformLiveLineWidth
+        UITheme.waveformStrokeColor(activity: activity).setStroke()
         path.stroke()
     }
 }
